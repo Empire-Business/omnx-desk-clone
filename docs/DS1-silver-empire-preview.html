@@ -1,0 +1,2340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DS1 — Silver Empire · Editorial Frio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400;1,600&family=DM+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS — DS1 SILVER EMPIRE
+═══════════════════════════════════════════════════════════ */
+:root {
+  /* Color System */
+  --void:       #070C14;
+  --empire:     #0D1829;
+  --steel:      #243B55;
+  --platinum:   #BFC5CC;
+  --gold:       #C9A240;
+  --bone:       #F2EFE8;
+  --ink:        #1A1F2E;
+  --ghost:      #E4E2DC;
+  --white:      #FFFFFF;
+  --mist:       #F7F6F2;
+  --danger:     #8B2E2E;
+
+  /* Semantic aliases */
+  --bg-primary:   var(--bone);
+  --bg-inverse:   var(--empire);
+  --text-primary: var(--ink);
+  --text-inverse: var(--platinum);
+  --border:       var(--ghost);
+  --accent:       var(--gold);
+
+  /* Typography */
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body:    'DM Sans', system-ui, sans-serif;
+  --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
+
+  /* Type Scale */
+  --text-11: 0.6875rem;
+  --text-13: 0.8125rem;
+  --text-16: 1rem;
+  --text-20: 1.25rem;
+  --text-28: 1.75rem;
+  --text-40: 2.5rem;
+  --text-56: 3.5rem;
+  --text-80: 5rem;
+  --text-120: 7.5rem;
+
+  /* Spacing Scale */
+  --s4:  0.25rem;
+  --s8:  0.5rem;
+  --s16: 1rem;
+  --s24: 1.5rem;
+  --s32: 2rem;
+  --s48: 3rem;
+  --s64: 4rem;
+  --s96: 6rem;
+  --s128: 8rem;
+
+  /* Motion */
+  --ease-out:    cubic-bezier(0.0, 0.0, 0.2, 1.0);
+  --ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1.0);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1.0);
+  --duration-fast:   150ms;
+  --duration-base:   280ms;
+  --duration-slow:   500ms;
+  --duration-slower: 800ms;
+
+  /* Shadows */
+  --shadow-sm:  0 1px 3px rgba(7,12,20,0.08), 0 1px 2px rgba(7,12,20,0.04);
+  --shadow-md:  0 4px 16px rgba(7,12,20,0.10), 0 2px 6px rgba(7,12,20,0.06);
+  --shadow-lg:  0 16px 48px rgba(7,12,20,0.14), 0 6px 16px rgba(7,12,20,0.08);
+  --shadow-xl:  0 32px 80px rgba(7,12,20,0.20), 0 12px 32px rgba(7,12,20,0.12);
+
+  /* Radius */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bone);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+img, svg { display: block; max-width: 100%; }
+a { color: inherit; text-decoration: none; }
+button { cursor: pointer; border: none; background: none; font-family: inherit; }
+
+/* ═══════════════════════════════════════════════════════════
+   GRAIN TEXTURE
+═══════════════════════════════════════════════════════════ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 128px 128px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCROLL REVEAL
+═══════════════════════════════════════════════════════════ */
+.reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity var(--duration-slower) var(--ease-out),
+              transform var(--duration-slower) var(--ease-out);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 80ms; }
+.reveal-delay-2 { transition-delay: 160ms; }
+.reveal-delay-3 { transition-delay: 240ms; }
+.reveal-delay-4 { transition-delay: 320ms; }
+.reveal-delay-5 { transition-delay: 400ms; }
+
+/* ═══════════════════════════════════════════════════════════
+   LAYOUT HELPERS
+═══════════════════════════════════════════════════════════ */
+.container {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 var(--s48);
+}
+.section-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: var(--s8);
+  margin-bottom: var(--s32);
+}
+.section-label::before {
+  content: '';
+  display: inline-block;
+  width: 24px;
+  height: 1px;
+  background: var(--gold);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NAVIGATION
+═══════════════════════════════════════════════════════════ */
+nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(242,239,232,0.82);
+  border-bottom: 1px solid var(--ghost);
+  transition: background var(--duration-base) var(--ease-out);
+}
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 var(--s48);
+}
+.nav-logo {
+  font-family: var(--font-display);
+  font-size: var(--text-20);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nav-logo-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gold);
+  flex-shrink: 0;
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: var(--s32);
+  list-style: none;
+}
+.nav-links a {
+  font-size: var(--text-13);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--steel);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.nav-links a:hover { color: var(--ink); }
+.nav-cta {
+  font-size: var(--text-13);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 9px 20px;
+  background: var(--ink);
+  color: var(--bone);
+  border-radius: var(--radius-sm);
+  transition: background var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-spring);
+}
+.nav-cta:hover { background: var(--empire); transform: translateY(-1px); }
+
+/* ═══════════════════════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════════════════════ */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 440px;
+  gap: 0;
+  align-items: center;
+  padding-top: 64px;
+  overflow: hidden;
+}
+.hero-ghost-word {
+  position: absolute;
+  top: 50%;
+  left: -2%;
+  transform: translateY(-50%);
+  font-family: var(--font-display);
+  font-size: clamp(200px, 22vw, 380px);
+  font-weight: 700;
+  color: var(--ghost);
+  letter-spacing: -0.04em;
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+  z-index: 0;
+  opacity: 0;
+  animation: ghostWordReveal 1.4s var(--ease-out) 0.3s forwards;
+}
+@keyframes ghostWordReveal {
+  from { opacity: 0; transform: translateY(-48%) translateX(-20px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+.hero-left {
+  position: relative;
+  z-index: 1;
+  padding: var(--s96) var(--s64) var(--s96) var(--s48);
+  max-width: 720px;
+}
+.hero-eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: var(--s8);
+  margin-bottom: var(--s32);
+  opacity: 0;
+  animation: fadeUp 0.8s var(--ease-out) 0.4s forwards;
+}
+.hero-eyebrow::before {
+  content: '';
+  width: 32px;
+  height: 1px;
+  background: var(--gold);
+}
+.hero-title {
+  font-family: var(--font-display);
+  line-height: 1.0;
+  margin-bottom: var(--s32);
+  opacity: 0;
+  animation: fadeUp 0.9s var(--ease-out) 0.55s forwards;
+}
+.hero-title-light {
+  display: block;
+  font-size: clamp(64px, 7.5vw, 110px);
+  font-weight: 300;
+  font-style: italic;
+  color: var(--steel);
+  letter-spacing: -0.02em;
+}
+.hero-title-bold {
+  display: block;
+  font-size: clamp(64px, 7.5vw, 110px);
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.03em;
+}
+.hero-manifesto {
+  font-size: var(--text-20);
+  font-weight: 300;
+  color: var(--steel);
+  line-height: 1.7;
+  max-width: 480px;
+  margin-bottom: var(--s48);
+  opacity: 0;
+  animation: fadeUp 0.9s var(--ease-out) 0.7s forwards;
+}
+.hero-ctas {
+  display: flex;
+  align-items: center;
+  gap: var(--s16);
+  opacity: 0;
+  animation: fadeUp 0.9s var(--ease-out) 0.85s forwards;
+}
+
+.hero-right {
+  position: relative;
+  z-index: 1;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  padding: var(--s48) var(--s48) var(--s48) 0;
+}
+.hero-panel {
+  background: var(--empire);
+  width: 100%;
+  height: 58vh;
+  min-height: 420px;
+  border-radius: var(--radius-lg);
+  padding: var(--s48);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: var(--shadow-xl);
+  opacity: 0;
+  animation: panelReveal 1.0s var(--ease-out) 0.6s forwards;
+  overflow: hidden;
+  position: relative;
+}
+.hero-panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+@keyframes panelReveal {
+  from { opacity: 0; transform: translateX(32px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.hero-panel-metric {
+  font-family: var(--font-display);
+  font-size: clamp(80px, 7vw, 112px);
+  font-weight: 700;
+  color: var(--white);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.hero-panel-metric span {
+  font-size: 0.38em;
+  font-weight: 300;
+  color: var(--gold);
+  font-style: italic;
+  vertical-align: super;
+  margin-left: 4px;
+}
+.hero-panel-rule {
+  height: 1px;
+  background: rgba(191,197,204,0.2);
+}
+.hero-panel-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s16);
+}
+.stat-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s12, 0.75rem) 0;
+  border-bottom: 1px solid rgba(191,197,204,0.1);
+}
+.stat-chip:last-child { border-bottom: none; }
+.stat-chip-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--platinum);
+  opacity: 0.7;
+}
+.stat-chip-value {
+  font-family: var(--font-display);
+  font-size: var(--text-28);
+  font-weight: 600;
+  color: var(--white);
+}
+.stat-chip-value.gold { color: var(--gold); }
+
+.hero-gold-rule {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent 60%);
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: lineGrow 1.2s var(--ease-out) 1.2s forwards;
+}
+@keyframes lineGrow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MANIFESTO SECTION
+═══════════════════════════════════════════════════════════ */
+.section-manifesto {
+  background: var(--empire);
+  padding: var(--s96) 0;
+  position: relative;
+  overflow: hidden;
+}
+.section-manifesto::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold) 30%, var(--gold) 70%, transparent);
+}
+.manifesto-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s48);
+  margin-top: var(--s48);
+}
+.manifesto-card {
+  padding: var(--s32);
+  border: 1px solid rgba(191,197,204,0.1);
+  border-radius: var(--radius-md);
+  position: relative;
+}
+.manifesto-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: var(--s32); right: var(--s32);
+  height: 1px;
+  background: var(--gold);
+  opacity: 0.6;
+}
+.manifesto-icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--s24);
+  color: var(--gold);
+}
+.manifesto-title {
+  font-family: var(--font-display);
+  font-size: var(--text-28);
+  font-weight: 600;
+  color: var(--white);
+  margin-bottom: var(--s16);
+  letter-spacing: -0.01em;
+}
+.manifesto-desc {
+  font-size: var(--text-16);
+  font-weight: 300;
+  color: var(--platinum);
+  line-height: 1.7;
+  opacity: 0.8;
+}
+.manifesto-number {
+  position: absolute;
+  bottom: var(--s24);
+  right: var(--s24);
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  color: var(--gold);
+  opacity: 0.5;
+  letter-spacing: 0.1em;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SECTION HEADERS
+═══════════════════════════════════════════════════════════ */
+.section-header {
+  margin-bottom: var(--s64);
+}
+.section-title {
+  font-family: var(--font-display);
+  font-size: var(--text-56);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--ink);
+  margin-bottom: var(--s16);
+}
+.section-subtitle {
+  font-size: var(--text-20);
+  font-weight: 300;
+  color: var(--steel);
+  max-width: 560px;
+  line-height: 1.6;
+}
+.section-title-inverse { color: var(--white); }
+.section-subtitle-inverse { color: var(--platinum); opacity: 0.75; }
+
+/* ═══════════════════════════════════════════════════════════
+   COLOR SYSTEM
+═══════════════════════════════════════════════════════════ */
+.section-colors {
+  background: var(--void);
+  padding: var(--s96) 0;
+}
+.color-context-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--platinum);
+  opacity: 0.5;
+  margin-bottom: var(--s24);
+}
+.color-swatches {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: var(--s8);
+  margin-bottom: var(--s48);
+}
+.color-swatch {
+  cursor: pointer;
+  transition: transform var(--duration-base) var(--ease-spring);
+}
+.color-swatch:hover { transform: translateY(-6px); }
+.swatch-bar {
+  height: 160px;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  position: relative;
+  overflow: hidden;
+}
+.swatch-bar::after {
+  content: 'Click to copy';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+  background: rgba(0,0,0,0.3);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.color-swatch:hover .swatch-bar::after { opacity: 1; }
+.swatch-info {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-top: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  padding: var(--s8) var(--s12, 0.75rem);
+}
+.swatch-token {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  margin-bottom: 2px;
+}
+.swatch-hex {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--platinum);
+  opacity: 0.6;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════ */
+.toast {
+  position: fixed;
+  bottom: var(--s32);
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--ink);
+  color: var(--bone);
+  font-family: var(--font-mono);
+  font-size: var(--text-13);
+  padding: var(--s12, 0.75rem) var(--s24);
+  border-radius: var(--radius-md);
+  z-index: 9000;
+  transition: transform var(--duration-base) var(--ease-spring);
+  box-shadow: var(--shadow-lg);
+  white-space: nowrap;
+  border: 1px solid rgba(201,162,64,0.3);
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ═══════════════════════════════════════════════════════════
+   TYPOGRAPHY SHOWCASE
+═══════════════════════════════════════════════════════════ */
+.section-typography {
+  padding: var(--s96) 0;
+  background: var(--mist);
+}
+.type-specimen {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s64);
+  align-items: start;
+  margin-bottom: var(--s64);
+}
+.type-giant {
+  font-family: var(--font-display);
+  font-size: 196px;
+  font-weight: 400;
+  line-height: 0.9;
+  color: var(--ink);
+  letter-spacing: -0.04em;
+  opacity: 0.12;
+  user-select: none;
+}
+.type-specimen-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--steel);
+  opacity: 0.6;
+  margin-top: var(--s8);
+}
+.type-scale {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.type-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: var(--s32);
+  align-items: baseline;
+  padding: var(--s16) 0;
+  border-bottom: 1px solid var(--ghost);
+}
+.type-row:last-child { border-bottom: none; }
+.type-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--steel);
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+.type-sample { color: var(--ink); }
+.type-variants {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s32);
+  padding: var(--s48);
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--ghost);
+}
+.type-variant-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--steel);
+  opacity: 0.5;
+  margin-bottom: var(--s16);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════════════════════ */
+.section-components {
+  padding: var(--s96) 0;
+  background: var(--bone);
+}
+.component-group {
+  margin-bottom: var(--s64);
+}
+.component-group-title {
+  font-family: var(--font-display);
+  font-size: var(--text-28);
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: var(--s8);
+  letter-spacing: -0.01em;
+}
+.component-group-sub {
+  font-size: var(--text-13);
+  color: var(--steel);
+  opacity: 0.7;
+  margin-bottom: var(--s32);
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+.btn-showcase {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s16);
+  align-items: center;
+  padding: var(--s32);
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--ghost);
+  margin-bottom: var(--s16);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s8);
+  font-family: var(--font-body);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-base) var(--ease-out);
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+}
+.btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--duration-fast);
+}
+.btn:hover::before { opacity: 1; }
+
+/* Primary */
+.btn-primary {
+  background: var(--empire);
+  color: var(--bone);
+  border: 1px solid var(--empire);
+}
+.btn-primary::before { background: rgba(255,255,255,0.08); }
+.btn-primary:hover { background: var(--ink); border-color: var(--ink); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+
+/* Secondary */
+.btn-secondary {
+  background: transparent;
+  color: var(--empire);
+  border: 1.5px solid var(--empire);
+}
+.btn-secondary::before { background: rgba(13,24,41,0.05); }
+.btn-secondary:hover { background: var(--empire); color: var(--bone); transform: translateY(-1px); }
+
+/* Ghost */
+.btn-ghost {
+  background: transparent;
+  color: var(--steel);
+  border: 1px solid transparent;
+}
+.btn-ghost:hover { color: var(--ink); border-color: var(--ghost); background: var(--mist); }
+
+/* Danger */
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1.5px solid var(--danger);
+}
+.btn-danger:hover { background: var(--danger); color: var(--white); transform: translateY(-1px); }
+
+/* Gold */
+.btn-gold {
+  background: var(--gold);
+  color: var(--empire);
+  border: 1px solid var(--gold);
+}
+.btn-gold:hover { background: #b8912e; border-color: #b8912e; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(201,162,64,0.3); }
+
+/* Sizes */
+.btn-sm { font-size: var(--text-13); padding: 7px 14px; }
+.btn-md { font-size: var(--text-16); padding: 10px 20px; }
+.btn-lg { font-size: var(--text-20); padding: 14px 28px; }
+.btn-xl { font-size: var(--text-20); padding: 16px 36px; letter-spacing: 0.06em; text-transform: uppercase; font-size: var(--text-13); }
+
+/* ═══════════════════════════════════════════════════════════
+   CARDS
+═══════════════════════════════════════════════════════════ */
+.cards-showcase {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s24);
+}
+.card {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: transform var(--duration-base) var(--ease-spring), box-shadow var(--duration-base) var(--ease-out);
+}
+.card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+
+/* Standard card */
+.card-standard {
+  background: var(--white);
+  border: 1px solid var(--ghost);
+  padding: var(--s32);
+  position: relative;
+}
+.card-standard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--empire);
+}
+.card-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: var(--s16);
+}
+.card-title {
+  font-family: var(--font-display);
+  font-size: var(--text-28);
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: var(--s8);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.card-body {
+  font-size: var(--text-16);
+  color: var(--steel);
+  line-height: 1.6;
+  opacity: 0.8;
+}
+
+/* Dark card */
+.card-dark {
+  background: var(--empire);
+  padding: var(--s32);
+  position: relative;
+  border: 1px solid rgba(191,197,204,0.08);
+}
+.card-dark::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+}
+.card-dark .card-tag { color: var(--gold); }
+.card-dark .card-title { color: var(--white); }
+.card-dark .card-body { color: var(--platinum); opacity: 0.7; }
+
+/* Metric card */
+.card-metric {
+  background: var(--white);
+  border: 1px solid var(--ghost);
+  padding: var(--s32);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s16);
+}
+.metric-number {
+  font-family: var(--font-display);
+  font-size: var(--text-80);
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.metric-number sup {
+  font-size: 0.3em;
+  font-weight: 300;
+  color: var(--gold);
+  vertical-align: super;
+}
+.metric-label {
+  font-size: var(--text-13);
+  color: var(--steel);
+  opacity: 0.6;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+.metric-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--text-13);
+  color: #2D7D4A;
+  background: rgba(45,125,74,0.1);
+  padding: 3px 8px;
+  border-radius: 3px;
+  width: fit-content;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BADGES
+═══════════════════════════════════════════════════════════ */
+.badges-showcase {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s16);
+  align-items: center;
+  padding: var(--s24);
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--ghost);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+.badge-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.badge-success  { background: rgba(45,125,74,0.1);  color: #2D7D4A;  }
+.badge-success .badge-dot  { background: #2D7D4A; }
+.badge-warning  { background: rgba(201,162,64,0.12); color: #8B6A1A;  }
+.badge-warning .badge-dot  { background: var(--gold); }
+.badge-danger   { background: rgba(139,46,46,0.1);  color: var(--danger); }
+.badge-danger .badge-dot   { background: var(--danger); }
+.badge-neutral  { background: var(--ghost);          color: var(--steel); }
+.badge-neutral .badge-dot  { background: var(--platinum); }
+.badge-empire   { background: var(--empire);         color: var(--platinum); }
+.badge-empire .badge-dot   { background: var(--gold); }
+
+/* ═══════════════════════════════════════════════════════════
+   FORMS
+═══════════════════════════════════════════════════════════ */
+.forms-showcase {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s48);
+  padding: var(--s48);
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--ghost);
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s8);
+}
+.form-label {
+  font-size: var(--text-13);
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: 0.02em;
+}
+.form-label-sub {
+  font-size: var(--text-11);
+  color: var(--steel);
+  opacity: 0.6;
+  font-family: var(--font-mono);
+}
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-family: var(--font-body);
+  font-size: var(--text-16);
+  color: var(--ink);
+  background: var(--mist);
+  border: 1.5px solid var(--ghost);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out), background var(--duration-fast);
+  -webkit-appearance: none;
+}
+.form-input::placeholder { color: var(--platinum); }
+.form-input:focus {
+  border-color: var(--empire);
+  background: var(--white);
+  box-shadow: 0 0 0 3px rgba(13,24,41,0.08);
+}
+.form-input.error {
+  border-color: var(--danger);
+  background: rgba(139,46,46,0.03);
+}
+.form-error-msg {
+  font-size: var(--text-13);
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.form-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23243B55' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px;
+}
+.checkbox-group, .radio-group {
+  display: flex;
+  align-items: center;
+  gap: var(--s12, 0.75rem);
+  cursor: pointer;
+}
+.checkbox-input, .radio-input {
+  width: 18px; height: 18px;
+  border: 1.5px solid var(--platinum);
+  border-radius: var(--radius-sm);
+  background: var(--mist);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--duration-fast);
+  cursor: pointer;
+}
+.radio-input { border-radius: 50%; }
+.checkbox-input.checked {
+  background: var(--empire);
+  border-color: var(--empire);
+}
+.radio-input.checked {
+  background: var(--empire);
+  border-color: var(--empire);
+  position: relative;
+}
+.radio-input.checked::after {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--white);
+}
+.checkbox-input.checked::after {
+  content: '✓';
+  font-size: 11px;
+  color: var(--white);
+  font-weight: 700;
+}
+.toggle-wrap { display: flex; align-items: center; gap: var(--s12, 0.75rem); }
+.toggle {
+  width: 44px; height: 24px;
+  background: var(--ghost);
+  border-radius: 12px;
+  position: relative;
+  cursor: pointer;
+  transition: background var(--duration-base);
+}
+.toggle.on { background: var(--empire); }
+.toggle-knob {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
+  background: var(--white);
+  border-radius: 50%;
+  transition: transform var(--duration-base) var(--ease-spring);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.toggle.on .toggle-knob { transform: translateX(20px); }
+
+/* ═══════════════════════════════════════════════════════════
+   TABLE
+═══════════════════════════════════════════════════════════ */
+.table-wrap {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--ghost);
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-16);
+}
+.data-table thead {
+  background: var(--mist);
+  border-bottom: 1px solid var(--ghost);
+}
+.data-table th {
+  padding: var(--s12, 0.75rem) var(--s24);
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--steel);
+  opacity: 0.7;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--duration-fast);
+}
+.data-table th:hover { color: var(--ink); opacity: 1; }
+.sort-icon { opacity: 0.4; font-size: 10px; }
+.data-table td {
+  padding: var(--s16) var(--s24);
+  border-bottom: 1px solid var(--ghost);
+  color: var(--ink);
+  vertical-align: middle;
+}
+.data-table tbody tr:last-child td { border-bottom: none; }
+.data-table tbody tr { transition: background var(--duration-fast); }
+.data-table tbody tr:hover { background: var(--mist); }
+.td-name { font-weight: 500; }
+.td-mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-13);
+  color: var(--steel);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SPACING & GRID
+═══════════════════════════════════════════════════════════ */
+.section-spacing {
+  padding: var(--s96) 0;
+  background: var(--mist);
+}
+.spacing-ruler {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s16);
+  margin-bottom: var(--s48);
+  padding: var(--s32);
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--ghost);
+  overflow-x: auto;
+}
+.spacing-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s8);
+  flex-shrink: 0;
+}
+.spacing-block {
+  background: var(--empire);
+  border-radius: 2px;
+  width: 100%;
+  min-width: 12px;
+  opacity: 0.9;
+}
+.spacing-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--steel);
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.grid-visual {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--s16);
+  padding: var(--s32);
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--ghost);
+}
+.grid-col {
+  height: 80px;
+  background: rgba(13,24,41,0.06);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--empire);
+  opacity: 0.7;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MOTION
+═══════════════════════════════════════════════════════════ */
+.section-motion {
+  padding: var(--s96) 0;
+  background: var(--bone);
+}
+.motion-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--s24);
+}
+.motion-card {
+  padding: var(--s32);
+  background: var(--white);
+  border: 1px solid var(--ghost);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  overflow: hidden;
+}
+.motion-demo {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--s24);
+}
+.motion-dot {
+  width: 40px; height: 40px;
+  background: var(--empire);
+  border-radius: var(--radius-md);
+}
+.motion-card:hover .motion-dot-fade { animation: demoFadeUp 0.6s var(--ease-out) forwards; }
+.motion-card:hover .motion-dot-scale { animation: demoScale 0.5s var(--ease-spring) forwards; }
+.motion-card:hover .motion-dot-cross { animation: demoCross 0.4s var(--ease-in-out) forwards; }
+.motion-card:hover .motion-dot-line { width: 100%; background: var(--gold); height: 2px; border-radius: 0; animation: demoLine 0.7s var(--ease-out) forwards; }
+@keyframes demoFadeUp { 0%{opacity:0;transform:translateY(20px)} 100%{opacity:1;transform:translateY(0)} }
+@keyframes demoScale { 0%{transform:scale(0.6)} 100%{transform:scale(1)} }
+@keyframes demoCross { 0%{opacity:1} 50%{opacity:0;transform:scale(0.8)} 100%{opacity:1;transform:scale(1)} }
+@keyframes demoLine { 0%{transform:scaleX(0)} 100%{transform:scaleX(1)} }
+
+.motion-name {
+  font-family: var(--font-display);
+  font-size: var(--text-20);
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: var(--s8);
+}
+.motion-curve {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--steel);
+  opacity: 0.5;
+  letter-spacing: 0.04em;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DARK MODE SECTION
+═══════════════════════════════════════════════════════════ */
+.section-dark {
+  background: var(--void);
+  padding: var(--s96) 0;
+}
+.dark-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s48);
+}
+.dark-compare-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--platinum);
+  opacity: 0.4;
+  margin-bottom: var(--s24);
+  display: flex;
+  align-items: center;
+  gap: var(--s8);
+}
+.dark-compare-label::before {
+  content: '';
+  width: 16px; height: 1px;
+  background: currentColor;
+}
+
+/* Light context components */
+.dm-card-light {
+  background: var(--white);
+  border: 1px solid var(--ghost);
+  border-radius: var(--radius-lg);
+  padding: var(--s32);
+}
+.dm-card-light .card-tag { color: var(--gold); }
+.dm-card-light .card-title { color: var(--ink); }
+.dm-card-light .card-body { color: var(--steel); opacity: 0.8; }
+
+/* Dark context components */
+.dm-card-dark {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(191,197,204,0.1);
+  border-radius: var(--radius-lg);
+  padding: var(--s32);
+  position: relative;
+}
+.dm-card-dark::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.dm-card-dark .card-tag { color: var(--gold); }
+.dm-card-dark .card-title { color: var(--white); }
+.dm-card-dark .card-body { color: var(--platinum); opacity: 0.7; }
+
+.dm-input-light {
+  width: 100%;
+  padding: 10px 14px;
+  font-family: var(--font-body);
+  font-size: var(--text-16);
+  background: var(--mist);
+  border: 1.5px solid var(--ghost);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  margin-top: var(--s16);
+}
+.dm-input-dark {
+  width: 100%;
+  padding: 10px 14px;
+  font-family: var(--font-body);
+  font-size: var(--text-16);
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(191,197,204,0.15);
+  border-radius: var(--radius-sm);
+  color: var(--platinum);
+  margin-top: var(--s16);
+  outline: none;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CSS TOKENS EXPORT
+═══════════════════════════════════════════════════════════ */
+.section-tokens {
+  padding: var(--s96) 0;
+  background: var(--mist);
+}
+.tokens-code {
+  background: var(--empire);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid rgba(191,197,204,0.1);
+}
+.tokens-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s16) var(--s24);
+  border-bottom: 1px solid rgba(191,197,204,0.1);
+  background: rgba(0,0,0,0.2);
+}
+.tokens-code-filename {
+  font-family: var(--font-mono);
+  font-size: var(--text-13);
+  color: var(--platinum);
+  opacity: 0.7;
+}
+.tokens-code-copy {
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gold);
+  cursor: pointer;
+  background: rgba(201,162,64,0.1);
+  border: 1px solid rgba(201,162,64,0.2);
+  padding: 4px 12px;
+  border-radius: 3px;
+  transition: background var(--duration-fast);
+}
+.tokens-code-copy:hover { background: rgba(201,162,64,0.2); }
+.tokens-code pre {
+  padding: var(--s32);
+  overflow-x: auto;
+}
+.tokens-code code {
+  font-family: var(--font-mono);
+  font-size: var(--text-13);
+  line-height: 1.9;
+  color: var(--platinum);
+}
+.tok-comment { color: rgba(191,197,204,0.35); }
+.tok-prop { color: #9ECBFF; }
+.tok-val-color { color: #F9826C; }
+.tok-val-string { color: #85E89D; }
+.tok-val-num { color: var(--gold); }
+.tok-punct { color: rgba(191,197,204,0.5); }
+
+/* ═══════════════════════════════════════════════════════════
+   USAGE EXAMPLES
+═══════════════════════════════════════════════════════════ */
+.section-examples {
+  padding: var(--s96) 0;
+  background: var(--bone);
+}
+.example-dashboard {
+  background: var(--mist);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--ghost);
+  overflow: hidden;
+  margin-bottom: var(--s48);
+}
+.example-topbar {
+  background: var(--white);
+  border-bottom: 1px solid var(--ghost);
+  padding: 0 var(--s32);
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ex-logo {
+  font-family: var(--font-display);
+  font-size: var(--text-20);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.ex-nav {
+  display: flex;
+  gap: var(--s24);
+  font-size: var(--text-13);
+  color: var(--steel);
+}
+.ex-dashboard-body {
+  padding: var(--s32);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s24);
+}
+.ex-metric-card {
+  background: var(--white);
+  border: 1px solid var(--ghost);
+  border-radius: var(--radius-md);
+  padding: var(--s24);
+}
+.ex-metric-num {
+  font-family: var(--font-display);
+  font-size: var(--text-40);
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: var(--s8);
+}
+.ex-metric-label {
+  font-size: var(--text-13);
+  color: var(--steel);
+  opacity: 0.6;
+}
+.ex-metric-delta-up {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #2D7D4A;
+  margin-top: var(--s8);
+}
+.ex-metric-delta-down {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--danger);
+  margin-top: var(--s8);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════════════════════════ */
+footer {
+  background: var(--empire);
+  padding: var(--s48) 0;
+  border-top: 1px solid rgba(191,197,204,0.08);
+}
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.footer-brand {
+  font-family: var(--font-display);
+  font-size: var(--text-20);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--white);
+  opacity: 0.8;
+}
+.footer-meta {
+  font-family: var(--font-mono);
+  font-size: var(--text-11);
+  color: var(--platinum);
+  opacity: 0.35;
+  letter-spacing: 0.08em;
+  text-align: right;
+  line-height: 1.8;
+}
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- ═══════════════════════════════════════
+     NAVIGATION
+═══════════════════════════════════════ -->
+<nav>
+  <div class="nav-inner">
+    <div class="nav-logo">
+      EMPIRE
+      <span class="nav-logo-dot"></span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#colors">Cores</a></li>
+      <li><a href="#typography">Tipografia</a></li>
+      <li><a href="#components">Componentes</a></li>
+      <li><a href="#darkmode">Dark Mode</a></li>
+      <a href="#tokens" class="nav-cta">CSS Tokens</a>
+    </ul>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════
+     HERO
+═══════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-ghost-word">EMPIRE</div>
+
+  <div class="hero-left">
+    <div class="hero-eyebrow">DS1 — Silver Empire · v2.0</div>
+    <h1 class="hero-title">
+      <span class="hero-title-light">The Architecture</span>
+      <span class="hero-title-bold">of Authority.</span>
+    </h1>
+    <p class="hero-manifesto">
+      Um sistema de design construído para instituições que não precisam gritar.
+      O poder está no espaço em branco. A autoridade está na tipografia.
+    </p>
+    <div class="hero-ctas">
+      <a href="#components" class="btn btn-primary btn-lg">Explorar Sistema</a>
+      <a href="#tokens" class="btn btn-ghost btn-lg">CSS Tokens →</a>
+    </div>
+  </div>
+
+  <div class="hero-right">
+    <div class="hero-panel">
+      <div>
+        <div class="hero-panel-metric">
+          98<span>pts</span>
+        </div>
+        <div style="font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--platinum);opacity:0.4;margin-top:8px;">Design Score</div>
+      </div>
+      <div class="hero-panel-rule"></div>
+      <div class="hero-panel-stats">
+        <div class="stat-chip">
+          <span class="stat-chip-label">Tokens</span>
+          <span class="stat-chip-value gold">48+</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">Componentes</span>
+          <span class="stat-chip-value">24</span>
+        </div>
+        <div class="stat-chip">
+          <span class="stat-chip-label">Variantes</span>
+          <span class="stat-chip-value">120+</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-gold-rule"></div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     MANIFESTO
+═══════════════════════════════════════ -->
+<section class="section-manifesto">
+  <div class="container">
+    <div class="section-label" style="color:var(--gold);">
+      <span style="background:var(--gold)"></span>
+      Filosofia de Design
+    </div>
+    <div class="manifesto-grid">
+      <div class="manifesto-card reveal">
+        <svg class="manifesto-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="4" y="8" width="32" height="24" rx="2"/>
+          <line x1="4" y1="16" x2="36" y2="16"/>
+          <line x1="12" y1="8" x2="12" y2="16"/>
+        </svg>
+        <div class="manifesto-title">Poder pelo Vazio</div>
+        <p class="manifesto-desc">Espaço negativo não é ausência — é presença. Cada pixel de respiro reforça a gravidade do conteúdo.</p>
+        <div class="manifesto-number">01</div>
+      </div>
+      <div class="manifesto-card reveal reveal-delay-2">
+        <svg class="manifesto-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M8 32 L14 12 L20 24 L26 8 L32 20"/>
+          <circle cx="32" cy="20" r="2" fill="currentColor" stroke="none"/>
+        </svg>
+        <div class="manifesto-title">Tipografia como Estrutura</div>
+        <p class="manifesto-desc">Hierarquia tipográfica dita a narrativa antes que o usuário leia uma palavra. A fonte é a arquitetura.</p>
+        <div class="manifesto-number">02</div>
+      </div>
+      <div class="manifesto-card reveal reveal-delay-3">
+        <svg class="manifesto-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="20" cy="20" r="14"/>
+          <path d="M20 6 L20 20 L30 26"/>
+        </svg>
+        <div class="manifesto-title">Ouro com Parcimônia</div>
+        <p class="manifesto-desc">O acento dourado aparece onde o olho deve repousar. Nunca decorativo. Sempre intencional.</p>
+        <div class="manifesto-number">03</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     COLORS
+═══════════════════════════════════════ -->
+<section class="section-colors" id="colors">
+  <div class="container">
+    <div class="section-label" style="color:var(--gold);">
+      <span style="background:var(--gold)"></span>
+      Sistema de Cores
+    </div>
+    <h2 class="section-title section-title-inverse reveal">Paleta Institucional</h2>
+    <p class="section-subtitle section-subtitle-inverse reveal reveal-delay-1">Cada tom foi calibrado para transmitir autoridade. Do void ao ouro — do absoluto ao precioso.</p>
+
+    <div style="margin-top:var(--s64);">
+      <div class="color-context-label reveal">Contexto Principal</div>
+      <div class="color-swatches reveal reveal-delay-1">
+        <div class="color-swatch" onclick="copyColor('--void', '#070C14')">
+          <div class="swatch-bar" style="background:#070C14;"></div>
+          <div class="swatch-info">
+            <div class="swatch-token">--void</div>
+            <div class="swatch-hex">#070C14</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('--empire', '#0D1829')">
+          <div class="swatch-bar" style="background:#0D1829;"></div>
+          <div class="swatch-info">
+            <div class="swatch-token">--empire</div>
+            <div class="swatch-hex">#0D1829</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('--steel', '#243B55')">
+          <div class="swatch-bar" style="background:#243B55;"></div>
+          <div class="swatch-info">
+            <div class="swatch-token">--steel</div>
+            <div class="swatch-hex">#243B55</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('--ink', '#1A1F2E')">
+          <div class="swatch-bar" style="background:#1A1F2E;"></div>
+          <div class="swatch-info">
+            <div class="swatch-token">--ink</div>
+            <div class="swatch-hex">#1A1F2E</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('--platinum', '#BFC5CC')">
+          <div class="swatch-bar" style="background:#BFC5CC;"></div>
+          <div class="swatch-info">
+            <div class="swatch-token">--platinum</div>
+            <div class="swatch-hex">#BFC5CC</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('--ghost', '#E4E2DC')">
+          <div class="swatch-bar" style="background:#E4E2DC;border:1px solid rgba(0,0,0,0.06);"></div>
+          <div class="swatch-info">
+            <div class="swatch-token">--ghost</div>
+            <div class="swatch-hex">#E4E2DC</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('--bone', '#F2EFE8')">
+          <div class="swatch-bar" style="background:#F2EFE8;border:1px solid rgba(0,0,0,0.05);"></div>
+          <div class="swatch-info">
+            <div class="swatch-token">--bone</div>
+            <div class="swatch-hex">#F2EFE8</div>
+          </div>
+        </div>
+        <div class="color-swatch" onclick="copyColor('--gold', '#C9A240')">
+          <div class="swatch-bar" style="background:#C9A240;"></div>
+          <div class="swatch-info">
+            <div class="swatch-token">--gold</div>
+            <div class="swatch-hex">#C9A240</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     TYPOGRAPHY
+═══════════════════════════════════════ -->
+<section class="section-typography" id="typography">
+  <div class="container">
+    <div class="section-label">Tipografia</div>
+    <h2 class="section-title reveal">Hierarquia Editorial</h2>
+    <p class="section-subtitle reveal reveal-delay-1">Cormorant Garamond para drama. DM Sans para clareza. IBM Plex Mono para precisão.</p>
+
+    <div class="type-specimen" style="margin-top:var(--s64);">
+      <div class="reveal">
+        <div class="type-giant">Aa</div>
+        <div class="type-specimen-label">Cormorant Garamond — Display</div>
+      </div>
+      <div class="type-scale reveal reveal-delay-2">
+        <div class="type-row">
+          <div class="type-meta">120px / 700</div>
+          <div class="type-sample" style="font-family:var(--font-display);font-size:clamp(48px,6vw,80px);font-weight:700;letter-spacing:-0.04em;line-height:1">Empire</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">56px / 600</div>
+          <div class="type-sample" style="font-family:var(--font-display);font-size:var(--text-56);font-weight:600;letter-spacing:-0.02em;line-height:1">Authority</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">40px / 400 italic</div>
+          <div class="type-sample" style="font-family:var(--font-display);font-size:var(--text-40);font-weight:400;font-style:italic;letter-spacing:-0.01em">The Architecture</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">28px / 600</div>
+          <div class="type-sample" style="font-family:var(--font-display);font-size:var(--text-28);font-weight:600">Design System</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">20px / 300</div>
+          <div class="type-sample" style="font-family:var(--font-body);font-size:var(--text-20);font-weight:300;color:var(--steel)">Poder através da contenção.</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">16px / 400</div>
+          <div class="type-sample" style="font-size:var(--text-16);color:var(--steel)">Texto corrido com DM Sans. Legível, limpo, sem concessão à clareza.</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">13px / mono</div>
+          <div class="type-sample" style="font-family:var(--font-mono);font-size:var(--text-13);color:var(--steel);opacity:0.7">--token-value: #C9A240;</div>
+        </div>
+        <div class="type-row">
+          <div class="type-meta">11px / caps</div>
+          <div class="type-sample" style="font-family:var(--font-mono);font-size:var(--text-11);letter-spacing:0.18em;text-transform:uppercase;color:var(--gold)">Label · Categoria</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="type-variants reveal">
+      <div>
+        <div class="type-variant-label">Light 300</div>
+        <div style="font-family:var(--font-display);font-size:var(--text-40);font-weight:300;letter-spacing:-0.01em;color:var(--steel)">Elegância sutil</div>
+      </div>
+      <div>
+        <div class="type-variant-label">Regular Italic 400</div>
+        <div style="font-family:var(--font-display);font-size:var(--text-40);font-weight:400;font-style:italic;letter-spacing:-0.01em;color:var(--ink)">Voz editorial</div>
+      </div>
+      <div>
+        <div class="type-variant-label">Bold 700</div>
+        <div style="font-family:var(--font-display);font-size:var(--text-40);font-weight:700;letter-spacing:-0.03em;color:var(--ink)">Autoridade total</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     COMPONENTS
+═══════════════════════════════════════ -->
+<section class="section-components" id="components">
+  <div class="container">
+    <div class="section-label">Biblioteca de Componentes</div>
+    <h2 class="section-title reveal">Todos os Elementos</h2>
+    <p class="section-subtitle reveal reveal-delay-1">Cada componente testado em contexto real. Hover para ver os estados de interação.</p>
+
+    <!-- BUTTONS -->
+    <div class="component-group" style="margin-top:var(--s64);">
+      <div class="component-group-title reveal">Botões</div>
+      <div class="component-group-sub reveal reveal-delay-1">4 variantes · 4 tamanhos</div>
+
+      <div class="btn-showcase reveal reveal-delay-2">
+        <button class="btn btn-primary btn-sm">Primary SM</button>
+        <button class="btn btn-primary btn-md">Primary MD</button>
+        <button class="btn btn-primary btn-lg">Primary LG</button>
+        <button class="btn btn-gold btn-xl">Ação Principal</button>
+      </div>
+      <div class="btn-showcase reveal reveal-delay-2">
+        <button class="btn btn-secondary btn-sm">Secondary SM</button>
+        <button class="btn btn-secondary btn-md">Secondary MD</button>
+        <button class="btn btn-secondary btn-lg">Secondary LG</button>
+        <button class="btn btn-ghost btn-md">Ghost</button>
+        <button class="btn btn-danger btn-md">Danger</button>
+      </div>
+    </div>
+
+    <!-- CARDS -->
+    <div class="component-group">
+      <div class="component-group-title reveal">Cards</div>
+      <div class="component-group-sub reveal reveal-delay-1">3 variantes: Standard · Dark · Metric</div>
+      <div class="cards-showcase reveal reveal-delay-2">
+        <div class="card card-standard">
+          <div class="card-tag">Estratégia</div>
+          <div class="card-title">Posicionamento de Mercado</div>
+          <p class="card-body">Análise competitiva para definição de vantagem estratégica sustentável.</p>
+        </div>
+        <div class="card card-dark">
+          <div class="card-tag">Consultoria</div>
+          <div class="card-title">Transformação Institucional</div>
+          <p class="card-body">Reposicionamento de marca para liderança de segmento em 18 meses.</p>
+        </div>
+        <div class="card card-metric">
+          <div class="metric-number">4.8<sup>x</sup></div>
+          <div class="metric-label">Crescimento médio · 24 meses</div>
+          <div class="metric-delta">↑ +380% vs. benchmark</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BADGES -->
+    <div class="component-group">
+      <div class="component-group-title reveal">Badges & Status</div>
+      <div class="component-group-sub reveal reveal-delay-1">5 estados semânticos</div>
+      <div class="badges-showcase reveal reveal-delay-2">
+        <span class="badge badge-success"><span class="badge-dot"></span>Ativo</span>
+        <span class="badge badge-warning"><span class="badge-dot"></span>Em análise</span>
+        <span class="badge badge-danger"><span class="badge-dot"></span>Crítico</span>
+        <span class="badge badge-neutral"><span class="badge-dot"></span>Inativo</span>
+        <span class="badge badge-empire"><span class="badge-dot"></span>Premium</span>
+        <span class="badge" style="background:rgba(201,162,64,0.12);color:#8B6A1A;border:1px solid rgba(201,162,64,0.3);">
+          <span class="badge-dot" style="background:var(--gold);"></span>Gold Tier
+        </span>
+      </div>
+    </div>
+
+    <!-- FORMS -->
+    <div class="component-group">
+      <div class="component-group-title reveal">Formulários</div>
+      <div class="component-group-sub reveal reveal-delay-1">Input · Select · Checkbox · Radio · Toggle</div>
+      <div class="forms-showcase reveal reveal-delay-2">
+        <div>
+          <div class="form-group" style="margin-bottom:var(--s24)">
+            <label class="form-label">Nome da empresa <span class="form-label-sub">default</span></label>
+            <input class="form-input" type="text" placeholder="Ex: Empire Consulting">
+          </div>
+          <div class="form-group" style="margin-bottom:var(--s24)">
+            <label class="form-label">Setor de atuação</label>
+            <select class="form-input form-select">
+              <option>Consultoria Estratégica</option>
+              <option>Gestão de Investimentos</option>
+              <option>Private Equity</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email <span class="form-label-sub">error state</span></label>
+            <input class="form-input error" type="email" value="email@invalido">
+            <span class="form-error-msg">⚠ Formato de email inválido</span>
+          </div>
+        </div>
+        <div>
+          <div style="margin-bottom:var(--s24)">
+            <div class="form-label" style="margin-bottom:var(--s16)">Perfil de risco</div>
+            <div style="display:flex;flex-direction:column;gap:var(--s12,0.75rem)">
+              <label class="radio-group">
+                <div class="radio-input checked"></div>
+                <span style="font-size:var(--text-16)">Conservador</span>
+              </label>
+              <label class="radio-group">
+                <div class="radio-input"></div>
+                <span style="font-size:var(--text-16)">Moderado</span>
+              </label>
+              <label class="radio-group">
+                <div class="radio-input"></div>
+                <span style="font-size:var(--text-16)">Agressivo</span>
+              </label>
+            </div>
+          </div>
+          <div style="margin-bottom:var(--s24)">
+            <label class="checkbox-group" style="margin-bottom:var(--s12,0.75rem)">
+              <div class="checkbox-input checked"></div>
+              <span style="font-size:var(--text-16)">Aceito os termos de serviço</span>
+            </label>
+            <label class="checkbox-group">
+              <div class="checkbox-input"></div>
+              <span style="font-size:var(--text-16)">Receber relatórios semanais</span>
+            </label>
+          </div>
+          <div>
+            <div class="form-label" style="margin-bottom:var(--s16)">Notificações</div>
+            <div style="display:flex;flex-direction:column;gap:var(--s12,0.75rem)">
+              <div class="toggle-wrap">
+                <div class="toggle on" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+                <span style="font-size:var(--text-16)">Email</span>
+              </div>
+              <div class="toggle-wrap">
+                <div class="toggle" onclick="this.classList.toggle('on')"><div class="toggle-knob"></div></div>
+                <span style="font-size:var(--text-16)">Push</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="component-group">
+      <div class="component-group-title reveal">Tabela de Dados</div>
+      <div class="component-group-sub reveal reveal-delay-1">Colunas ordenáveis · Hover states · Badges inline</div>
+      <div class="table-wrap reveal reveal-delay-2">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Cliente <span class="sort-icon">↕</span></th>
+              <th>Setor <span class="sort-icon">↕</span></th>
+              <th>Receita <span class="sort-icon">↓</span></th>
+              <th>Status</th>
+              <th>Variação</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="td-name">Meridian Capital</td>
+              <td class="td-mono">Private Equity</td>
+              <td class="td-mono">R$ 48.2M</td>
+              <td><span class="badge badge-success"><span class="badge-dot"></span>Ativo</span></td>
+              <td class="td-mono" style="color:#2D7D4A">↑ +22%</td>
+            </tr>
+            <tr>
+              <td class="td-name">Vantage Group</td>
+              <td class="td-mono">Consultoria</td>
+              <td class="td-mono">R$ 31.7M</td>
+              <td><span class="badge badge-warning"><span class="badge-dot"></span>Análise</span></td>
+              <td class="td-mono" style="color:#8B6A1A">→ +2%</td>
+            </tr>
+            <tr>
+              <td class="td-name">Fortis Partners</td>
+              <td class="td-mono">M&amp;A</td>
+              <td class="td-mono">R$ 87.4M</td>
+              <td><span class="badge badge-empire"><span class="badge-dot"></span>Premium</span></td>
+              <td class="td-mono" style="color:#2D7D4A">↑ +41%</td>
+            </tr>
+            <tr>
+              <td class="td-name">Axiom Holdings</td>
+              <td class="td-mono">Real Estate</td>
+              <td class="td-mono">R$ 19.1M</td>
+              <td><span class="badge badge-danger"><span class="badge-dot"></span>Crítico</span></td>
+              <td class="td-mono" style="color:var(--danger)">↓ -8%</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     SPACING & GRID
+═══════════════════════════════════════ -->
+<section class="section-spacing">
+  <div class="container">
+    <div class="section-label">Espaçamento & Grid</div>
+    <h2 class="section-title reveal">Sistema de Espaço</h2>
+    <p class="section-subtitle reveal reveal-delay-1">Escala multiplicativa base-4. Grid de 12 colunas com gutter de 16px.</p>
+
+    <div style="margin-top:var(--s64)">
+      <div class="spacing-ruler reveal">
+        <div class="spacing-unit">
+          <div class="spacing-block" style="height:4px;width:4px"></div>
+          <div class="spacing-label">4</div>
+        </div>
+        <div class="spacing-unit">
+          <div class="spacing-block" style="height:8px;width:8px"></div>
+          <div class="spacing-label">8</div>
+        </div>
+        <div class="spacing-unit">
+          <div class="spacing-block" style="height:16px;width:16px"></div>
+          <div class="spacing-label">16</div>
+        </div>
+        <div class="spacing-unit">
+          <div class="spacing-block" style="height:24px;width:24px"></div>
+          <div class="spacing-label">24</div>
+        </div>
+        <div class="spacing-unit">
+          <div class="spacing-block" style="height:32px;width:32px"></div>
+          <div class="spacing-label">32</div>
+        </div>
+        <div class="spacing-unit">
+          <div class="spacing-block" style="height:48px;width:48px"></div>
+          <div class="spacing-label">48</div>
+        </div>
+        <div class="spacing-unit">
+          <div class="spacing-block" style="height:64px;width:64px"></div>
+          <div class="spacing-label">64</div>
+        </div>
+        <div class="spacing-unit">
+          <div class="spacing-block" style="height:96px;width:96px;opacity:0.7"></div>
+          <div class="spacing-label">96</div>
+        </div>
+        <div class="spacing-unit">
+          <div class="spacing-block" style="height:128px;width:128px;opacity:0.5"></div>
+          <div class="spacing-label">128</div>
+        </div>
+      </div>
+
+      <div style="margin-top:var(--s32)">
+        <div class="color-context-label reveal">Grid — 12 colunas</div>
+        <div class="grid-visual reveal reveal-delay-1">
+          <div class="grid-col">1</div>
+          <div class="grid-col">2</div>
+          <div class="grid-col">3</div>
+          <div class="grid-col">4</div>
+          <div class="grid-col">5</div>
+          <div class="grid-col">6</div>
+          <div class="grid-col">7</div>
+          <div class="grid-col">8</div>
+          <div class="grid-col">9</div>
+          <div class="grid-col">10</div>
+          <div class="grid-col">11</div>
+          <div class="grid-col">12</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     MOTION
+═══════════════════════════════════════ -->
+<section class="section-motion">
+  <div class="container">
+    <div class="section-label">Motion</div>
+    <h2 class="section-title reveal">Princípios de Animação</h2>
+    <p class="section-subtitle reveal reveal-delay-1">Hover nos cards para ver cada primitiva de motion em ação.</p>
+
+    <div class="motion-grid" style="margin-top:var(--s64)">
+      <div class="motion-card reveal">
+        <div class="motion-demo">
+          <div class="motion-dot motion-dot-fade"></div>
+        </div>
+        <div class="motion-name">Fade Up</div>
+        <div class="motion-curve">ease-out · 600ms</div>
+      </div>
+      <div class="motion-card reveal reveal-delay-1">
+        <div class="motion-demo">
+          <div class="motion-dot motion-dot-scale"></div>
+        </div>
+        <div class="motion-name">Scale In</div>
+        <div class="motion-curve">spring · 500ms</div>
+      </div>
+      <div class="motion-card reveal reveal-delay-2">
+        <div class="motion-demo">
+          <div class="motion-dot motion-dot-cross" style="border-radius:50%"></div>
+        </div>
+        <div class="motion-name">Cross Fade</div>
+        <div class="motion-curve">ease-in-out · 400ms</div>
+      </div>
+      <div class="motion-card reveal reveal-delay-3">
+        <div class="motion-demo" style="width:100%;overflow:hidden;">
+          <div class="motion-dot motion-dot-line" style="width:32px;height:2px;border-radius:1px;transform-origin:left center;"></div>
+        </div>
+        <div class="motion-name">Line Grow</div>
+        <div class="motion-curve">ease-out · 700ms</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     DARK MODE
+═══════════════════════════════════════ -->
+<section class="section-dark" id="darkmode">
+  <div class="container">
+    <div class="section-label" style="color:var(--gold);">
+      <span style="background:var(--gold)"></span>
+      Dark Mode
+    </div>
+    <h2 class="section-title section-title-inverse reveal">Contexto Escuro</h2>
+    <p class="section-subtitle section-subtitle-inverse reveal reveal-delay-1">O sistema inverte com coerência. Navy vira fundo. Ouro permanece âncora.</p>
+
+    <div class="dark-compare" style="margin-top:var(--s64)">
+      <div class="reveal">
+        <div class="dark-compare-label">Contexto Claro</div>
+        <div class="dm-card-light">
+          <div class="card-tag">Estratégia</div>
+          <div class="card-title" style="font-family:var(--font-display);font-size:var(--text-28);font-weight:600;letter-spacing:-0.01em;margin-bottom:var(--s8)">Posicionamento Premium</div>
+          <p class="card-body" style="font-size:var(--text-16);line-height:1.6;">Análise competitiva para definição de autoridade de mercado no segmento de alta renda.</p>
+          <div style="margin-top:var(--s24);display:flex;gap:var(--s12,0.75rem)">
+            <button class="btn btn-primary btn-md">Explorar</button>
+            <button class="btn btn-ghost btn-md">Ver mais</button>
+          </div>
+        </div>
+        <div style="margin-top:var(--s16)">
+          <input class="dm-input-light" type="text" placeholder="Input em contexto claro..." readonly style="outline:none;">
+        </div>
+        <div style="margin-top:var(--s16);display:flex;gap:var(--s8);flex-wrap:wrap">
+          <span class="badge badge-success"><span class="badge-dot"></span>Ativo</span>
+          <span class="badge badge-warning"><span class="badge-dot"></span>Análise</span>
+          <span class="badge badge-neutral"><span class="badge-dot"></span>Inativo</span>
+        </div>
+      </div>
+      <div class="reveal reveal-delay-2">
+        <div class="dark-compare-label">Contexto Escuro</div>
+        <div class="dm-card-dark">
+          <div class="card-tag">Estratégia</div>
+          <div class="card-title" style="font-family:var(--font-display);font-size:var(--text-28);font-weight:600;letter-spacing:-0.01em;margin-bottom:var(--s8)">Posicionamento Premium</div>
+          <p class="card-body" style="font-size:var(--text-16);line-height:1.6;">Análise competitiva para definição de autoridade de mercado no segmento de alta renda.</p>
+          <div style="margin-top:var(--s24);display:flex;gap:var(--s12,0.75rem)">
+            <button class="btn btn-gold btn-md">Explorar</button>
+            <button class="btn" style="color:var(--platinum);border:1px solid rgba(191,197,204,0.2);background:transparent;font-size:var(--text-16);padding:10px 20px;font-weight:600;border-radius:var(--radius-sm)">Ver mais</button>
+          </div>
+        </div>
+        <div style="margin-top:var(--s16)">
+          <input class="dm-input-dark" type="text" placeholder="Input em contexto escuro..." readonly>
+        </div>
+        <div style="margin-top:var(--s16);display:flex;gap:var(--s8);flex-wrap:wrap">
+          <span class="badge" style="background:rgba(45,125,74,0.2);color:#5CD688;"><span class="badge-dot" style="background:#5CD688"></span>Ativo</span>
+          <span class="badge" style="background:rgba(201,162,64,0.2);color:#E8C26A;"><span class="badge-dot" style="background:#E8C26A"></span>Análise</span>
+          <span class="badge" style="background:rgba(191,197,204,0.1);color:var(--platinum);"><span class="badge-dot" style="background:var(--platinum)"></span>Inativo</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     CSS TOKENS EXPORT
+═══════════════════════════════════════ -->
+<section class="section-tokens" id="tokens">
+  <div class="container">
+    <div class="section-label">Tokens CSS</div>
+    <h2 class="section-title reveal">Exportar Tokens</h2>
+    <p class="section-subtitle reveal reveal-delay-1">Copie os tokens e cole diretamente no :root do seu projeto.</p>
+
+    <div class="tokens-code reveal reveal-delay-2" style="margin-top:var(--s48)">
+      <div class="tokens-code-header">
+        <span class="tokens-code-filename">tokens.css</span>
+        <button class="tokens-code-copy" onclick="copyTokens()">Copiar tudo</button>
+      </div>
+      <pre><code id="tokens-content"><span class="tok-comment">/* DS1 Silver Empire — Design Tokens */</span>
+<span class="tok-punct">:root {</span>
+
+  <span class="tok-comment">/* Colors */</span>
+  <span class="tok-prop">--void</span><span class="tok-punct">:</span>       <span class="tok-val-color">#070C14</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--empire</span><span class="tok-punct">:</span>     <span class="tok-val-color">#0D1829</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--steel</span><span class="tok-punct">:</span>      <span class="tok-val-color">#243B55</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--platinum</span><span class="tok-punct">:</span>   <span class="tok-val-color">#BFC5CC</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--gold</span><span class="tok-punct">:</span>       <span class="tok-val-color">#C9A240</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--bone</span><span class="tok-punct">:</span>       <span class="tok-val-color">#F2EFE8</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--ink</span><span class="tok-punct">:</span>        <span class="tok-val-color">#1A1F2E</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--ghost</span><span class="tok-punct">:</span>      <span class="tok-val-color">#E4E2DC</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--mist</span><span class="tok-punct">:</span>       <span class="tok-val-color">#F7F6F2</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--white</span><span class="tok-punct">:</span>      <span class="tok-val-color">#FFFFFF</span><span class="tok-punct">;</span>
+
+  <span class="tok-comment">/* Typography */</span>
+  <span class="tok-prop">--font-display</span><span class="tok-punct">:</span> <span class="tok-val-string">'Cormorant Garamond', Georgia, serif</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--font-body</span><span class="tok-punct">:</span>    <span class="tok-val-string">'DM Sans', system-ui, sans-serif</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--font-mono</span><span class="tok-punct">:</span>    <span class="tok-val-string">'IBM Plex Mono', monospace</span><span class="tok-punct">;</span>
+
+  <span class="tok-comment">/* Type Scale */</span>
+  <span class="tok-prop">--text-11</span><span class="tok-punct">:</span>  <span class="tok-val-num">0.6875rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--text-13</span><span class="tok-punct">:</span>  <span class="tok-val-num">0.8125rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--text-16</span><span class="tok-punct">:</span>  <span class="tok-val-num">1rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--text-20</span><span class="tok-punct">:</span>  <span class="tok-val-num">1.25rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--text-28</span><span class="tok-punct">:</span>  <span class="tok-val-num">1.75rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--text-40</span><span class="tok-punct">:</span>  <span class="tok-val-num">2.5rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--text-56</span><span class="tok-punct">:</span>  <span class="tok-val-num">3.5rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--text-80</span><span class="tok-punct">:</span>  <span class="tok-val-num">5rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--text-120</span><span class="tok-punct">:</span> <span class="tok-val-num">7.5rem</span><span class="tok-punct">;</span>
+
+  <span class="tok-comment">/* Spacing */</span>
+  <span class="tok-prop">--s4</span><span class="tok-punct">:</span>   <span class="tok-val-num">0.25rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--s8</span><span class="tok-punct">:</span>   <span class="tok-val-num">0.5rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--s16</span><span class="tok-punct">:</span>  <span class="tok-val-num">1rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--s24</span><span class="tok-punct">:</span>  <span class="tok-val-num">1.5rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--s32</span><span class="tok-punct">:</span>  <span class="tok-val-num">2rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--s48</span><span class="tok-punct">:</span>  <span class="tok-val-num">3rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--s64</span><span class="tok-punct">:</span>  <span class="tok-val-num">4rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--s96</span><span class="tok-punct">:</span>  <span class="tok-val-num">6rem</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--s128</span><span class="tok-punct">:</span> <span class="tok-val-num">8rem</span><span class="tok-punct">;</span>
+
+  <span class="tok-comment">/* Motion */</span>
+  <span class="tok-prop">--ease-out</span><span class="tok-punct">:</span>    <span class="tok-val-string">cubic-bezier(0.0, 0.0, 0.2, 1.0)</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--ease-spring</span><span class="tok-punct">:</span> <span class="tok-val-string">cubic-bezier(0.34, 1.56, 0.64, 1.0)</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--duration-fast</span><span class="tok-punct">:</span>   <span class="tok-val-num">150ms</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--duration-base</span><span class="tok-punct">:</span>   <span class="tok-val-num">280ms</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--duration-slow</span><span class="tok-punct">:</span>   <span class="tok-val-num">500ms</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--duration-slower</span><span class="tok-punct">:</span> <span class="tok-val-num">800ms</span><span class="tok-punct">;</span>
+
+  <span class="tok-comment">/* Shadows */</span>
+  <span class="tok-prop">--shadow-sm</span><span class="tok-punct">:</span>  <span class="tok-val-string">0 1px 3px rgba(7,12,20,0.08)</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--shadow-md</span><span class="tok-punct">:</span>  <span class="tok-val-string">0 4px 16px rgba(7,12,20,0.10)</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--shadow-lg</span><span class="tok-punct">:</span>  <span class="tok-val-string">0 16px 48px rgba(7,12,20,0.14)</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--shadow-xl</span><span class="tok-punct">:</span>  <span class="tok-val-string">0 32px 80px rgba(7,12,20,0.20)</span><span class="tok-punct">;</span>
+
+  <span class="tok-comment">/* Radius */</span>
+  <span class="tok-prop">--radius-sm</span><span class="tok-punct">:</span> <span class="tok-val-num">3px</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--radius-md</span><span class="tok-punct">:</span> <span class="tok-val-num">6px</span><span class="tok-punct">;</span>
+  <span class="tok-prop">--radius-lg</span><span class="tok-punct">:</span> <span class="tok-val-num">12px</span><span class="tok-punct">;</span>
+<span class="tok-punct">}</span></code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     USAGE EXAMPLES
+═══════════════════════════════════════ -->
+<section class="section-examples">
+  <div class="container">
+    <div class="section-label">Exemplos de Uso</div>
+    <h2 class="section-title reveal">Sistema em Ação</h2>
+    <p class="section-subtitle reveal reveal-delay-1">Mini-produto: dashboard de métricas usando o sistema completo.</p>
+
+    <div class="example-dashboard reveal" style="margin-top:var(--s64)">
+      <div class="example-topbar">
+        <div class="ex-logo">Empire</div>
+        <div class="ex-nav">
+          <span>Dashboard</span>
+          <span>Clientes</span>
+          <span>Relatórios</span>
+          <span style="color:var(--gold);font-weight:500">Portfólio</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--s16)">
+          <span class="badge badge-success" style="font-size:11px"><span class="badge-dot"></span>Ao vivo</span>
+          <button class="btn btn-primary btn-sm">+ Novo</button>
+        </div>
+      </div>
+      <div class="ex-dashboard-body">
+        <div class="ex-metric-card">
+          <div class="ex-metric-num">R$4.8M</div>
+          <div class="ex-metric-label">Receita · Mar 2026</div>
+          <div class="ex-metric-delta-up">↑ +22% vs. mês anterior</div>
+        </div>
+        <div class="ex-metric-card">
+          <div class="ex-metric-num">128</div>
+          <div class="ex-metric-label">Clientes Ativos</div>
+          <div class="ex-metric-delta-up">↑ +14 este mês</div>
+        </div>
+        <div class="ex-metric-card">
+          <div class="ex-metric-num">94%</div>
+          <div class="ex-metric-label">Taxa de Retenção</div>
+          <div class="ex-metric-delta-down">↓ -2% vs. Q4 2025</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════ -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <div class="footer-brand">Empire</div>
+      <div class="footer-meta">
+        DS1 — Silver Empire · v2.0<br>
+        Editorial Frio · Cormorant + DM Sans<br>
+        Março 2026
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════════════════
+     SCRIPTS
+═══════════════════════════════════════ -->
+<script>
+// Scroll Reveal
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+// Toast helper
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// Copy color
+function copyColor(token, hex) {
+  navigator.clipboard.writeText(`var(${token})`).then(() => {
+    showToast(`Copiado: var(${token}) → ${hex}`);
+  }).catch(() => {
+    showToast(`${token}: ${hex}`);
+  });
+}
+
+// Copy all tokens
+function copyTokens() {
+  const raw = `:root {
+  --void:       #070C14;
+  --empire:     #0D1829;
+  --steel:      #243B55;
+  --platinum:   #BFC5CC;
+  --gold:       #C9A240;
+  --bone:       #F2EFE8;
+  --ink:        #1A1F2E;
+  --ghost:      #E4E2DC;
+  --mist:       #F7F6F2;
+  --white:      #FFFFFF;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-body:    'DM Sans', system-ui, sans-serif;
+  --font-mono:    'IBM Plex Mono', monospace;
+  --text-11: 0.6875rem; --text-13: 0.8125rem; --text-16: 1rem;
+  --text-20: 1.25rem;   --text-28: 1.75rem;   --text-40: 2.5rem;
+  --text-56: 3.5rem;    --text-80: 5rem;       --text-120: 7.5rem;
+  --s4: 0.25rem;  --s8: 0.5rem;   --s16: 1rem;   --s24: 1.5rem;
+  --s32: 2rem;    --s48: 3rem;    --s64: 4rem;   --s96: 6rem;
+  --s128: 8rem;
+  --ease-out: cubic-bezier(0.0,0.0,0.2,1.0);
+  --ease-spring: cubic-bezier(0.34,1.56,0.64,1.0);
+  --duration-fast: 150ms; --duration-base: 280ms;
+  --duration-slow: 500ms; --duration-slower: 800ms;
+  --shadow-sm: 0 1px 3px rgba(7,12,20,0.08);
+  --shadow-md: 0 4px 16px rgba(7,12,20,0.10);
+  --shadow-lg: 0 16px 48px rgba(7,12,20,0.14);
+  --shadow-xl: 0 32px 80px rgba(7,12,20,0.20);
+  --radius-sm: 3px; --radius-md: 6px; --radius-lg: 12px;
+}`;
+  navigator.clipboard.writeText(raw).then(() => {
+    showToast('Tokens copiados para o clipboard!');
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+[functions.uazapi-actions]
+verify_jwt = false

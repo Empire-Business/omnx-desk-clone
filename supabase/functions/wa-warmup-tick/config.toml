@@ -1,0 +1,2 @@
+[functions.wa-warmup-tick]
+verify_jwt = false

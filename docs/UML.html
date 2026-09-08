@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UML Visual — omnx-desk</title>
+<!--
+  TEMPLATE: modelo-uml.html — OMNX Code v1.10+
+  ---------------------------------------------------------------------------
+  Este arquivo é um template. A IA deve:
+  1. Substituir omnx-desk pelo nome real do produto
+  2. Preencher cada <div class="mermaid"> com os diagramas correspondentes
+     do docs/UML.md do projeto (classDiagram, sequenceDiagram, stateDiagram)
+  3. Ajustar os títulos das abas e painéis conforme os diagramas do projeto
+  4. Remover placeholders/divs de diagramas que o projeto não tiver
+  5. Ajustar a versão no header e footer (ex: "v1.0", "v2.0")
+
+  Regra: SEMPRE que docs/UML.md for criado ou atualizado, o UML.html
+  correspondente também deve ser gerado/atualizado no MESMO commit.
+  ---------------------------------------------------------------------------
+-->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0a0a0b;
+    --surface: #121214;
+    --border: #1e1e22;
+    --text: #e4e4e7;
+    --text-secondary: #9898a0;
+    --accent: #22c55e;
+    --accent-glow: rgba(34, 197, 94, 0.15);
+    --radius: 10px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo {
+    font-weight: 700;
+    font-size: 18px;
+    color: var(--accent);
+    letter-spacing: -0.02em;
+  }
+
+  .version-badge {
+    font-size: 11px;
+    background: var(--accent-glow);
+    color: var(--accent);
+    padding: 2px 8px;
+    border-radius: 100px;
+    font-weight: 500;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    padding: 16px 24px 0;
+    background: var(--bg);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab {
+    padding: 10px 16px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+
+  .tab:hover { color: var(--text); background: var(--surface); }
+  .tab.active {
+    color: var(--accent);
+    background: var(--surface);
+    border-color: var(--border);
+  }
+
+  .content {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    min-height: calc(100vh - 120px);
+  }
+
+  .panel {
+    display: none;
+    padding: 24px;
+  }
+
+  .panel.active { display: block; }
+
+  .panel h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    letter-spacing: -0.01em;
+  }
+
+  .panel .subtitle {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+
+  .mermaid-wrapper {
+    background: #0d0d0f;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    overflow-x: auto;
+  }
+
+  .mermaid-wrapper .mermaid {
+    display: flex;
+    justify-content: center;
+    min-height: 200px;
+  }
+
+  footer {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
+  @media (max-width: 720px) {
+    .tabs { padding: 12px 12px 0; }
+    .panel { padding: 16px; }
+    .mermaid-wrapper { padding: 12px; }
+    .tab { font-size: 11px; padding: 8px 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">omnx-desk</span>
+  <span class="version-badge">UML 04/08/2026</span>
+  <span style="flex:1"></span>
+  <span style="color:var(--text-secondary);font-size:13px">Diagramas do Sistema</span>
+</header>
+
+<!-- Gerado a partir de docs/UML.md. Para atualizar, edite o markdown e regere. -->
+<div class="tabs" id="tabs">
+  <button class="tab active" data-panel="d0">1. Núcleo multi-tenant — tenants é o hub de tudo</button>
+  <button class="tab" data-panel="d1">2. Domínio Contratos / Vendas / Comissões (o mais rico)</button>
+  <button class="tab" data-panel="d2">3. Domínio Chat (OMNXChat)</button>
+  <button class="tab" data-panel="d3">3.5. Domínio Atendimento (app Social Media — Fase 4)</button>
+  <button class="tab" data-panel="d4">Ciclo de vida da demanda</button>
+  <button class="tab" data-panel="d5">5. Fluxo dos apps (modularização)</button>
+</div>
+
+<div class="content">
+  <div class="panel active" id="panel-d0">
+    <h2>1. Núcleo multi-tenant — tenants é o hub de tudo</h2>
+    <div class="mermaid-wrapper">
+      <div class="mermaid">
+erDiagram
+  tenants   ||--o{ profiles     : "1 pessoa = 1 tenant"
+  tenants   ||--o{ user_roles   : "papel por tenant"
+  tenants   ||--o{ app_modules  : "apps ligados"
+  tenants   ||--o{ clients      : ""
+  tenants   ||--o{ contratos    : ""
+  tenants   ||--o{ whatsapp_instances : ""
+  auth_users ||--|| profiles    : "user_id"
+  auth_users ||--o{ user_roles  : "user_id"
+
+  tenants {
+    uuid id PK
+    text name
+    text slug
+    bool is_master "só 1 mestre"
+    text primary_color
+  }
+  profiles {
+    uuid user_id PK_FK
+    uuid tenant_id FK
+    text full_name
+  }
+  user_roles {
+    uuid user_id FK
+    app_role role "admin|manager|member"
+    uuid tenant_id FK
+  }
+  app_modules {
+    uuid tenant_id PK_FK
+    text slug PK "dashboard|chat|contratos|cobranca|portal"
+    bool enabled
+    uuid updated_by
+  }
+      </div>
+    </div>
+  </div>
+  <div class="panel" id="panel-d1">
+    <h2>2. Domínio Contratos / Vendas / Comissões (o mais rico)</h2>
+    <div class="mermaid-wrapper">
+      <div class="mermaid">
+erDiagram
+  clients            ||--o{ contratos          : "cliente_id"
+  products           ||--o{ contratos          : "produto_id"
+  vendas_pendentes   ||--o| contratos          : "venda_pendente_id"
+  users              ||--o{ contratos          : "estrategista_id / criado_por"
+  contratos          ||--o{ comissoes          : "contrato_id"
+  contratos          ||--o{ contrato_anexos    : ""
+  users              ||--o{ comissoes          : "estrategista_id"
+  extratos_mensais   ||--o{ comissoes          : "extrato_id (fechamento mensal)"
+  products           ||--o{ produtos_comissao  : "regra de %/valor"
+  clients            ||--o{ products           : "produto do cliente"
+  contratos_kanban_colunas ||--o{ contratos    : "status_chave (kanban)"
+
+  contratos {
+    uuid id PK
+    uuid tenant_id FK
+    uuid cliente_id FK
+    uuid produto_id FK
+    text status_interno
+    numeric valor_total
+    text link_clicksign "assinatura -> ATIVO"
+  }
+  comissoes {
+    uuid id PK
+    uuid tenant_id FK
+    uuid contrato_id FK
+    uuid estrategista_id FK
+    uuid extrato_id FK
+    numeric valor
+    text status
+  }
+      </div>
+    </div>
+  </div>
+  <div class="panel" id="panel-d2">
+    <h2>3. Domínio Chat (OMNXChat)</h2>
+    <div class="mermaid-wrapper">
+      <div class="mermaid">
+erDiagram
+  whatsapp_instances ||--o{ chat_departments   : "instance_id"
+  whatsapp_instances ||--o{ chat_conversations : "instance_id"
+  chat_departments   ||--o{ chat_conversations : "department_id"
+  chat_contacts      ||--o{ chat_conversations : "contact_id"
+  users              ||--o{ chat_conversations : "agente_id"
+  chat_conversations ||--o{ chat_messages      : "conversation_id"
+  chat_messages      ||--o| chat_messages      : "reply_to_id"
+  users              ||--o{ chat_departments   : "gerente_id"
+
+  chat_conversations {
+    uuid id PK
+    uuid tenant_id FK
+    uuid instance_id FK
+    uuid department_id FK
+    uuid agente_id FK
+  }
+      </div>
+    </div>
+  </div>
+  <div class="panel" id="panel-d3">
+    <h2>3.5. Domínio Atendimento (app Social Media — Fase 4)</h2>
+    <div class="mermaid-wrapper">
+      <div class="mermaid">
+classDiagram
+  class tenants { uuid id }
+  class clients { uuid id; text nome }
+  class users { uuid id; text nome; text perfil }
+
+  class atendimento_tipos {
+    uuid id
+    uuid tenant_id
+    text nome
+    bool ativo
+    int ordem
+  }
+  class atendimento_etapas {
+    uuid id
+    uuid tenant_id
+    text nome
+    text cor
+    int ordem
+    bool is_final
+  }
+  class atendimento_demandas {
+    uuid id
+    uuid tenant_id
+    text codigo "DEM-00001"
+    text titulo
+    text prioridade "baixa|media|alta|urgente"
+    date prazo
+    text aprovacao "nao_enviado|aguardando|aprovado|ajustes"
+    jsonb anexos
+    timestamptz concluida_em
+  }
+  class atendimento_comentarios {
+    uuid id
+    uuid demanda_id
+    text texto
+  }
+  class atendimento_historico {
+    uuid id
+    uuid demanda_id
+    text campo
+    text valor_de
+    text valor_para
+  }
+
+  tenants "1" --> "N" atendimento_tipos
+  tenants "1" --> "N" atendimento_etapas
+  tenants "1" --> "N" atendimento_demandas
+  clients "1" --> "N" atendimento_demandas : cliente_id
+  users "1" --> "N" atendimento_demandas : responsavel_id
+  atendimento_tipos "1" --> "N" atendimento_demandas : tipo_id
+  atendimento_etapas "1" --> "N" atendimento_demandas : etapa_id (RESTRICT)
+  atendimento_demandas "1" --> "N" atendimento_comentarios
+  atendimento_demandas "1" --> "N" atendimento_historico
+      </div>
+    </div>
+  </div>
+  <div class="panel" id="panel-d4">
+    <h2>Ciclo de vida da demanda</h2>
+    <div class="mermaid-wrapper">
+      <div class="mermaid">
+stateDiagram-v2
+  [*] --> Solicitado
+  Solicitado --> EmProducao: responsável assume
+  EmProducao --> EmRevisao: peça pronta
+  EmRevisao --> AguardandoAprovacao: enviada ao cliente
+  AguardandoAprovacao --> Ajustes: cliente pediu mudança
+  Ajustes --> EmProducao
+  AguardandoAprovacao --> Aprovado: cliente aprovou
+  Aprovado --> Publicado: no ar
+  Publicado --> [*]
+
+  note right of Publicado
+    Etapa com is_final = true.
+    O trigger carimba concluida_em;
+    voltar para etapa de trabalho limpa o carimbo.
+  end note
+      </div>
+    </div>
+  </div>
+  <div class="panel" id="panel-d5">
+    <h2>5. Fluxo dos apps (modularização)</h2>
+    <div class="mermaid-wrapper">
+      <div class="mermaid">
+flowchart TD
+  A[Login / AuthContext] --> B{ProtectedRoute<br/>trava de domínio + tenant}
+  B --> C[AppLayout - núcleo]
+  C --> H{HomePage /}
+  H -->|app ligado + permissão| N[Painel de Atendimento]
+  H -->|senão| D[Dashboard legado /dashboard-legado]
+  C -->|appSlug| E[OMNXChat /chat]
+  C -->|appSlug + permissão| N2[Atendimento /atendimento/*]
+  C -->|appSlug + acesso_contratos| F[Contratos /contratos]
+  B -->|RequireApp cobranca — arquivado| G[Cobrança /cobranca]
+  B -->|RequireApp portal — arquivado| P[Portal do Cliente /portal]
+  C -->|adminOnly| I[Apps /apps · Reportes · Admin]
+  C -->|masterOnly is_master_admin| J[Empresas /empresas]
+
+  K[(app_modules por tenant)] -.liga/desliga.-> E & N2 & F & G
+  S[(tenants.atendimento_segmento)] -.define abas e métricas.-> N & N2
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  omnx-desk — UML Visual &middot; Renderizado com Mermaid.js &middot; 04/08/2026 BRT &middot; fonte: docs/UML.md
+</footer>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      primaryColor: '#1a1a1e',
+      primaryTextColor: '#e4e4e7',
+      primaryBorderColor: '#2e2e32',
+      lineColor: '#3a3a40',
+      secondaryColor: '#0f0f11',
+      tertiaryColor: '#121214',
+      noteBkgColor: '#1a2a1a',
+      noteTextColor: '#e4e4e7',
+      fontSize: '13px',
+      fontFamily: 'Inter, -apple-system, sans-serif'
+    },
+    sequence: {
+      actorFontSize: '13px',
+      noteFontSize: '11px',
+      messageFontSize: '12px',
+      boxMargin: 8
+    }
+  });
+
+  window.addEventListener('load', () => {
+    const tabs = document.querySelectorAll('.tab');
+    const panels = document.querySelectorAll('.panel');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.panel;
+        tabs.forEach(t => t.classList.remove('active'));
+        panels.forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        const panel = document.getElementById('panel-' + target);
+        if (panel) panel.classList.add('active');
+      });
+    });
+  });
+</script>
+
+</body>
+</html>
+

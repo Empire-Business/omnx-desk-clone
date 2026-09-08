@@ -1,0 +1,1004 @@
+@import "tailwindcss";
+
+/* ============================================================
+   OMNX Desk Design System — Gmail M3 (token-swap from DS1 v2.0)
+   Material 3 productivity surface · Google Blue 700 primary
+   Fonts: Roboto (body) + Google Sans (display) + Material Symbols
+   ============================================================ */
+
+/* ----------------------------------------------------------
+   1. CSS Custom Properties — Light Mode (default)
+   ---------------------------------------------------------- */
+:root {
+  /* ── Raw Palette (DS1 names retained as aliases, recolored to Gmail M3) ── */
+  --void:       #0E0E0E;  /* Deepest surface (M3 dark surface-container-lowest) */
+  --empire:     #0B57D0;  /* Google Blue 700 (GM2) — interactive primary */
+  --steel:      #444746;  /* M3 on-surface-variant — secondary text */
+  --platinum:   #C4C7C5;  /* M3 outline */
+  --gold:       #FBBC04;  /* Gmail brand yellow — Star icon, warm accent */
+  --bone:       #F6F8FC;  /* Gmail sidebar canvas (cool white) */
+  --ink:        #1F1F1F;  /* M3 on-surface — body foreground */
+  --ghost:      #DADCE0;  /* M3 outline-variant — input borders & dividers */
+  --white:      #FFFFFF;
+  --mist:       #F0F4F9;  /* M3 surface-container — search-bar fill, hover */
+  --ds-danger:  #EA4335;  /* Gmail brand red */
+
+  /* ── Gmail brand primitives (verified GM2 + brand palette) ── */
+  --google-blue-500:    #1A73E8;
+  --google-blue-600:    #1967D2;
+  --google-blue-700:    #0B57D0;
+  --gmail-brand-red:    #EA4335;
+  --gmail-brand-yellow: #FBBC04;
+  --gmail-brand-green:  #34A853;
+  --gmail-brand-blue:   #4285F4;
+  --gmail-blue-compose:        #C2E7FF;  /* Compose pill / active nav-rail / badges */
+  --gmail-blue-on-compose:     #001D35;
+  --gmail-blue-selected-row:   #D3E3FD;  /* M3 primary container — selected row tint */
+  --gmail-blue-on-selected-row:#001B3F;
+  --gmail-status-online:       #34A853;
+  --gmail-yellow-star:         #FBBC04;
+  --gmail-state-hover:   rgba(31, 31, 31, 0.04);
+  --gmail-state-focus:   rgba(31, 31, 31, 0.08);
+  --gmail-state-pressed: rgba(31, 31, 31, 0.12);
+  --gmail-surface-container:        #F0F4F9;
+  --gmail-surface-container-high:   #E9EEF6;
+  --gmail-surface-container-highest:#DDE3EA;
+
+  /* ── Semantic — mapped to Tailwind tokens ── */
+  --background:          var(--bone);     /* #F6F8FC cool white */
+  --foreground:          var(--ink);      /* #1F1F1F */
+  --card:                var(--white);
+  --card-foreground:     var(--ink);
+  --card-border:         var(--ghost);
+  --popover:             var(--white);
+  --popover-foreground:  var(--ink);
+  --muted:               var(--mist);     /* #F0F4F9 */
+  --muted-foreground:    var(--steel);    /* #444746 */
+  --border:              var(--ghost);    /* #DADCE0 */
+  --input:               var(--ghost);
+  --ring:                var(--empire);   /* #0B57D0 Google Blue 700 focus */
+
+  /* ── Brand (Google Blue 700) ── */
+  --primary:             var(--empire);              /* #0B57D0 */
+  --primary-foreground:  var(--white);
+  --primary-hover:       #0A4FBC;
+  --primary-light:       var(--gmail-blue-compose);  /* #C2E7FF */
+  --primary-glow:        rgba(11, 87, 208, 0.18);
+  --primary-muted:       rgba(11, 87, 208, 0.06);
+
+  /* ── Accent (M3 primary container — selected row tint) ── */
+  --accent:              var(--gmail-blue-selected-row);  /* #D3E3FD */
+  --accent-foreground:   var(--gmail-blue-on-selected-row);
+
+  /* ── Sidebar (cool white canvas) ── */
+  --sidebar:                    var(--bone);            /* #F6F8FC */
+  --sidebar-foreground:         var(--ink);
+  --sidebar-border:             var(--ghost);
+  --sidebar-accent:             var(--gmail-blue-compose);  /* #C2E7FF active nav */
+  --sidebar-accent-foreground:  var(--gmail-blue-on-compose);
+
+  /* ── Secondary (Compose pill / active nav / badges) ── */
+  --secondary:             var(--gmail-blue-compose);    /* #C2E7FF */
+  --secondary-foreground:  var(--gmail-blue-on-compose); /* #001D35 */
+
+  /* ── Destructive ── */
+  --destructive:            var(--ds-danger);
+  --destructive-foreground: var(--white);
+
+  /* ── Status (alinhado com paleta Google brand) ── */
+  --success:       var(--gmail-brand-green);   /* #34A853 */
+  --success-light: rgba(52, 168, 83, 0.10);
+  --warning:       var(--gold);                /* #FBBC04 */
+  --warning-light: rgba(251, 188, 4, 0.14);
+  --danger:        var(--ds-danger);           /* #EA4335 */
+  --danger-light:  rgba(234, 67, 53, 0.10);
+  --info:          var(--google-blue-500);     /* #1A73E8 */
+  --info-light:    rgba(26, 115, 232, 0.08);
+
+  /* ── Area Colors ── */
+  --area-acquisition:            var(--google-blue-500);
+  --area-acquisition-foreground: var(--white);
+  --area-acquisition-light:      rgba(26, 115, 232, 0.10);
+  --area-acquisition-muted:      rgba(26, 115, 232, 0.05);
+
+  --area-delivery:               var(--gmail-brand-green);
+  --area-delivery-foreground:    var(--white);
+  --area-delivery-light:         rgba(52, 168, 83, 0.10);
+  --area-delivery-muted:         rgba(52, 168, 83, 0.05);
+
+  --area-operation:              var(--gold);
+  --area-operation-foreground:   var(--ink);
+  --area-operation-light:        rgba(251, 188, 4, 0.14);
+  --area-operation-muted:        rgba(251, 188, 4, 0.06);
+
+  /* ── Glass ── */
+  --glass-bg:      rgba(255, 255, 255, 0.72);
+  --glass-border:  var(--ghost);
+  --glass-shimmer: rgba(255, 255, 255, 0.18);
+
+  /* ── Shadows (M3 elevation — neutral, subtle) ── */
+  --shadow-xs:  none;
+  --shadow-sm:  0 1px 2px 0 rgba(0, 0, 0, 0.30), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --shadow-md:  0 1px 2px 0 rgba(0, 0, 0, 0.30), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --shadow-lg:  0 4px 8px 3px rgba(0, 0, 0, 0.15), 0 1px 3px 0 rgba(0, 0, 0, 0.30);
+  --shadow-xl:  0 6px 10px 4px rgba(0, 0, 0, 0.15), 0 2px 3px 0 rgba(0, 0, 0, 0.30);
+  --shadow-glow: 0 4px 12px rgba(11, 87, 208, 0.24);
+
+  /* ── Layout (M3: card 8px, pill 9999px) ── */
+  --radius: 8px;
+  --sidebar-width: 256px;
+  --sidebar-width-collapsed: 64px;
+
+  /* ── Motion (M3 emphasized easing) ── */
+  --ease-out:        cubic-bezier(.05, .7, .1, 1);
+  --ease-in-out:     cubic-bezier(.2, 0, 0, 1);
+  --ease-spring:     cubic-bezier(.2, 0, 0, 1);
+  --duration-fast:   150ms;
+  --duration-base:   250ms;
+  --duration-slow:   400ms;
+  --duration-slower: 500ms;
+}
+
+/* ----------------------------------------------------------
+   2. CSS Custom Properties — Dark Mode
+   ---------------------------------------------------------- */
+/* ──────────────────────────────────────────────────────────
+   Dark Mode — M3 dark surface ladder, Google Blue dark variant
+   primary: #A8C7FA · secondary container: #004A77
+   ────────────────────────────────────────────────────────── */
+.force-dark,
+.dark {
+  /* M3 dark surface ladder */
+  --background:          #1F1F1F;
+  --foreground:          #E3E3E3;
+  --card:                #2D2D2D;
+  --card-foreground:     #E3E3E3;
+  --card-border:         #3C4043;
+  --popover:             #2D2D2D;
+  --popover-foreground:  #E3E3E3;
+  --muted:               #282828;
+  --muted-foreground:    #9AA0A6;
+  --border:              #3C4043;
+  --input:               #3C4043;
+  --ring:                #A8C7FA;
+
+  /* Primary — M3 dark Google Blue variant */
+  --primary:             #A8C7FA;
+  --primary-foreground:  #062E6F;
+  --primary-hover:       #C2DAFD;
+  --primary-light:       rgba(168, 199, 250, 0.12);
+  --primary-glow:        rgba(168, 199, 250, 0.20);
+  --primary-muted:       rgba(168, 199, 250, 0.08);
+
+  /* Secondary — Compose pill darkens to M3 dark secondary container */
+  --secondary:            #004A77;
+  --secondary-foreground: #C2E7FF;
+
+  /* Accent — M3 dark primary container (selected row dark tint) */
+  --accent:              #062E6F;
+  --accent-foreground:   #D2E3FC;
+
+  --destructive:            #F2B8B5;
+  --destructive-foreground: #601410;
+
+  /* Sidebar (dark surface ladder) */
+  --sidebar:                    #1A1A1A;
+  --sidebar-foreground:         #E3E3E3;
+  --sidebar-border:             #3C4043;
+  --sidebar-accent:             #004A77;          /* compose pill dark */
+  --sidebar-accent-foreground:  #C2E7FF;
+
+  /* Status (dark variants Google brand) */
+  --success:       #81C995;
+  --success-light: rgba(52, 168, 83, 0.20);
+  --warning:       #FDD663;
+  --warning-light: rgba(251, 188, 4, 0.20);
+  --danger:        #F2B8B5;
+  --danger-light:  rgba(234, 67, 53, 0.18);
+  --info:          #A8C7FA;
+  --info-light:    rgba(168, 199, 250, 0.10);
+
+  /* Area Colors (dark) */
+  --area-acquisition:            #A8C7FA;
+  --area-acquisition-foreground: #062E6F;
+  --area-acquisition-light:      rgba(168, 199, 250, 0.10);
+  --area-acquisition-muted:      rgba(168, 199, 250, 0.05);
+
+  --area-delivery:               #81C995;
+  --area-delivery-foreground:    #062E6F;
+  --area-delivery-light:         rgba(52, 168, 83, 0.20);
+  --area-delivery-muted:         rgba(52, 168, 83, 0.08);
+
+  --area-operation:              #FDD663;
+  --area-operation-foreground:   #1F1F1F;
+  --area-operation-light:        rgba(251, 188, 4, 0.20);
+  --area-operation-muted:        rgba(251, 188, 4, 0.08);
+
+  /* Glass */
+  --glass-bg:      rgba(45, 45, 45, 0.72);
+  --glass-border:  #3C4043;
+  --glass-shimmer: rgba(255, 255, 255, 0.06);
+
+  /* Shadows (M3 elevation, dark) */
+  --shadow-xs:  none;
+  --shadow-sm:  0 1px 2px 0 rgba(0, 0, 0, 0.30), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --shadow-md:  0 1px 2px 0 rgba(0, 0, 0, 0.30), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --shadow-lg:  0 4px 8px 3px rgba(0, 0, 0, 0.30), 0 1px 3px 0 rgba(0, 0, 0, 0.50);
+  --shadow-xl:  0 6px 10px 4px rgba(0, 0, 0, 0.30), 0 2px 3px 0 rgba(0, 0, 0, 0.50);
+  --shadow-glow: 0 4px 16px rgba(168, 199, 250, 0.30);
+
+  color-scheme: dark;
+}
+
+/* ----------------------------------------------------------
+   3. @theme — Tailwind v4 Theme Mapping
+   ---------------------------------------------------------- */
+@theme {
+  /* Colors */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-light: var(--primary-light);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-glow: var(--primary-glow);
+  --color-primary-muted: var(--primary-muted);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-card-border: var(--card-border);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-danger: var(--danger);
+  --color-danger-light: var(--danger-light);
+  --color-info: var(--info);
+  --color-info-light: var(--info-light);
+
+  --color-area-acquisition: var(--area-acquisition);
+  --color-area-acquisition-foreground: var(--area-acquisition-foreground);
+  --color-area-acquisition-light: var(--area-acquisition-light);
+  --color-area-acquisition-muted: var(--area-acquisition-muted);
+
+  --color-area-delivery: var(--area-delivery);
+  --color-area-delivery-foreground: var(--area-delivery-foreground);
+  --color-area-delivery-light: var(--area-delivery-light);
+  --color-area-delivery-muted: var(--area-delivery-muted);
+
+  --color-area-operation: var(--area-operation);
+  --color-area-operation-foreground: var(--area-operation-foreground);
+  --color-area-operation-light: var(--area-operation-light);
+  --color-area-operation-muted: var(--area-operation-muted);
+
+  --color-glass-bg: var(--glass-bg);
+  --color-glass-border: var(--glass-border);
+  --color-glass-shimmer: var(--glass-shimmer);
+
+  /* DS1 named colors for direct use */
+  --color-void: var(--void);
+  --color-empire: var(--empire);
+  --color-steel: var(--steel);
+  --color-platinum: var(--platinum);
+  --color-gold: var(--gold);
+  --color-bone: var(--bone);
+  --color-ink: var(--ink);
+  --color-ghost: var(--ghost);
+  --color-ds-mist: var(--mist);
+  --color-ds-white: var(--white);
+  --color-ds-danger: var(--ds-danger);
+
+  /* Font families — Gmail M3 (Roboto body, Google Sans display, Material Symbols icons) */
+  --font-sans: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Google Sans", "Roboto", system-ui, sans-serif;
+  --font-mono: "Roboto Mono", "Menlo", "Consolas", monospace;
+  --font-icons: "Material Symbols Outlined";
+
+  /* Gmail brand color tokens (consumable via Tailwind) */
+  --color-google-blue-500: var(--google-blue-500);
+  --color-google-blue-600: var(--google-blue-600);
+  --color-google-blue-700: var(--google-blue-700);
+  --color-gmail-red: var(--gmail-brand-red);
+  --color-gmail-yellow: var(--gmail-brand-yellow);
+  --color-gmail-green: var(--gmail-brand-green);
+  --color-gmail-blue: var(--gmail-brand-blue);
+  --color-gmail-compose: var(--gmail-blue-compose);
+  --color-gmail-selected: var(--gmail-blue-selected-row);
+
+  /* Border radius — M3 scale (card 8px, pill 9999px) */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 28px;
+  --radius-pill: 9999px;
+
+  /* Shadows */
+  --shadow-card: var(--shadow-sm);
+  --shadow-panel: var(--shadow-xl);
+
+  /* Animations */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-slide-in-right: slide-in-right 0.3s var(--ease-out);
+  --animate-fade-in: fade-in var(--duration-base) var(--ease-out);
+  --animate-fade-in-up: fade-in-up var(--duration-base) var(--ease-out);
+  --animate-shimmer-premium: shimmer-premium 2.5s ease-in-out infinite;
+
+  /* Sidebar sizing */
+  --spacing-sidebar: var(--sidebar-width);
+  --spacing-sidebar-collapsed: var(--sidebar-width-collapsed);
+}
+
+/* ----------------------------------------------------------
+   4. Keyframes
+   ---------------------------------------------------------- */
+@keyframes accordion-down {
+  from { height: 0; }
+  to { height: var(--radix-accordion-content-height); }
+}
+
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to { height: 0; }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer-premium {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes line-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* ----------------------------------------------------------
+   5. Base Styles
+   ---------------------------------------------------------- */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.43;
+    letter-spacing: 0.0142857em;
+    font-weight: 400;
+    font-feature-settings: "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Pointer cursor for all interactive elements */
+  button,
+  [role="button"],
+  [type="button"],
+  [type="submit"],
+  select,
+  label[for] {
+    cursor: pointer;
+  }
+
+  /* Consistent focus-visible ring across all elements */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+}
+
+/* ----------------------------------------------------------
+   6. Utility Classes
+   ---------------------------------------------------------- */
+@layer utilities {
+  /* Hide scrollbar but keep scroll functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Extra-small text */
+  .text-2xs {
+    font-size: 0.625rem;
+    line-height: 0.875rem;
+  }
+
+  /* Section label pattern (M3 eyebrow) */
+  .section-label {
+    font-family: "Roboto", system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .section-label::before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 1px;
+    background: var(--primary);
+  }
+
+  /* Glass morphism — DS1 style */
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px) saturate(1.5);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    border: 1px solid var(--glass-border);
+  }
+
+  .glass-light {
+    background: rgba(242, 239, 232, 0.82);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--ghost);
+  }
+
+  /* M3 flat card — hairline border, no default shadow, subtle hover */
+  .glass-card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius);
+    box-shadow: none;
+    transition: background 200ms cubic-bezier(.2, 0, 0, 1),
+                box-shadow 200ms cubic-bezier(.2, 0, 0, 1),
+                border-color 200ms cubic-bezier(.2, 0, 0, 1);
+  }
+
+  .glass-card:hover {
+    background: color-mix(in srgb, var(--card) 96%, var(--foreground));
+    border-color: var(--border);
+  }
+
+  /* DS1 gradient — adapts to light/dark */
+  .gradient-primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+  }
+
+  .gradient-bg {
+    background: var(--background);
+  }
+
+  /* M3 hairline accent (replaces DS1 gold-line) */
+  .gold-line {
+    height: 1px;
+    background: var(--border);
+    transform-origin: left center;
+  }
+
+  /* Entity card hover — M3 subtle */
+  .entity-card-hover {
+    transition: background 200ms cubic-bezier(.2, 0, 0, 1),
+                border-color 200ms cubic-bezier(.2, 0, 0, 1),
+                box-shadow 200ms cubic-bezier(.2, 0, 0, 1);
+  }
+
+  .entity-card-hover:hover {
+    background: color-mix(in srgb, var(--card) 94%, var(--foreground));
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Stagger enter animation */
+  .stagger-enter {
+    animation: fade-in-up 0.3s var(--ease-out) backwards;
+  }
+
+  .stagger-enter:nth-child(1) { animation-delay: 0ms; }
+  .stagger-enter:nth-child(2) { animation-delay: 60ms; }
+  .stagger-enter:nth-child(3) { animation-delay: 120ms; }
+  .stagger-enter:nth-child(4) { animation-delay: 180ms; }
+  .stagger-enter:nth-child(5) { animation-delay: 240ms; }
+  .stagger-enter:nth-child(6) { animation-delay: 300ms; }
+  .stagger-enter:nth-child(7) { animation-delay: 360ms; }
+  .stagger-enter:nth-child(8) { animation-delay: 420ms; }
+  .stagger-enter:nth-child(9) { animation-delay: 480ms; }
+  .stagger-enter:nth-child(10) { animation-delay: 540ms; }
+
+  /* Hide scrollbar utility */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Chat background — WhatsApp Web 2024 doodle pattern */
+  .chat-bg {
+    background-color: #efeae2;
+    background-image: url("data:image/svg+xml,%3Csvg width='412' height='412' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='wp' width='412' height='412' patternUnits='userSpaceOnUse'%3E%3Cpath d='M20 20h4v4h-4zM60 30h3v3h-3zM100 15h5v3h-5zM140 35h3v5h-3zM180 10h4v4h-4zM220 25h3v3h-3zM260 40h5v3h-5zM300 20h3v5h-3zM340 30h4v4h-4zM380 15h3v3h-3zM40 70h3v5h-3zM80 55h5v3h-5zM120 80h3v3h-3zM160 60h4v4h-4zM200 75h3v5h-3zM240 50h5v3h-5zM280 65h3v3h-3zM320 85h4v4h-4zM360 55h3v5h-3zM400 70h3v3h-3zM30 110h5v3h-5zM70 95h3v5h-3zM110 120h4v4h-4zM150 100h3v3h-3zM190 115h5v3h-5zM230 90h3v5h-3zM270 105h4v4h-4zM310 125h3v3h-3zM350 95h5v3h-5zM390 110h3v5h-3zM50 150h3v3h-3zM90 140h5v3h-5zM130 160h3v5h-3zM170 145h4v4h-4zM210 155h3v3h-3zM250 135h5v3h-5zM290 150h3v5h-3zM330 140h4v4h-4zM370 160h3v3h-3z' fill='%23d1cdc7' fill-opacity='0.4'/%3E%3C/pattern%3E%3C/defs%3E%3Crect fill='url(%23wp)' width='412' height='412'/%3E%3C/svg%3E");
+  }
+
+  .dark .chat-bg {
+    background-color: #0b141a;
+    background-image: url("data:image/svg+xml,%3Csvg width='412' height='412' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='wp' width='412' height='412' patternUnits='userSpaceOnUse'%3E%3Cpath d='M20 20h4v4h-4zM60 30h3v3h-3zM100 15h5v3h-5zM140 35h3v5h-3zM180 10h4v4h-4zM220 25h3v3h-3zM260 40h5v3h-5zM300 20h3v5h-3zM340 30h4v4h-4zM380 15h3v3h-3zM40 70h3v5h-3zM80 55h5v3h-5zM120 80h3v3h-3zM160 60h4v4h-4zM200 75h3v5h-3zM240 50h5v3h-5zM280 65h3v3h-3zM320 85h4v4h-4zM360 55h3v5h-3zM400 70h3v3h-3zM30 110h5v3h-5zM70 95h3v5h-3zM110 120h4v4h-4zM150 100h3v3h-3zM190 115h5v3h-5zM230 90h3v5h-3zM270 105h4v4h-4zM310 125h3v3h-3zM350 95h5v3h-5zM390 110h3v5h-3zM50 150h3v3h-3zM90 140h5v3h-5zM130 160h3v5h-3zM170 145h4v4h-4zM210 155h3v3h-3zM250 135h5v3h-5zM290 150h3v5h-3zM330 140h4v4h-4zM370 160h3v3h-3z' fill='%23172028' fill-opacity='0.5'/%3E%3C/pattern%3E%3C/defs%3E%3Crect fill='url(%23wp)' width='412' height='412'/%3E%3C/svg%3E");
+  }
+
+  /* WhatsApp-style conversation list scrollbar */
+  .wpp-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  .wpp-scroll:hover {
+    scrollbar-color: rgba(0,0,0,0.2) transparent;
+  }
+  .dark .wpp-scroll:hover {
+    scrollbar-color: rgba(255,255,255,0.15) transparent;
+  }
+  .wpp-scroll::-webkit-scrollbar { width: 6px; }
+  .wpp-scroll::-webkit-scrollbar-track { background: transparent; }
+  .wpp-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+  .wpp-scroll:hover::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); }
+  .dark .wpp-scroll:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
+
+  /* Scrollbar fina e discreta do Kanban (vertical nas colunas, horizontal no board) */
+  .kanban-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100,116,139,0.28) transparent;
+  }
+  .dark .kanban-scroll {
+    scrollbar-color: rgba(148,163,184,0.28) transparent;
+  }
+  .kanban-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+  .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
+  .kanban-scroll::-webkit-scrollbar-thumb {
+    background: rgba(100,116,139,0.25);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    transition: background 0.2s;
+  }
+  .kanban-scroll:hover::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.45); background-clip: content-box; }
+  .kanban-scroll::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.6); background-clip: content-box; }
+  .dark .kanban-scroll::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.28); background-clip: content-box; }
+  .dark .kanban-scroll:hover::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.5); background-clip: content-box; }
+  .kanban-scroll::-webkit-scrollbar-corner { background: transparent; }
+
+  /* WhatsApp bubble tail — left (received) */
+  .bubble-tail-left::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -8px;
+    width: 8px;
+    height: 13px;
+    background: inherit;
+    clip-path: polygon(100% 0, 0 0, 100% 100%);
+  }
+  /* WhatsApp bubble tail — right (sent) */
+  .bubble-tail-right::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -8px;
+    width: 8px;
+    height: 13px;
+    background: inherit;
+    clip-path: polygon(0 0, 100% 0, 0 100%);
+  }
+
+  /* Shimmer effect */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--glass-shimmer) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer-premium 2.5s ease-in-out infinite;
+  }
+
+  /* Display heading — Google Sans 500, M3 display style */
+  .text-display {
+    font-family: "Google Sans", "Roboto", system-ui, sans-serif;
+    font-weight: 500;
+    letter-spacing: 0em;
+    line-height: 1.2;
+  }
+
+  /* Eyebrow label — Roboto 500, wide tracking */
+  .text-eyebrow {
+    font-family: "Roboto", system-ui, sans-serif;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--primary);
+  }
+
+  /* Gold glow (now Gmail yellow #FBBC04) */
+  .shadow-gold {
+    box-shadow: 0 4px 12px rgba(251, 188, 4, 0.30);
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     M3 State Layers — translucent overlays for hover/focus/press
+     Use over any base surface — never replace background opaquely
+     ────────────────────────────────────────────────────────── */
+  .state-layer {
+    position: relative;
+  }
+  .state-layer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    pointer-events: none;
+    border-radius: inherit;
+    transition: background 150ms cubic-bezier(.2, 0, 0, 1);
+  }
+  .state-layer:hover::after {
+    background: var(--gmail-state-hover);
+  }
+  .state-layer:focus-visible::after {
+    background: var(--gmail-state-focus);
+  }
+  .state-layer:active::after {
+    background: var(--gmail-state-pressed);
+  }
+  .dark .state-layer:hover::after {
+    background: rgba(227, 227, 227, 0.06);
+  }
+  .dark .state-layer:focus-visible::after {
+    background: rgba(227, 227, 227, 0.10);
+  }
+  .dark .state-layer:active::after {
+    background: rgba(227, 227, 227, 0.14);
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     Pill buttons (M3 / Gmail compose style)
+     ────────────────────────────────────────────────────────── */
+  .btn-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 24px;
+    border-radius: 9999px;
+    font-family: "Roboto", sans-serif;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.43;
+    letter-spacing: 0.0142857em;
+    transition: background 150ms cubic-bezier(.2, 0, 0, 1),
+                box-shadow 150ms cubic-bezier(.2, 0, 0, 1),
+                transform 150ms cubic-bezier(.2, 0, 0, 1);
+    cursor: pointer;
+    border: none;
+    user-select: none;
+  }
+  .btn-pill:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+  }
+
+  /* Compose CTA — Gmail's signature pale-blue pill (M3 secondary container) */
+  .btn-compose {
+    background: var(--secondary);
+    color: var(--secondary-foreground);
+    box-shadow: var(--shadow-sm);
+    padding: 14px 24px;
+  }
+  .btn-compose:hover {
+    background: color-mix(in srgb, var(--secondary) 88%, var(--foreground));
+    box-shadow: var(--shadow-md);
+  }
+  .btn-compose:active {
+    transform: scale(0.98);
+  }
+
+  /* Primary pill — solid Google Blue 700 */
+  .btn-primary-pill {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .btn-primary-pill:hover {
+    background: var(--primary-hover);
+  }
+
+  /* Outlined pill */
+  .btn-outline-pill {
+    background: transparent;
+    color: var(--primary);
+    border: 1px solid var(--border);
+  }
+  .btn-outline-pill:hover {
+    background: var(--primary-muted);
+    border-color: var(--primary);
+  }
+
+  /* ──────────────────────────────────────────────────────────
+     Pill input — Gmail search bar style
+     ────────────────────────────────────────────────────────── */
+  .input-pill {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 44px;
+    padding: 0 20px;
+    border-radius: 9999px;
+    background: var(--muted);
+    color: var(--foreground);
+    border: 1px solid transparent;
+    font-family: "Roboto", sans-serif;
+    font-size: 0.875rem;
+    line-height: 1.43;
+    letter-spacing: 0.0142857em;
+    transition: background 150ms cubic-bezier(.2, 0, 0, 1),
+                box-shadow 150ms cubic-bezier(.2, 0, 0, 1);
+    outline: none;
+  }
+  .input-pill:focus,
+  .input-pill:focus-within {
+    background: var(--card);
+    box-shadow: var(--shadow-sm);
+  }
+  .input-pill::placeholder {
+    color: var(--muted-foreground);
+  }
+
+  /* Material Symbols utility */
+  .material-symbols {
+    font-family: "Material Symbols Outlined";
+    font-weight: normal;
+    font-style: normal;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'liga';
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+  .material-symbols.filled {
+    font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+  }
+
+  /* ── Sidebar Scrollbar — thin, auto-hide, themed ── */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s;
+  }
+
+  .sidebar-scroll:hover {
+    scrollbar-color: rgba(191, 197, 204, 0.2) transparent;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 8px 0;
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+    transition: background 0.3s;
+  }
+
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+    background: rgba(191, 197, 204, 0.2);
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(201, 162, 64, 0.4);
+  }
+
+  .sidebar-scroll::-webkit-scrollbar-thumb:active {
+    background: rgba(201, 162, 64, 0.6);
+  }
+}
+
+/* ----------------------------------------------------------
+   7. Motion Preferences
+   ---------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .stagger-enter {
+    animation: none;
+  }
+
+  .shimmer {
+    animation: none;
+    background: var(--muted);
+  }
+
+  .glass-card:hover {
+    transform: none;
+  }
+
+  .entity-card-hover:hover {
+    transform: none;
+  }
+}
+
+/* ----------------------------------------------------------
+   PWA Safe Area & Touch Utilities
+   ---------------------------------------------------------- */
+
+/* Safe area padding for notched devices (iOS, Android punch-hole) */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-left {
+  padding-left: env(safe-area-inset-left);
+}
+
+.safe-area-right {
+  padding-right: env(safe-area-inset-right);
+}
+
+.safe-area-inset {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Standalone mode detection (PWA installed) */
+@media (display-mode: standalone) {
+  body {
+    /* Prevent overscroll bounce in PWA mode */
+    overscroll-behavior: none;
+  }
+}
+
+/* Touch optimization */
+.touch-action-none {
+  touch-action: none;
+}
+
+.touch-action-pan-x {
+  touch-action: pan-x;
+}
+
+.touch-action-pan-y {
+  touch-action: pan-y;
+}
+
+.touch-action-manipulation {
+  touch-action: manipulation;
+}
+
+/* Prevent text selection on interactive elements in PWA */
+.select-none-pwa {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* PWA splash / loading indicator */
+.pwa-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background);
+  z-index: 9999;
+}
+
+/* react-phone-number-input — estilo OMNX Desk */
+.phone-input-omnx {
+  --PhoneInputCountryFlag-borderColor: transparent;
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--background);
+  border-radius: 0.5rem;
+  padding: 0 0.75rem;
+  height: 2.5rem;
+  transition: all 150ms;
+}
+.phone-input-omnx:focus-within {
+  outline: none;
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 25%, transparent);
+}
+.phone-input-omnx .PhoneInputCountry {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-right: 0.5rem;
+  border-right: 1px solid var(--border);
+}
+.phone-input-omnx .PhoneInputInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  min-width: 0;
+}
+.phone-input-omnx .PhoneInputInput::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+.phone-input-omnx .PhoneInputCountrySelectArrow {
+  opacity: 0.5;
+}

@@ -1,0 +1,2 @@
+[functions.notion-import]
+verify_jwt = true

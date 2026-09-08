@@ -1,0 +1,2 @@
+[functions.cami-deliveries]
+verify_jwt = true

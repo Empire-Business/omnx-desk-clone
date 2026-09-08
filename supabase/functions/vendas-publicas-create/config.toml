@@ -1,0 +1,2 @@
+[functions.vendas-publicas-create]
+verify_jwt = false

@@ -1,0 +1,110 @@
+project_id = "wuzmckatbmlpkdxtfhqr"
+
+# Provisionamento de empresa chamado máquina-a-máquina pela plataforma (Empire OS):
+# a chamada não traz JWT de usuário, então a verificação automática é desligada e a
+# autorização é feita DENTRO da função (X-Platform-Key OU JWT de master admin).
+[functions.provision-tenant]
+verify_jwt = false
+
+# -- Funcoes que NAO podem verificar JWT no gateway --------------------------
+# Cada uma faz a autorizacao por conta propria, por dentro: chave de servico
+# (webhook/bot), segredo em header, ou validacao manual do token do usuario.
+# Se o gateway verificar o JWT antes, ele rejeita a chamada com 401 e a funcao
+# nem roda -- foi assim que o envio de mensagem ja caiu antes.
+#
+# Estavam configuradas so no servidor. Sem esta lista, um deploy pela CLI sem
+# a flag --no-verify-jwt religa a verificacao e derruba a funcao em producao.
+# Levantado do servidor em 19/08/2026.
+
+[functions.cami-deliveries]
+verify_jwt = false
+
+[functions.chat-api]
+verify_jwt = false
+
+[functions.chat-broadcast-scheduler]
+verify_jwt = false
+
+[functions.chat-sla-monitor]
+verify_jwt = false
+
+[functions.cobranca-scheduler]
+verify_jwt = false
+
+[functions.contrato-extract-pdf]
+verify_jwt = false
+
+[functions.contratos-alerts]
+verify_jwt = false
+
+[functions.empire-conexao-test]
+verify_jwt = false
+
+[functions.fetch-profile-pic]
+verify_jwt = false
+
+[functions.ia-analyze-message]
+verify_jwt = false
+
+[functions.ia-backfill-sentiment]
+verify_jwt = false
+
+[functions.ia-bot-respond]
+verify_jwt = false
+
+[functions.ia-extract-client-data]
+verify_jwt = false
+
+[functions.ia-suggest-reply]
+verify_jwt = false
+
+[functions.ia-summarize-conversation]
+verify_jwt = false
+
+[functions.ia-weekly-analysis]
+verify_jwt = false
+
+[functions.instagram-alerts]
+verify_jwt = false
+
+[functions.instagram-stats]
+verify_jwt = false
+
+[functions.instagram-stats-batch]
+verify_jwt = false
+
+[functions.notion-import]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.send-push]
+verify_jwt = false
+
+[functions.uazapi-actions]
+verify_jwt = false
+
+[functions.uazapi-send-message]
+verify_jwt = false
+
+[functions.uazapi-webhook]
+verify_jwt = false
+
+[functions.vendas-buscar-lead-crm]
+verify_jwt = false
+
+[functions.vendas-publicas-create]
+verify_jwt = false
+
+[functions.vendas-sincronizar-crm]
+verify_jwt = false
+
+[functions.wa-warmup-blast]
+verify_jwt = false
+
+[functions.wa-warmup-tick]
+verify_jwt = false
+
+[functions.webhook-dispatch]
+verify_jwt = false
