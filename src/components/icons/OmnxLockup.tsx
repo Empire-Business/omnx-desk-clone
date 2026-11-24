@@ -1,111 +1,79 @@
-import { useEffect, useState } from 'react'
+import { OmnxMonograma } from './OmnxMonograma'
+import { BRAND } from '@/config/brand'
 
 interface OmnxLockupProps {
   /**
-   * Variante de contraste da wordmark:
-   * - 'dark'  => texto PRETO (para FUNDO CLARO)  -> /omnx-logo-dark.png
-   * - 'light' => texto BRANCO (para FUNDO ESCURO) -> /omnx-logo-light.png
-   * Se omitido, alterna AUTOMATICAMENTE conforme o tema (classe `.dark` no <html>).
+   * Contraste conforme o FUNDO do local:
+   * - omitido ou 'dark' => segue o tema (azul + nome escuro no claro; claro no
+   *   escuro). 'dark' era "para fundo claro", mas quem usa (ex.: login) fica
+   *   sobre superfícies que mudam com o tema, então seguir o tema é o correto;
+   * - 'light' => sempre claro, para fundos que são escuros nos dois temas.
    */
   variant?: 'dark' | 'light'
-  /** Altura da logo em px (a wordmark se dimensiona a partir dela). */
+  /** Altura do monograma em px (o nome do produto se dimensiona a partir dela). */
   height?: number
-  /** Palavra do produto exibida após o separador. */
+  /** Nome do produto ao lado do logo. */
   word?: string
-  /** Mostra ou não a palavra do produto (e o separador). */
+  /** Mostra ou não o nome do produto. */
   showWord?: boolean
-  /**
-   * Tamanho da palavra do produto relativo à altura da logo. Default 0.5.
-   * Aumente (ex.: 0.95) para deixar o nome maior sem crescer a logo.
-   */
+  /** Tamanho do nome relativo à altura do logo. Padrão 0,54 (28 px → 15 px, como no DS). */
   wordRatio?: number
   className?: string
 }
 
+/** "DESK" → "Desk": o DS escreve o nome do produto em caixa alta e baixa. */
+function nomeDoProduto(word: string) {
+  return word === word.toUpperCase() ? word.charAt(0) + word.slice(1).toLowerCase() : word
+}
+
 /**
- * Lockup de marca OMNX: [logo OMNX] + [separador sutil] + [palavra do produto].
- * Harmonizados como uma marca só — idêntico em todos os apps OMNX.
- *
- * `variant` define a versão da wordmark conforme o FUNDO do local:
- * - 'dark'  => texto PRETO  (usar em FUNDO CLARO)  -> /omnx-logo-dark.png
- * - 'light' => texto BRANCO (usar em FUNDO ESCURO) -> /omnx-logo-light.png
- * Se omitido, observa a classe `.dark` no <html> e escolhe sozinho.
+ * Assinatura de marca do DS (seção 01): monograma 2×2 oficial + nome do
+ * produto em Archivo 750, alargada a 112%. Idêntica em todos os apps OMNX.
  */
 export function OmnxLockup({
   variant,
-  height = 22,
-  word = 'DESK',
+  height = 28,
+  word = BRAND.produto,
   showWord = true,
-  wordRatio = 0.5,
+  wordRatio = 0.54,
   className,
 }: OmnxLockupProps) {
-  // Modo automático (variant undefined): segue o tema via classe `.dark`.
-  const [isDark, setIsDark] = useState(
-    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
-  )
-  useEffect(() => {
-    if (variant !== undefined) return
-    const el = document.documentElement
-    const update = () => setIsDark(el.classList.contains('dark'))
-    update()
-    const obs = new MutationObserver(update)
-    obs.observe(el, { attributes: true, attributeFilter: ['class'] })
-    return () => obs.disconnect()
-  }, [variant])
-
-  const effective = variant ?? (isDark ? 'light' : 'dark')
-  const gap = height * 0.45
-  const sepHeight = height * 0.55
-  const wordSize = height * wordRatio
-
-  const src = effective === 'light' ? '/omnx-logo-light.png' : '/omnx-logo-dark.png'
-  const sepColor = effective === 'light' ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)'
-
+  const fixoClaro = variant === 'light'
+  const corNome = fixoClaro ? '#F2F5FA' : 'var(--foreground)'
   return (
-    <span
-      className={className}
-      style={{ display: 'inline-flex', alignItems: 'center', gap }}
-    >
-      {/* Logo OMNX (uma única imagem, conforme o fundo) */}
-      <img
-        src={src}
-        alt="OMNX"
-        draggable={false}
-        className="select-none"
-        style={{ height, width: 'auto', display: 'block', flexShrink: 0 }}
-      />
-
+    <span className={className} style={{ display: 'inline-flex', alignItems: 'center', gap: Math.round(height * 0.36) }}>
+      {BRAND.familiaOmnx ? (
+        <OmnxMonograma height={height} variant={fixoClaro ? 'light' : 'auto'} title={showWord ? '' : 'OMNX'} />
+      ) : (
+        // Fora da marca OMNX: selo neutro com a inicial do app, na cor da marca.
+        <span
+          aria-hidden={showWord ? true : undefined}
+          title={showWord ? undefined : BRAND.appName}
+          style={{
+            width: height, height, borderRadius: Math.round(height * 0.28), display: 'inline-flex',
+            alignItems: 'center', justifyContent: 'center', background: 'var(--primary, #0B57D0)', color: '#fff',
+            fontFamily: 'var(--font-display)', fontWeight: 750, fontSize: Math.round(height * 0.55), lineHeight: 1,
+          }}
+        >
+          {BRAND.appName.charAt(0).toUpperCase()}
+        </span>
+      )}
       {showWord && (
-        <>
-          {/* Separador vertical sutil */}
-          <span
-            aria-hidden="true"
-            style={{
-              width: 1,
-              height: sepHeight,
-              borderRadius: 1,
-              flexShrink: 0,
-              background: sepColor,
-            }}
-          />
-          {/* Palavra do produto — usa a cor primária do app */}
-          <span
-            className="text-primary"
-            style={{
-              // Fonte próxima da wordmark OMNX (geométrica/técnica, cantos chanfrados).
-              fontFamily:
-                "'Chakra Petch','Space Grotesk','Segoe UI',system-ui,sans-serif",
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.12em',
-              fontSize: wordSize,
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {word}
-          </span>
-        </>
+        <span
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontWeight: 750,
+            fontStretch: '112%',
+            letterSpacing: '-0.02em',
+            fontSize: Math.max(12, Math.round(height * wordRatio)),
+            lineHeight: 1,
+            whiteSpace: 'nowrap',
+            color: corNome,
+          }}
+        >
+          {BRAND.familiaOmnx && <span className="sr-only">OMNX </span>}
+          {nomeDoProduto(word)}
+        </span>
       )}
     </span>
   )

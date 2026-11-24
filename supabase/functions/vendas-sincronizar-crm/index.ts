@@ -1,3 +1,5 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
+import { sessaoDeskLiberada } from '../_shared/desk-session.ts'
 // Intermediária omnx-desk → CRM: sincroniza uma venda validada com a vendas_fechamento do GHL.
 // Porta MANUAL — acionada por um usuário na tela de Vendas Pendentes (concluir+vincular,
 // vincular depois ou reenviar). A porta AUTOMÁTICA, disparada por trigger quando a venda
@@ -29,13 +31,13 @@ async function perfilAutorizado(authHeader: string | null): Promise<boolean> {
     auth: { persistSession: false },
   })
   const { data: { user } } = await userClient.auth.getUser()
-  if (!user) return false
+  if (!user || !await sessaoDeskLiberada(userClient)) return false
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
   const { data } = await admin.from('users').select('perfil').eq('id', user.id).single()
   return ['admin', 'gerente', 'atendimento'].includes(data?.perfil ?? '')
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
 

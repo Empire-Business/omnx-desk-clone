@@ -133,7 +133,7 @@ export function CobrancaDashboardPage() {
   return (
     <div className="space-y-3 sm:space-y-4 lg:space-y-6 p-3 sm:p-4 lg:p-6 animate-fade-in">
       <PageHeader
-        title="Dashboard"
+        title="Visão geral"
         description="Visão geral da cobrança"
         action={
           tab === 'geral' ? (

@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Delivery, DeliveryStatus, DeliveryWithDetails, DeliveryWithVersions } from '@/types/database'
@@ -54,7 +55,7 @@ export function useCreateEntrega() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: { deliverable_id: string; client_id: string; titulo: string; prazo?: string; responsavel_id?: string }) => {
-      const { data, error } = await supabase.from('deliveries').insert(input).select().single()
+      const { data, error } = await supabase.from('deliveries').insert({ ...(input), tenant_id: await tenantDaSessao() }).select().single()
       if (error) throw error
       return data as Delivery
     },

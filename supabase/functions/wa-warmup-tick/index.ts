@@ -1,14 +1,15 @@
 // Aquecimento de chip: a cada minuto o cron chama esta função.
 // Para cada grupo ATIVO, decide (com base em horário + intervalo aleatório)
 // se uma instância sorteada envia uma frase sorteada do pool ao grupo.
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { tokenUazapi, urlUazapi } from '../_shared/uazapi-credenciais.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const UAZAPI_URL = 'https://empirebusiness.uazapi.com'
 
 interface WarmupGroup {
   id: string
@@ -120,7 +121,7 @@ function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   const supabase = createClient(
@@ -168,7 +169,9 @@ Deno.serve(async (req) => {
     if (!mensagem) {
       mensagem = pickRandom(frases)
     }
-    const token = Deno.env.get(`UAZAPI_TOKEN_${instanceId}`)
+    const tenantDoGrupo = (g as { tenant_id?: string | null }).tenant_id ?? null
+    const token = await tokenUazapi(supabase, instanceId, tenantDoGrupo)
+    const UAZAPI_URL = await urlUazapi(supabase, tenantDoGrupo)
     if (!token) {
       results.push({ group: g.nome, error: `token_missing_${instanceId}` })
       continue

@@ -82,7 +82,7 @@ function uid() {
 
 export function AreasCargosPage() {
   const [store, setStore] = useState<Store>(() => loadStore())
-  const { data: users } = useUsers()
+  useUsers()
 
   const [zoom, setZoom] = useState(1)
   const [search, setSearch] = useState('')

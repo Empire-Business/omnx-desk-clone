@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Wallet, FileText, TrendingUp, Receipt, Plus, Link as LinkIcon, Check } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { ContratosTabs } from '@/components/contratos/ContratosTabs'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePermissoes } from '@/hooks/usePermissoes'
@@ -173,7 +174,7 @@ function DashboardContratos() {
   const totalStatus = stats.porStatus.reduce((s, [, v]) => s + v.count, 0)
 
   return (
-    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+    <PageContainer className="animate-fade-in">
       <PageHeader
         title="Contratos"
         description="Visão geral dos contratos: faturamento, status e evolução."
@@ -202,7 +203,7 @@ function DashboardContratos() {
       <ContratosTabs />
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 2xl:grid-cols-4">
         {kpis.map((kpi) => (
           <div key={kpi.title} className="glass-card flex items-start gap-4 p-5">
             <div className={cn('rounded-lg p-2.5 shrink-0', kpi.bgColor)}>
@@ -210,7 +211,7 @@ function DashboardContratos() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-mono text-[11px] tracking-wider uppercase text-muted-foreground">{kpi.title}</p>
-              <p className="mt-1 font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight">{kpi.value}</p>
+              <p className="mt-1 font-display text-2xl sm:text-3xl font-bold text-foreground tracking-tight [overflow-wrap:anywhere]">{kpi.value}</p>
             </div>
           </div>
         ))}
@@ -281,7 +282,7 @@ function DashboardContratos() {
                       className="group relative flex h-full flex-1 flex-col items-center justify-end min-w-0"
                       title={`${m.label}: ${m.count} contratos · ${fmtBRL(m.valor)}`}
                     >
-                      <span className={cn('mb-1 text-[10px] font-semibold tabular-nums', isPico ? 'text-primary' : 'text-muted-foreground')}>
+                      <span className={cn('mb-1 text-[11px] font-semibold tabular-nums', isPico ? 'text-primary' : 'text-muted-foreground')}>
                         {m.count || ''}
                       </span>
                       <div
@@ -300,7 +301,7 @@ function DashboardContratos() {
               {/* Rótulos dos meses */}
               <div className="flex gap-1.5">
                 {stats.meses.map((m) => (
-                  <span key={m.key} className="flex-1 text-center text-[10px] text-muted-foreground">{m.label}</span>
+                  <span key={m.key} className="flex-1 text-center text-[11px] text-muted-foreground">{m.label}</span>
                 ))}
               </div>
             </div>
@@ -332,7 +333,7 @@ function DashboardContratos() {
           onSelect={(tagId) => navigate(`/contratos/lista?tags=${tagId}`)}
         />
       </div>
-    </div>
+    </PageContainer>
   )
 }
 

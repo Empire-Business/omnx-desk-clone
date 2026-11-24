@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 
 const PERFIL_LABELS: Record<string, string> = {
   admin: 'Admin',
-  gerente: 'Gerente',
+  gerente: 'Gestor',
   agente: 'Agente',
   atendimento: 'Atendimento',
   estrategista: 'Estrategista',

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { LifeBuoy, Paperclip, ChevronRight, MessageSquare } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { cn } from '@/lib/utils'
 import {
@@ -17,13 +18,13 @@ import {
 
 /** Rótulo e cor por status, na linguagem de quem reportou (não a interna da equipe). */
 const STATUS_INFO: Record<ReporteStatus, { label: string; classe: string }> = {
-  recebido:           { label: 'Recebido',            classe: 'bg-muted text-muted-foreground' },
-  em_triagem:         { label: 'Em análise',          classe: 'bg-primary/10 text-primary' },
-  precisa_info:       { label: 'Precisamos de você',  classe: 'bg-warning-light text-warning' },
-  confirmado:         { label: 'Confirmado',          classe: 'bg-primary/10 text-primary' },
-  em_desenvolvimento: { label: 'Sendo corrigido',     classe: 'bg-primary/10 text-primary' },
-  em_validacao:       { label: 'Em teste',            classe: 'bg-primary/10 text-primary' },
-  corrigido:          { label: 'Corrigido',           classe: 'bg-success-light text-success' },
+  recebido:           { label: 'Recebido',            classe: 'bg-st-open text-st-open-fg' },
+  em_triagem:         { label: 'Em análise',          classe: 'bg-st-progress text-st-progress-fg' },
+  precisa_info:       { label: 'Precisamos de você',  classe: 'bg-st-waiting text-st-waiting-fg' },
+  confirmado:         { label: 'Confirmado',          classe: 'bg-st-progress text-st-progress-fg' },
+  em_desenvolvimento: { label: 'Sendo corrigido',     classe: 'bg-st-progress text-st-progress-fg' },
+  em_validacao:       { label: 'Em teste',            classe: 'bg-st-progress text-st-progress-fg' },
+  corrigido:          { label: 'Corrigido',           classe: 'bg-st-done text-st-done-fg' },
   nao_reproduzido:    { label: 'Não reproduzido',     classe: 'bg-muted text-muted-foreground' },
   duplicado:          { label: 'Já reportado antes',  classe: 'bg-muted text-muted-foreground' },
   encerrado:          { label: 'Encerrado',           classe: 'bg-muted text-muted-foreground' },
@@ -38,15 +39,15 @@ export function MeusReportesPage() {
   const [aberto, setAberto] = useState<string | null>(null)
 
   return (
-    <div className="animate-fade-in space-y-4 sm:space-y-6">
+    <PageContainer largura="leitura">
       <PageHeader
-        title="Meus reportes"
+        title="Meus pedidos de suporte"
         description="Os problemas que você relatou e em que pé está cada um."
       />
 
       {isLoading ? (
         <div className="space-y-2">
-          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-16 shimmer rounded-xl" />)}
+          {Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk h-16 rounded-lg" />)}
         </div>
       ) : !reportes || reportes.length === 0 ? (
         <EmptyState
@@ -66,7 +67,7 @@ export function MeusReportesPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageContainer>
   )
 }
 
@@ -91,12 +92,12 @@ function ReporteCard({
         type="button"
         onClick={onToggle}
         aria-expanded={expandido}
-        className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/40 sm:px-4"
+        className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors duration-fast hover:bg-bg-1 focus-ds min-h-14 sm:px-4"
       >
         <ChevronRight className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', expandido && 'rotate-90')} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold text-foreground">{reporte.titulo}</span>
-          <span className="block text-xs text-muted-foreground">
+          <span className="block text-[13px] text-muted-foreground">
             {reporte.protocolo} · {dataBR(reporte.created_at)}
           </span>
         </span>
@@ -105,24 +106,24 @@ function ReporteCard({
             <Paperclip className="h-3 w-3" /> {anexos.length}
           </span>
         )}
-        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', info.classe)}>
+        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium', info.classe)}>
           {info.label}
         </span>
       </button>
 
       {expandido && (
-        <div className="space-y-3 border-t border-border bg-muted/20 px-3 py-4 text-sm sm:px-4">
+        <div className="space-y-3 border-t border-stroke-subtle bg-bg-1 px-3 py-4 text-sm sm:px-4">
           {reporte.descricao && (
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">O que você relatou</p>
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">O que você relatou</p>
               <p className="whitespace-pre-wrap text-foreground">{reporte.descricao}</p>
             </div>
           )}
 
           {/* Só a resposta destinada ao usuário. A nota interna da equipe nunca aparece aqui. */}
           {reporte.resposta_usuario && (
-            <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
+            <div className="rounded-lg border border-stroke-default bg-primary-muted p-3">
+              <p className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-primary">
                 <MessageSquare className="h-3 w-3" /> Resposta da equipe
               </p>
               <p className="mt-1 whitespace-pre-wrap text-foreground">{reporte.resposta_usuario}</p>
@@ -131,14 +132,14 @@ function ReporteCard({
 
           {anexos.length > 0 && (
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Anexos</p>
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">Anexos</p>
               <div className="mt-1 flex flex-wrap gap-2">
                 {anexos.map((a) => (
                   <button
                     key={a.storage_path}
                     type="button"
                     onClick={() => abrirAnexo(a.storage_path)}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-foreground transition-colors hover:bg-muted/70"
+                    className="btn btn-secondary btn-sm"
                   >
                     <Paperclip className="h-3 w-3" />
                     <span className="max-w-[180px] truncate">{a.nome_original}</span>
@@ -149,7 +150,7 @@ function ReporteCard({
           )}
 
           {reporte.status === 'precisa_info' && (
-            <p className="rounded-lg border border-warning/30 bg-warning-light px-3 py-2 text-xs text-warning">
+            <p className="rounded-lg border border-note-border bg-note px-3 py-2 text-[13px] text-note-fg">
               A equipe precisa de mais detalhes para seguir. Responda pelo canal de sempre citando o
               protocolo {reporte.protocolo}.
             </p>

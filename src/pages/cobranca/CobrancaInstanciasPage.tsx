@@ -12,6 +12,9 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { cn, formatPhone } from '@/lib/utils'
+import { usePermissoes } from '@/hooks/usePermissoes'
+import { useNumerosComToken } from '@/hooks/useUazapiTokens'
+import { TokenDoNumero } from '@/components/whatsapp/TokenDoNumero'
 
 const inputCls = 'w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40'
 
@@ -65,6 +68,10 @@ function InstanceModal({
   const [form, setForm] = useState<FormState>(instance ? instanceToForm(instance) : EMPTY_FORM)
   const createInstance = useCreateInstance()
   const updateInstance = useUpdateInstance()
+  // Token da UAZAPI deste número no cofre (só administrador; o banco confere de novo).
+  const { can } = usePermissoes()
+  const podeToken = Boolean(instance) && can('cobranca', 'admin')
+  const { data: comToken } = useNumerosComToken(podeToken, 'cobranca')
 
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
@@ -98,7 +105,7 @@ function InstanceModal({
   return (
     <Modal
       open
-      title={instance ? 'Editar instância' : 'Nova instância'}
+      title={instance ? 'Editar número' : 'Novo número'}
       onClose={onClose}
       size="lg"
     >
@@ -144,7 +151,7 @@ function InstanceModal({
                 onChange={set('ativo')}
                 className="h-4 w-4 rounded border-border accent-primary"
               />
-              <span className="text-foreground">Instância ativa</span>
+              <span className="text-foreground">Número ativo</span>
             </label>
           </div>
         </div>
@@ -157,10 +164,13 @@ function InstanceModal({
             disabled={isLoading}
             className="gradient-primary rounded-lg px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
-            {isLoading ? 'Salvando...' : instance ? 'Salvar alterações' : 'Criar instância'}
+            {isLoading ? 'Salvando...' : instance ? 'Salvar alterações' : 'Cadastrar número'}
           </button>
         </div>
       </form>
+      {instance && podeToken && (
+        <TokenDoNumero tipo="cobranca" instanciaId={instance.id} salvo={comToken?.has(instance.id) ?? false} />
+      )}
     </Modal>
   )
 }
@@ -227,8 +237,8 @@ function InstanceCard({ instance }: { instance: CobrancaInstance }) {
         open={showDelete}
         onClose={() => setShowDelete(false)}
         onConfirm={() => deleteInstance.mutate(instance.id)}
-        title="Excluir instância"
-        description={`Deseja excluir a instância "${instance.nome}"? Esta ação não pode ser desfeita.`}
+        title="Excluir número"
+        description={`Deseja excluir o número "${instance.nome}"? Esta ação não pode ser desfeita.`}
         confirmLabel="Excluir"
         loading={deleteInstance.isPending}
       />
@@ -245,15 +255,15 @@ export function CobrancaInstanciasPage() {
   return (
     <div className="space-y-3 sm:space-y-4 lg:space-y-6 animate-fade-in">
       <PageHeader
-        title="Instâncias"
-        description="Gerencie as instâncias WhatsApp para disparo de cobranças"
+        title="Números de WhatsApp"
+        description="Números de WhatsApp usados para enviar cobranças"
         action={
           <button
             onClick={() => setShowNova(true)}
             className="gradient-primary flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-primary-foreground"
           >
             <Plus className="h-4 w-4" />
-            Nova instância
+            Novo número
           </button>
         }
       />
@@ -265,14 +275,14 @@ export function CobrancaInstanciasPage() {
       ) : !instances || instances.length === 0 ? (
         <EmptyState
           icon={Server}
-          title="Nenhuma instância cadastrada"
-          description="Crie uma instância WhatsApp para começar a enviar cobranças."
+          title="Nenhum número cadastrado"
+          description="Cadastre um número de WhatsApp para começar a enviar cobranças."
           action={
             <button
               onClick={() => setShowNova(true)}
               className="gradient-primary rounded-lg px-4 py-2 text-sm font-medium text-primary-foreground"
             >
-              Nova instância
+              Novo número
             </button>
           }
         />

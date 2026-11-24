@@ -1,7 +1,10 @@
+import { ContratoClientes } from '@/components/contratos/ContratoClientes'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Save, Trash2, ExternalLink, Upload, FileText, Download, History, Sparkles, Check, Link as LinkIcon, X, Plus, Users, RotateCcw } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { TabelaResponsiva } from '@/components/ui/TabelaResponsiva'
 import {
   useContrato,
   useUpdateContrato,
@@ -23,6 +26,11 @@ import {
   type ContratoPagamento,
 } from '@/hooks/useComissoes'
 import { ContratoTagsEditor } from '@/components/tags/ContratoTagsEditor'
+import { useAuth } from '@/contexts/AuthContext'
+import { ContratoVigencia } from '@/components/contratos/ContratoVigencia'
+import { erroVigencia } from '@/lib/contratoVigencia'
+import { ContratoClienteVinculo } from '@/components/contratos/ContratoClienteVinculo'
+import { comClienteVinculado, patchContratoSemVinculo } from '@/lib/contratoClienteVinculo'
 import { supabase } from '@/lib/supabase'
 function fmtBRL(v: number | null | undefined) {
   if (v === null || v === undefined) return '—'
@@ -165,17 +173,19 @@ function statusPrimarioDet(valor: string | null): Contrato['status'] {
   const v = valor ?? ''
   if (/CANCEL/i.test(v)) return 'cancelado'
   if (/CONCL/i.test(v)) return 'concluido'
+  if (/PAUS/i.test(v)) return 'pausado'
   if (/INICIAD/i.test(v)) return 'rascunho' as Contrato['status']
   return 'ativo'
 }
 
 export function ContratoDetailPage() {
+  const { user } = useAuth()
   const { id: rawId } = useParams<{ id: string }>()
   const isNovo = rawId === 'novo'
   const id = isNovo ? undefined : rawId
 
   const navigate = useNavigate()
-  const { data: contrato, isLoading } = useContrato(id)
+  const { data: contrato, isLoading, isError, isFetching, refetch } = useContrato(id)
   const { data: consultores } = useConsultores()
   const { data: produtosComissao } = useProdutosComissao()
   const { data: produtosCatalogo } = useProdutosList()
@@ -198,6 +208,7 @@ export function ContratoDetailPage() {
       : {},
   )
   const [dirty, setDirty] = useState(false)
+  const [vinculandoCliente, setVinculandoCliente] = useState(false)
 
   useEffect(() => {
     if (contrato) {
@@ -261,62 +272,75 @@ export function ContratoDetailPage() {
   }
 
   async function onSave() {
-    if (isNovo) {
-      if (!form.cliente_nome) { alert('Nome do cliente é obrigatório.'); return }
-      const novo = await create.mutateAsync({
-        cliente_nome: form.cliente_nome,
-        produto_nome: form.produto_nome ?? null,
-        estrategista_id: form.estrategista_id ?? null,
-        data_fechamento: form.data_fechamento ?? new Date().toISOString().slice(0, 10),
-        valor_total: form.valor_total ?? 0,
-        num_parcelas: form.num_parcelas ?? 1,
-        percentual_aplicado: form.percentual_aplicado ?? 0,
-        status: form.status ?? 'ativo',
-        observacoes: form.observacoes ?? null,
-        ...form,
-      })
-      // O e-mail de "contrato assinado" é disparado por um trigger no banco
-      // sempre que o link do Clicksign passa a existir — não importa a tela.
-      navigate(`/contratos/${novo.id}`)
-      return
-    }
-    if (!id) return
-    // A tabela manda: salva a lista de pagamentos (real ou a prévia derivada dos
-    // campos) junto com os campos-resumo, pra o que aparece na tela ser o que grava.
-    const pagsFinais = (form.pagamentos && form.pagamentos.length > 0)
-      ? form.pagamentos
-      : (pagamentosOnboarding && pagamentosOnboarding.length > 0)
-        ? pagamentosOnboarding
-        : derivarPagamentos(form)
-    const patch: Partial<Contrato> & { id: string } = {
-      id,
-      ...form,
-      pagamentos: pagsFinais,
-      ...resumirPagamentos(pagsFinais),
-    }
-    delete (patch as Partial<Contrato>).criado_em
-    delete (patch as Partial<Contrato>).atualizado_em
-    delete (patch as Partial<Contrato>).importado_em
-    delete (patch as Partial<Contrato>).notion_ultima_edicao
-    const linkAntes = (contrato?.link_clicksign ?? '').trim()
-    const linkDepois = (form.link_clicksign ?? '').trim()
-    // Contrato assinado (link Clicksign adicionado agora) → ativa automaticamente,
-    // desde que ainda esteja parado em rascunho/"Não iniciado".
-    if (!linkAntes && linkDepois) {
-      const statusSec = (patch.status_secundario ?? '').toUpperCase()
-      if (!statusSec || statusSec === 'NÃO INICIADO' || (patch.status as string) === 'rascunho') {
-        patch.status = 'ativo'
-        patch.status_secundario = 'ATIVO'
+    if (vinculandoCliente) return
+    try {
+      if (isNovo) {
+        if (!form.cliente_nome) { alert('Nome do cliente é obrigatório.'); return }
+        if (form.vigencia_fim) {
+          const erro = erroVigencia({ novaData: form.vigencia_fim, motivo: form.vigencia_motivo ?? '', fimEsperado: null })
+          if (erro) { alert(erro); return }
+        }
+        const novo = await create.mutateAsync({
+          cliente_nome: form.cliente_nome,
+          produto_nome: form.produto_nome ?? null,
+          estrategista_id: form.estrategista_id ?? null,
+          data_fechamento: form.data_fechamento ?? new Date().toISOString().slice(0, 10),
+          valor_total: form.valor_total ?? 0,
+          num_parcelas: form.num_parcelas ?? 1,
+          percentual_aplicado: form.percentual_aplicado ?? 0,
+          status: form.status ?? 'ativo',
+          observacoes: form.observacoes ?? null,
+          ...form,
+        })
+        // O e-mail de "contrato assinado" é disparado por um trigger no banco
+        // sempre que o link do Clicksign passa a existir — não importa a tela.
+        navigate(`/contratos/${novo.id}`)
+        return
       }
+      if (!id) return
+      // A tabela manda: salva a lista de pagamentos (real ou a prévia derivada dos
+      // campos) junto com os campos-resumo, pra o que aparece na tela ser o que grava.
+      const pagsFinais = (form.pagamentos && form.pagamentos.length > 0)
+        ? form.pagamentos
+        : (pagamentosOnboarding && pagamentosOnboarding.length > 0)
+          ? pagamentosOnboarding
+          : derivarPagamentos(form)
+      const patch: Partial<Contrato> & { id: string } = patchContratoSemVinculo({
+        id,
+        ...form,
+        pagamentos: pagsFinais,
+        ...resumirPagamentos(pagsFinais),
+      })
+      // Vigência existente só muda pela ação isolada, com motivo e concorrência no servidor.
+      delete patch.vigencia_fim
+      delete patch.vigencia_motivo
+      delete (patch as Partial<Contrato>).criado_em
+      delete (patch as Partial<Contrato>).atualizado_em
+      delete (patch as Partial<Contrato>).importado_em
+      delete (patch as Partial<Contrato>).notion_ultima_edicao
+      const linkAntes = (contrato?.link_clicksign ?? '').trim()
+      const linkDepois = (form.link_clicksign ?? '').trim()
+      // Contrato assinado (link Clicksign adicionado agora) → ativa automaticamente,
+      // desde que ainda esteja parado em rascunho/"Não iniciado".
+      if (!linkAntes && linkDepois) {
+        const statusSec = (patch.status_secundario ?? '').toUpperCase()
+        if (!statusSec || statusSec === 'NÃO INICIADO' || (patch.status as string) === 'rascunho') {
+          patch.status = 'ativo'
+          patch.status_secundario = 'ATIVO'
+        }
+      }
+      await update.mutateAsync(patch)
+      setDirty(false)
+      // O e-mail de aviso sai por um trigger no banco quando o link do Clicksign
+      // passa a existir — não é mais disparado manualmente pela tela.
+    } catch {
+      // A mutation mantém o erro para o aviso abaixo. Preserva o formulário
+      // e o estado dirty para permitir corrigir os dados ou tentar novamente.
     }
-    await update.mutateAsync(patch)
-    setDirty(false)
-    // O e-mail de aviso sai por um trigger no banco quando o link do Clicksign
-    // passa a existir — não é mais disparado manualmente pela tela.
   }
 
   async function onDelete() {
-    if (!id) return
+    if (!id || vinculandoCliente) return
     if (!confirm('Excluir este contrato? As comissões previstas serão removidas.')) return
     try {
       await del.mutateAsync(id)
@@ -327,11 +351,27 @@ export function ContratoDetailPage() {
     }
   }
 
-  if (!isNovo && (isLoading || !contrato)) {
+  if (!isNovo && isLoading) {
     return (
       <div className="space-y-4 animate-fade-in">
         <div className="h-8 w-64 shimmer rounded-lg" />
         <div className="h-96 shimmer rounded-lg" />
+      </div>
+    )
+  }
+
+  if (!isNovo && (isError || !contrato)) {
+    return (
+      <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-5 space-y-3">
+        <h1 className="font-semibold">Não foi possível abrir este contrato</h1>
+        <p className="text-sm text-muted-foreground">Confira sua conexão e seu acesso. O contrato pode ter sido removido ou não estar disponível para sua conta.</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => void refetch()} disabled={isFetching}
+            className="rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-50">
+            {isFetching ? 'Tentando novamente…' : 'Tentar novamente'}
+          </button>
+          <button type="button" onClick={() => navigate('/contratos/lista')} className="rounded-lg border border-border px-3 py-2 text-sm">Voltar para contratos</button>
+        </div>
       </div>
     )
   }
@@ -359,7 +399,6 @@ export function ContratoDetailPage() {
       : pagamentosDerivados
   // A tabela é a fonte da verdade: estes campos-resumo saem dela (só leitura na tela).
   const resumo = resumirPagamentos(pagamentos)
-  const totalPagamentos = resumo.valor_total
   // Grava a lista E recalcula os campos-resumo num único update, pra nunca divergirem.
   function commitPagamentos(novos: ContratoPagamento[]) {
     setForm((prev) => ({ ...prev, pagamentos: novos, ...resumirPagamentos(novos) }))
@@ -388,11 +427,11 @@ export function ContratoDetailPage() {
     try {
       const pags = await buscarPagamentosOnboarding(f.whatsapp, f.email)
       if (!pags) {
-        setAvisoPuxar({ tipo: 'erro', msg: 'Não encontrei nenhuma venda no onboarding com pagamentos pra este cliente.' })
+        setAvisoPuxar({ tipo: 'erro', msg: 'Não encontrei nenhuma venda em Vendas novas com pagamentos para este cliente.' })
         return
       }
       commitPagamentos(pags)
-      setAvisoPuxar({ tipo: 'ok', msg: `${pags.length} pagamento(s) trazido(s) do onboarding. Confira e salve.` })
+      setAvisoPuxar({ tipo: 'ok', msg: `${pags.length} pagamento(s) trazido(s) de Vendas novas. Confira e salve.` })
     } catch (e) {
       setAvisoPuxar({ tipo: 'erro', msg: `Erro ao buscar a venda: ${(e as Error).message}` })
     } finally {
@@ -401,7 +440,12 @@ export function ContratoDetailPage() {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6 animate-fade-in pb-12">
+    <PageContainer className="animate-fade-in pb-12">
+      {(update.isError || create.isError) && (
+        <p role="alert" className="rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
+          Não foi possível salvar o contrato. Suas alterações continuam no formulário. Confira os dados e tente novamente.
+        </p>
+      )}
       <button
         onClick={() => {
           // Volta para a URL anterior (a lista mantém os filtros na query string).
@@ -439,6 +483,7 @@ export function ContratoDetailPage() {
             {!isNovo && (
               <button
                 onClick={onDelete}
+                disabled={vinculandoCliente}
                 className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-danger hover:bg-danger-light"
               >
                 <Trash2 className="h-4 w-4" /> Excluir
@@ -446,7 +491,7 @@ export function ContratoDetailPage() {
             )}
             <button
               onClick={onSave}
-              disabled={(!dirty && !isNovo) || isPending}
+              disabled={(!dirty && !isNovo) || isPending || vinculandoCliente}
               className="flex items-center gap-2 rounded-full bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               <Save className="h-4 w-4" /> {isPending ? 'Salvando…' : (isNovo ? 'Criar contrato' : 'Salvar')}
@@ -466,6 +511,7 @@ export function ContratoDetailPage() {
             <button
               key={key}
               onClick={() => setTab(key)}
+              disabled={vinculandoCliente}
               className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                 tab === key ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
@@ -480,7 +526,19 @@ export function ContratoDetailPage() {
       {!isNovo && tab === 'ia' && id && <ExtracaoIATab contratoId={id} />}
       {!isNovo && tab === 'historico' && id && <HistoricoTab contratoId={id} consultores={consultores ?? []} />}
 
-      {(isNovo || tab === 'detalhes') && <>
+      {(isNovo || tab === 'detalhes') && <fieldset disabled={vinculandoCliente} className="min-w-0 space-y-4 sm:space-y-6">
+
+      {!isNovo && id && contrato && (
+        <ContratoClienteVinculo key={id} contratoId={id} clienteId={contrato.cliente_id}
+          edicaoPendente={dirty || isPending || puxando} onOcupadoChange={setVinculandoCliente}
+          onVinculado={(clienteId) => setForm((atual) => atual.id === id ? comClienteVinculado(atual, clienteId) : atual)} />
+      )}
+
+      {!isNovo && contrato && <ContratoClientes key={`${id}:${user?.id}`} contrato={contrato}
+        edicaoPendente={dirty || isPending || puxando} onOcupadoChange={setVinculandoCliente} />}
+
+      {!isNovo && contrato && <ContratoVigencia key={`${id}:${user?.id}`} contrato={contrato}
+        edicaoPendente={dirty || isPending || puxando} onOcupadoChange={setVinculandoCliente} />}
 
       <Section title="Cliente">
         <Field label="Nome do cliente *">
@@ -551,6 +609,15 @@ export function ContratoDetailPage() {
         )}
       </div>
 
+      {isNovo && <Section title="Vigência confirmada (opcional)">
+        <Field label="Último dia de serviço acordado">
+          <Input type="date" value={f.vigencia_fim ?? ''} onChange={v => set('vigencia_fim', v || null)} />
+          <p className="mt-1 text-xs text-muted-foreground">Preencha apenas o prazo real do contrato. Sem confirmação, o encerramento automático fica pendente.</p>
+        </Field>
+        <Field label="Motivo / referência do acordo" wide>
+          <Textarea value={f.vigencia_motivo ?? ''} onChange={v => set('vigencia_motivo', v || null)} />
+        </Field>
+      </Section>}
       <Section title="Contrato">
         <Field label="Produto">
           <Select
@@ -624,7 +691,7 @@ export function ContratoDetailPage() {
           <Input value={f.link_clicksign ?? ''} onChange={(v) => set('link_clicksign', v)} />
         </Field>
         {id && (
-          <Field label="Tags" wide>
+          <Field label="Etiquetas" wide>
             <ContratoTagsEditor contratoId={id} />
           </Field>
         )}
@@ -639,9 +706,9 @@ export function ContratoDetailPage() {
               onClick={puxarDoOnboarding}
               disabled={puxando}
               className="flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
-              title="Busca a venda deste cliente no onboarding e traz os pagamentos (forma, plataforma, datas)"
+              title="Busca a venda deste cliente em Vendas novas e traz os pagamentos (forma, plataforma, datas)"
             >
-              <Download className="h-3.5 w-3.5" /> {puxando ? 'Buscando…' : 'Puxar do onboarding'}
+              <Download className="h-3.5 w-3.5" /> {puxando ? 'Buscando…' : 'Puxar de Vendas novas'}
             </button>
             <button
               type="button"
@@ -672,7 +739,7 @@ export function ContratoDetailPage() {
         {temOnboarding && (
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg border border-success/40 bg-success/10 px-3 py-2 text-xs text-foreground">
             <span className="flex-1">
-              Pagamentos trazidos automaticamente do onboarding (com forma, plataforma e datas). Confira a tabela e clique em “Confirmar” pra salvar no contrato.
+              Pagamentos trazidos automaticamente de Vendas novas (com forma, plataforma e datas). Confira a tabela e clique em “Confirmar” pra salvar no contrato.
             </span>
             <button
               type="button"
@@ -701,44 +768,32 @@ export function ContratoDetailPage() {
 
         {pagamentos.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border py-6 text-center text-sm text-muted-foreground">
-            Nenhuma parcela cadastrada. Use “Adicionar parcela” — em breve isso será preenchido automaticamente pelo onboarding.
+            Nenhuma parcela cadastrada. Use “Adicionar parcela” — em breve isso será preenchido automaticamente por Vendas novas.
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border bg-muted/40 text-left text-muted-foreground">
-                  <th className="px-2 py-2 font-medium">Sinal</th>
-                  <th className="px-2 py-2 font-medium">Data</th>
-                  <th className="px-2 py-2 font-medium text-right">Valor (R$)</th>
-                  <th className="px-2 py-2 font-medium">Forma</th>
-                  <th className="px-2 py-2 font-medium">Plataforma</th>
-                  <th className="px-2 py-2 font-medium w-10"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {pagamentos.map((p, i) => (
-                  <tr key={i}>
-                    <td className="px-2 py-1.5"><CellInput value={p.sinal} onChange={(v) => setPagamento(i, 'sinal', v)} placeholder="Entrada" /></td>
-                    <td className="px-2 py-1.5"><CellInput type="date" value={(p.data ?? '').slice(0, 10)} onChange={(v) => setPagamento(i, 'data', v)} /></td>
-                    <td className="px-2 py-1.5"><CellInput type="number" align="right" value={p.valor ?? ''} onChange={(v) => setPagamento(i, 'valor', v)} placeholder="0" /></td>
-                    <td className="px-2 py-1.5"><CellInput value={p.forma} onChange={(v) => setPagamento(i, 'forma', v)} placeholder="PIX" /></td>
-                    <td className="px-2 py-1.5"><CellInput value={p.plataforma} onChange={(v) => setPagamento(i, 'plataforma', v)} /></td>
-                    <td className="px-2 py-1.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => removePagamento(i)}
-                        className="p-1 rounded hover:bg-danger-light text-muted-foreground hover:text-danger"
-                        title="Remover parcela"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <TabelaResponsiva
+            rotulo="Parcelas do contrato"
+            linhas={pagamentos.map((p, i) => ({ p, i }))}
+            chave={({ i }) => String(i)}
+            colunas={[
+              { id: 'sinal', titulo: 'Sinal', principal: true, celula: ({ p, i }) => <CellInput value={p.sinal} onChange={(v) => setPagamento(i, 'sinal', v)} placeholder="Entrada" /> },
+              { id: 'data', titulo: 'Data', celula: ({ p, i }) => <CellInput type="date" value={(p.data ?? '').slice(0, 10)} onChange={(v) => setPagamento(i, 'data', v)} /> },
+              { id: 'valor', titulo: 'Valor (R$)', numerica: true, celula: ({ p, i }) => <CellInput type="number" align="right" value={p.valor ?? ''} onChange={(v) => setPagamento(i, 'valor', v)} placeholder="0" /> },
+              { id: 'forma', titulo: 'Forma', celula: ({ p, i }) => <CellInput value={p.forma} onChange={(v) => setPagamento(i, 'forma', v)} placeholder="PIX" /> },
+              { id: 'plataforma', titulo: 'Plataforma', celula: ({ p, i }) => <CellInput value={p.plataforma} onChange={(v) => setPagamento(i, 'plataforma', v)} /> },
+            ]}
+            acoes={({ i }) => (
+              <button
+                type="button"
+                onClick={() => removePagamento(i)}
+                className="btn btn-ghost btn-icon btn-sm text-muted-foreground hover:text-danger"
+                title="Remover parcela"
+                aria-label="Remover parcela"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          />
         )}
 
         {/* Faturamento e bônus — ficam junto do financeiro */}
@@ -830,14 +885,16 @@ export function ContratoDetailPage() {
         </div>
       )}
 
-      </>}
+      </fieldset>}
 
       {dirty && (
-        <div className="fixed bottom-4 right-4 rounded-full bg-warning px-4 py-2 text-sm font-medium text-warning-foreground shadow-lg">
-          Alterações não salvas
+        <div className="toaster" role="status">
+          <div className="justify-self-center rounded-full bg-warning px-4 py-2 text-sm font-medium text-warning-foreground shadow-pop md:justify-self-start">
+            Alterações não salvas
+          </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   )
 }
 
@@ -1145,6 +1202,9 @@ const FIELD_LABELS: Record<string, string> = {
   status_secundario: 'Status secundário',
   data_fechamento: 'Data de assinatura',
   vencimento: 'Vencimento',
+  clientes_atendidos: 'Clientes atendidos',
+  vigencia_fim: 'Fim da vigência confirmada',
+  vigencia_motivo: 'Motivo da vigência / prorrogação',
   plano_dias: 'Plano (dias)',
   semanas: 'Semanas',
   renovacao: 'Renovação',
@@ -1220,6 +1280,16 @@ function resolveValue(campo: string, valor: string | null, consultores: Consulto
     const n = parseFloat(valor)
     if (!isNaN(n)) return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   }
+  if (campo === 'clientes_atendidos') {
+    try {
+      const registro: unknown = JSON.parse(valor)
+      if (registro && typeof registro === 'object' && 'cliente_ids' in registro && Array.isArray(registro.cliente_ids)) {
+        const motivo = 'motivo' in registro && typeof registro.motivo === 'string' ? ` — ${registro.motivo}` : ''
+        return `${registro.cliente_ids.length} cliente(s)${motivo}. Alterações pela seção Clientes atendidos.`
+      }
+    } catch { /* Histórico legado permanece legível abaixo. */ }
+  }
+  if (campo === 'vigencia_motivo') return valor
   if (valor.length > 80) return valor.slice(0, 80) + '…'
   return valor
 }
@@ -1249,7 +1319,7 @@ function HistoricoTab({ contratoId, consultores }: { contratoId: string; consult
   // Reverte a alteração mais recente: devolve cada campo ao valor_antigo registrado no audit.
   async function reverter(group: AuditGroup) {
     const updates = group.items.filter((e) => e.operacao === 'UPDATE' && e.campo)
-    if (updates.length === 0) return
+    if (updates.length === 0 || updates.some(e => e.campo === 'vigencia_fim' || e.campo === 'vigencia_motivo' || e.campo === 'clientes_atendidos')) return
     const labels = updates.map((e) => FIELD_LABELS[e.campo!] ?? e.campo).join(', ')
     if (!confirm(`Reverter a última alteração? ${updates.length === 1 ? 'O campo' : 'Os campos'} (${labels}) voltará ao valor anterior.`)) return
     const patch: Record<string, unknown> = {}
@@ -1294,7 +1364,7 @@ function HistoricoTab({ contratoId, consultores }: { contratoId: string; consult
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {gi === 0 && updates.length > 0 && !isInsert && !isDelete && (
+                    {gi === 0 && updates.length > 0 && !isInsert && !isDelete && !updates.some(e => e.campo === 'vigencia_fim' || e.campo === 'vigencia_motivo' || e.campo === 'clientes_atendidos') && (
                       <button
                         onClick={() => reverter(group)}
                         disabled={update.isPending}
@@ -1313,14 +1383,14 @@ function HistoricoTab({ contratoId, consultores }: { contratoId: string; consult
                 {updates.length > 0 && (
                   <ul className="space-y-1 pt-1 border-t border-border/60">
                     {updates.map((e) => (
-                      <li key={e.id} className="grid grid-cols-[140px_1fr] gap-2 text-xs items-start">
+                      <li key={e.id} className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-0.5 sm:gap-2 text-xs items-start">
                         <span className="font-medium text-foreground truncate">{FIELD_LABELS[e.campo!] ?? e.campo}</span>
                         <span className="flex items-center gap-1.5 min-w-0 flex-wrap">
                           <span className="text-muted-foreground line-through truncate max-w-[160px]">
                             {resolveValue(e.campo!, e.valor_antigo, consultores)}
                           </span>
                           <span className="text-muted-foreground">→</span>
-                          <span className="text-success font-medium truncate max-w-[160px]">
+                          <span title={e.valor_novo ?? undefined} className={(e.campo === 'vigencia_motivo' || e.campo === 'clientes_atendidos') ? "text-success font-medium whitespace-pre-wrap break-words" : "text-success font-medium truncate max-w-[160px]"}>
                             {resolveValue(e.campo!, e.valor_novo, consultores)}
                           </span>
                         </span>
@@ -1444,7 +1514,7 @@ function CellInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className={`w-full min-w-[6rem] rounded-md border border-transparent bg-transparent px-1.5 py-1 text-xs text-foreground hover:border-border focus:border-primary focus:bg-background focus:outline-none ${align === 'right' ? 'text-right tabular-nums' : ''}`}
+      className={`w-full min-w-0 sm:min-w-[6rem] rounded-md border border-transparent bg-transparent px-1.5 py-1 text-xs text-foreground hover:border-border focus:border-primary focus:bg-background focus:outline-none ${align === 'right' ? 'text-right tabular-nums' : ''}`}
     />
   )
 }

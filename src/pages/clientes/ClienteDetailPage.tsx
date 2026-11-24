@@ -1,27 +1,31 @@
 import { useState, useMemo, useRef, useEffect, Children } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  Pencil, Plus, Package, Mail, Phone, Building2, Tag, Users, Trash2, UserPlus,
+  Pencil, Plus, Package, Mail, Phone, Building2, Tag, Users, Trash2,
   MessageSquare, MapPin, Instagram, Globe, DollarSign, FileText, Calendar,
-  TrendingUp, BarChart3, Award, ExternalLink, ClipboardList, Hash, Briefcase,
+  TrendingUp, Award, ExternalLink, ClipboardList, Hash, Briefcase,
   Target, StickyNote, Smartphone, ChevronLeft, ChevronRight as ChevronRightIcon,
   Wallet, Headphones,
 } from 'lucide-react'
 import { useCliente, useCreateContract, useUpdateContract, useDeleteContract } from '@/hooks/useClientes'
 import { useProdutosByClient, useCreateProduto } from '@/hooks/useProdutos'
-import { useAssignments, useCreateAssignment, useDeleteAssignment, useUsers } from '@/hooks/useUsers'
-import { useClientAvatars, useCurrentFollowers } from '@/hooks/useInstagramStats'
+import { useAssignments } from '@/hooks/useUsers'
+import { ResponsaveisCliente } from '@/components/clientes/ResponsaveisCliente'
+import { ContratoStatusBadges } from '@/components/contratos/ContratoStatusBadges'
+import { useClientAvatars } from '@/hooks/useInstagramStats'
 import { useContratosByCliente, type Contrato } from '@/hooks/useComissoes'
 import { useAuth } from '@/contexts/AuthContext'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { AbasRolaveis, type AbaItem } from '@/components/ui/AbasRolaveis'
 import { Modal } from '@/components/ui/Modal'
 import { ClienteForm } from '@/components/clientes/ClienteForm'
 import { useClientContacts } from '@/hooks/useClientContacts'
-import { ClienteRetrospecto, NotaBadge } from '@/components/clientes/ClienteRetrospecto'
+import { AtivoBadge, ClienteRetrospecto, NotaBadge } from '@/components/clientes/ClienteRetrospecto'
 import { AbaFinanceiro, AbaConversas, AbaDemandas } from '@/components/clientes/ClienteVisao360'
 import { usePermissoes } from '@/hooks/usePermissoes'
 import { useConversasDoCliente, useDemandasDoCliente } from '@/hooks/useClienteVinculos'
 import { parcelasDoContrato, type ContratoFluxo } from '@/pages/contratos/fluxoFuturo'
+import { formatarDataCivil } from '@/lib/contratoVigencia'
 import { cn } from '@/lib/utils'
 import type { ClientContract } from '@/types/database'
 
@@ -83,7 +87,7 @@ function InfoCardHeader({
 }) {
   const colorMap = {
     primary: 'bg-primary/10 text-primary',
-    accent: 'bg-accent text-accent-foreground',
+    accent: 'bg-primary-muted text-link',
     success: 'bg-success/10 text-success',
     warning: 'bg-warning/15 text-warning',
   }[accent]
@@ -104,7 +108,7 @@ function SectionTitle({ icon: Icon, title, children }: { icon: React.ElementType
   return (
     <div className="flex items-center justify-between mb-3">
       <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
-        <Icon className="h-4 w-4 text-accent" />
+        <Icon className="h-4 w-4 text-link" />
         {title}
       </h3>
       {children}
@@ -148,7 +152,7 @@ function ContractCard({ contract, isAdmin, onEdit, onDelete }: {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-x-4 gap-y-2">
         {contract.faturamento_bruto && (
           <div><p className="text-2xs text-muted-foreground">Fat. Bruto</p><p className="text-sm font-medium text-foreground">{contract.faturamento_bruto}</p></div>
         )}
@@ -194,7 +198,7 @@ function ContractCard({ contract, isAdmin, onEdit, onDelete }: {
       {(contract.seguidores_inicio || contract.seguidores_fim || contract.videos_postados || contract.entregas_totais || contract.nps) && (
         <div className="pt-2 border-t border-border">
           <p className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Performance</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-x-4 gap-y-2">
             {contract.seguidores_inicio != null && (
               <div><p className="text-2xs text-muted-foreground">Seguidores (início)</p><p className="text-sm text-foreground">{contract.seguidores_inicio.toLocaleString('pt-BR')}</p></div>
             )}
@@ -237,7 +241,7 @@ function ContractCard({ contract, isAdmin, onEdit, onDelete }: {
       {/* Internal flags */}
       <div className="flex flex-wrap gap-1.5 pt-1">
         {contract.venda_interna && <span className="rounded-full bg-primary-muted px-2 py-0.5 text-2xs font-medium text-primary">Venda interna</span>}
-        {contract.venda_diretoria && <span className="rounded-full bg-accent/10 px-2 py-0.5 text-2xs font-medium text-accent">Venda diretoria</span>}
+        {contract.venda_diretoria && <span className="rounded-full bg-primary-muted px-2 py-0.5 text-2xs font-medium text-link">Venda diretoria</span>}
         {contract.financeiro_ok && <span className="rounded-full bg-success-light px-2 py-0.5 text-2xs font-medium text-success">Financeiro OK</span>}
         {contract.email_enviado && <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">Email enviado</span>}
       </div>
@@ -369,18 +373,7 @@ function formatBRL(n: number | null | undefined) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-function formatDate(d: string | null | undefined) {
-  if (!d) return null
-  const date = new Date(d)
-  if (isNaN(date.getTime())) return d
-  return date.toLocaleDateString('pt-BR')
-}
-
-const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  ativo: { bg: 'bg-success/15', text: 'text-success', label: 'Ativo' },
-  cancelado: { bg: 'bg-danger/15', text: 'text-danger', label: 'Cancelado' },
-  concluido: { bg: 'bg-muted', text: 'text-muted-foreground', label: 'Concluído' },
-}
+const formatDate = formatarDataCivil
 
 function ContratoRichCard({
   contrato, onOpen, liveFollowers,
@@ -389,7 +382,6 @@ function ContratoRichCard({
   onOpen: () => void
   liveFollowers?: number | null
 }) {
-  const status = STATUS_STYLES[contrato.status] ?? STATUS_STYLES.ativo
   const totalSlots = (contrato.entregas_totais ?? 0)
   const noPrazo = (contrato.entregas_no_prazo ?? 0)
   const entregasPct = totalSlots > 0 ? Math.round((noPrazo / totalSlots) * 100) : null
@@ -412,14 +404,7 @@ function ContratoRichCard({
             <h4 className="font-bold text-sm text-foreground truncate">
               {contrato.produto_nome || 'Contrato'}
             </h4>
-            <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs font-bold uppercase tracking-wider', status.bg, status.text)}>
-              {status.label}
-            </span>
-            {contrato.status_secundario && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-2xs font-semibold text-warning">
-                {contrato.status_secundario}
-              </span>
-            )}
+            <ContratoStatusBadges status={contrato.status} statusSecundario={contrato.status_secundario} />
           </div>
           {contrato.notion_numero && (
             <p className="mt-0.5 text-2xs text-muted-foreground">#{contrato.notion_numero}</p>
@@ -443,7 +428,7 @@ function ContratoRichCard({
       )}
 
       {/* Financeiro hero */}
-      <div className="relative grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="relative grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-3">
           <p className="text-2xs uppercase tracking-wider text-muted-foreground font-semibold">Valor total</p>
           <p className="text-lg font-extrabold text-foreground tabular-nums leading-tight mt-0.5">
@@ -475,7 +460,7 @@ function ContratoRichCard({
       </div>
 
       {/* Datas */}
-      {(contrato.data_fechamento || contrato.vencimento || contrato.renovacao || contrato.plano_dias || contrato.pg_entrada) && (
+      {(contrato.vigencia_fim || contrato.data_fechamento || contrato.vencimento || contrato.renovacao || contrato.plano_dias || contrato.pg_entrada) && (
         <div className="relative flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
           {contrato.data_fechamento && (
             <span className="inline-flex items-center gap-1 text-muted-foreground">
@@ -487,9 +472,12 @@ function ContratoRichCard({
               <DollarSign className="h-3 w-3" /> PG Entrada: <span className="text-foreground font-medium">{formatDate(contrato.pg_entrada) ?? contrato.pg_entrada}</span>
             </span>
           )}
+          {contrato.vigencia_fim && (
+            <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> Vigência confirmada até: <strong>{formatDate(contrato.vigencia_fim)}</strong></span>
+          )}
           {contrato.vencimento && (
             <span className="inline-flex items-center gap-1 text-muted-foreground">
-              <Calendar className="h-3 w-3" /> Vence: <span className="text-foreground font-medium">{formatDate(contrato.vencimento)}</span>
+              <Calendar className="h-3 w-3" /> Data legada: <span className="text-foreground font-medium">{formatDate(contrato.vencimento)}</span>
             </span>
           )}
           {contrato.renovacao && (
@@ -523,7 +511,7 @@ function ContratoRichCard({
           <p className="text-2xs uppercase tracking-wider text-muted-foreground font-semibold mb-2">Equipe</p>
           <div className="flex flex-wrap gap-1.5">
             {contrato.estrategista_nome_raw && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-2xs font-medium text-accent">
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary-muted px-2 py-0.5 text-2xs font-medium text-link">
                 <Award className="h-3 w-3" /> Estrat.: {contrato.estrategista_nome_raw}
               </span>
             )}
@@ -547,13 +535,13 @@ function ContratoRichCard({
           <p className="text-2xs uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1">
             <TrendingUp className="h-3 w-3" /> Performance
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
             {(contrato.seguidores_inicio != null && seguidoresFim != null) && (
               <div className="rounded-lg bg-muted/40 p-2">
                 <div className="flex items-center justify-between gap-1">
                   <p className="text-2xs text-muted-foreground">Seguidores</p>
                   {crescimentoIsLive && (
-                    <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-success uppercase tracking-wider">
+                    <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-success uppercase tracking-wider">
                       <span className="h-1 w-1 rounded-full bg-success animate-pulse" />
                       ao vivo
                     </span>
@@ -619,7 +607,7 @@ function ContratoRichCard({
           </span>
         )}
         {contrato.venda_interna && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-medium text-primary">Venda interna</span>}
-        {contrato.venda_diretoria && <span className="rounded-full bg-accent/10 px-2 py-0.5 text-2xs font-medium text-accent">Diretoria</span>}
+        {contrato.venda_diretoria && <span className="rounded-full bg-primary-muted px-2 py-0.5 text-2xs font-medium text-link">Diretoria</span>}
         {contrato.link_clicksign && (
           <a
             href={contrato.link_clicksign}
@@ -693,10 +681,13 @@ function ContractFormModal({ initial, clientId, onClose }: { initial?: ClientCon
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const payload = { ...form, client_id: clientId }
+    const payload: Record<string, unknown> & { client_id: string } = { ...form, client_id: clientId }
     // Convert empty strings to null
     for (const [k, v] of Object.entries(payload)) {
-      if (v === '') delete payload[k]
+      if (v === '') {
+        if (isEdit) payload[k] = null
+        else delete payload[k]
+      }
     }
     if (isEdit && initial?.id) {
       await update.mutateAsync({ id: initial.id, ...payload } as Partial<ClientContract> & { id: string })
@@ -709,7 +700,7 @@ function ContractFormModal({ initial, clientId, onClose }: { initial?: ClientCon
   const mutation = isEdit ? update : create
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+    <form onSubmit={handleSubmit} className="space-y-4 max-h-[70dvh] overflow-y-auto pr-1">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {contractFields.map(f => (
           <div key={f.key}>
@@ -736,7 +727,7 @@ function ContractFormModal({ initial, clientId, onClose }: { initial?: ClientCon
       </div>
 
       {/* Boolean flags */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-3">
         {(['venda_interna', 'venda_diretoria', 'financeiro_ok', 'email_enviado'] as const).map(key => (
           <label key={key} className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
             <input
@@ -783,10 +774,8 @@ export function ClienteDetailPage() {
   const { data: products } = useProdutosByClient(id ?? '')
   const { data: clientContacts } = useClientContacts(id)
   const { data: avatarMap } = useClientAvatars()
-  const { data: followersMap } = useCurrentFollowers()
-  const { data: contratosRich = [] } = useContratosByCliente(id)
+  const { data: contratosRich = [], isLoading: contratosCarregando, isError: contratosErro } = useContratosByCliente(id)
   const avatarUrl = id ? avatarMap?.get(id) ?? null : null
-  const liveFollowers = id ? followersMap?.get(id) ?? null : null
   const createProduto = useCreateProduto()
   const deleteContract = useDeleteContract()
 
@@ -798,16 +787,6 @@ export function ClienteDetailPage() {
   const isAdmin = can('clientes.atribuir', 'editar')
   const { data: allAssignments = [] } = useAssignments()
   const clientAssignments = allAssignments.filter(a => a.client_id === id)
-  const { data: allUsers = [] } = useUsers()
-  const createAssignment = useCreateAssignment()
-  const deleteAssignment = useDeleteAssignment()
-  const [addingMember, setAddingMember] = useState(false)
-  const [selectedUserId, setSelectedUserId] = useState('')
-  const [selectedTipo, setSelectedTipo] = useState<'estrategista' | 'atendimento'>('atendimento')
-
-  const assignedUserIds = new Set(clientAssignments.map(a => a.user_id))
-  const availableUsers = allUsers.filter(u => !assignedUserIds.has(u.id) && u.ativo)
-
   // Quem pode escrever retrospecto: admin, gerente ou estrategista vinculado
   const isEstrategistaDoCliente = clientAssignments.some(a => a.user_id === authUser?.id && a.tipo === 'estrategista')
   const canWriteRetrospecto = isAdmin || isEstrategistaDoCliente
@@ -862,14 +841,14 @@ export function ClienteDetailPage() {
             <button onClick={() => {
               const whatsapp = client.whatsapp || client.telefone
               if (whatsapp) {
-                navigate(`/chat?novaConversa=1&nome=${encodeURIComponent(client.nome)}&whatsapp=${encodeURIComponent(whatsapp)}`)
+                navigate(`/conversas?novaConversa=1&nome=${encodeURIComponent(client.nome)}&whatsapp=${encodeURIComponent(whatsapp)}`)
               } else {
-                navigate(`/chat?cliente=${encodeURIComponent(client.nome)}`)
+                navigate(`/conversas?cliente=${encodeURIComponent(client.nome)}`)
               }
             }}
               className="flex items-center gap-2 rounded-lg gradient-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity">
               <MessageSquare className="h-4 w-4" />
-              <span className="hidden sm:inline">Abrir Chat</span>
+              <span className="hidden sm:inline">Abrir conversa</span>
             </button>
             <button onClick={() => setEditOpen(true)}
               className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors">
@@ -881,10 +860,8 @@ export function ClienteDetailPage() {
       />
 
       {/* Hero header: avatar + nome + KPIs */}
-      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-primary/5 p-5 sm:p-6">
-        <div className="pointer-events-none absolute -top-16 -right-16 h-48 w-48 rounded-full bg-primary/10 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-16 -left-16 h-40 w-40 rounded-full bg-accent/10 blur-3xl" />
-        <div className="relative flex flex-col sm:flex-row sm:items-center gap-5">
+      <div className="relative overflow-hidden rounded-xl border border-border bg-card p-4 sm:p-6">
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-5">
           {/* Avatar */}
           <div className="shrink-0">
             {avatarUrl ? (
@@ -895,7 +872,7 @@ export function ClienteDetailPage() {
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
               />
             ) : (
-              <div className="flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-accent/30 text-2xl sm:text-3xl font-extrabold text-primary border-4 border-card shadow-lg">
+              <div className="flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-primary/10 text-2xl sm:text-3xl font-extrabold text-primary border-4 border-card shadow-lg">
                 {client.nome.replace(/\[.*?\]/g, '').trim().split(/\s+/).filter(Boolean).map(n => n[0]).slice(0, 2).join('').toUpperCase() || '?'}
               </div>
             )}
@@ -905,13 +882,7 @@ export function ClienteDetailPage() {
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <NotaBadge clientId={client.id} nota={client.nota ?? null} canEdit={isAdmin} />
-              <span className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-2xs font-bold uppercase tracking-wider',
-                client.ativo ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground',
-              )}>
-                <span className={cn('h-1.5 w-1.5 rounded-full', client.ativo ? 'bg-success animate-pulse' : 'bg-muted-foreground/40')} />
-                {client.ativo ? 'Ativo' : 'Inativo'}
-              </span>
+              <AtivoBadge clientId={client.id} ativo={client.ativo} canEdit={isAdmin} />
               {client.segmento && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-2xs font-semibold text-primary">
                   <Tag className="h-3 w-3" />
@@ -962,16 +933,16 @@ export function ClienteDetailPage() {
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 shrink-0">
-            <div className="rounded-xl border border-border bg-card/60 backdrop-blur px-3 py-2 text-center min-w-[80px]">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:shrink-0">
+            <div className="rounded-lg border border-border bg-bg-1 px-2 py-2 text-center sm:px-3 lg:min-w-[80px]">
               <p className="text-2xs uppercase tracking-wider text-muted-foreground font-semibold">Contratos</p>
-              <p className="text-xl font-extrabold text-foreground tabular-nums leading-tight">{contracts.length}</p>
+              <p className="text-xl font-extrabold text-foreground tabular-nums leading-tight">{contratosErro || contratosCarregando ? '—' : contratosRich.length + contracts.length}</p>
             </div>
-            <div className="rounded-xl border border-border bg-card/60 backdrop-blur px-3 py-2 text-center min-w-[80px]">
+            <div className="rounded-lg border border-border bg-bg-1 px-2 py-2 text-center sm:px-3 lg:min-w-[80px]">
               <p className="text-2xs uppercase tracking-wider text-muted-foreground font-semibold">Produtos</p>
               <p className="text-xl font-extrabold text-foreground tabular-nums leading-tight">{produtosUnificados.length}</p>
             </div>
-            <div className="rounded-xl border border-border bg-card/60 backdrop-blur px-3 py-2 text-center min-w-[80px]">
+            <div className="rounded-lg border border-border bg-bg-1 px-2 py-2 text-center sm:px-3 lg:min-w-[80px]">
               <p className="text-2xs uppercase tracking-wider text-muted-foreground font-semibold">Equipe</p>
               <p className="text-xl font-extrabold text-foreground tabular-nums leading-tight">{clientAssignments.length}</p>
             </div>
@@ -979,8 +950,10 @@ export function ClienteDetailPage() {
         </div>
       </div>
 
+      <ResponsaveisCliente key={client.id} clientId={client.id} clienteNome={client.nome} podeEditar={isAdmin} />
+
       <div className="grid grid-cols-1 gap-4 lg:gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(420px,460px)]">
-        {/* Side cards: Info + Contact + Details + Retrospecto + Team — em carrossel à direita */}
+        {/* Side cards: Info + Contact + Details + Retrospecto — em carrossel à direita */}
         <div className="order-2 xl:order-2 min-w-0"><SideCardCarousel>
           {/* Basic info card */}
           <div className="group rounded-2xl border border-border bg-card p-4 space-y-2 transition-all hover:border-primary/30 hover:shadow-md">
@@ -995,7 +968,7 @@ export function ClienteDetailPage() {
           </div>
 
           {/* Contact card */}
-          <div className="group rounded-2xl border border-border bg-card p-4 space-y-2 transition-all hover:border-accent/30 hover:shadow-md">
+          <div className="group rounded-2xl border border-border bg-card p-4 space-y-2 transition-all hover:border-primary/30 hover:shadow-md">
             <InfoCardHeader icon={MessageSquare} title="Contato" accent="accent" />
             <div className="space-y-0.5">
               <InfoField icon={Mail} label="Email" value={client.email}
@@ -1022,173 +995,35 @@ export function ClienteDetailPage() {
           {/* Retrospecto / Anotações */}
           <ClienteRetrospecto clientId={client.id} canWrite={canWriteRetrospecto} />
 
-          {/* Team / Equipe responsável */}
-          <div className="group rounded-2xl border border-border bg-card p-4 space-y-2 transition-all hover:border-success/30 hover:shadow-md">
-            <InfoCardHeader
-              icon={Users}
-              title="Estrategista vinculado"
-              accent="success"
-              action={isAdmin && !addingMember ? (
-                <button
-                  onClick={() => setAddingMember(true)}
-                  className="flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/15 transition-colors"
-                >
-                  <UserPlus className="h-3 w-3" />
-                  Vincular
-                </button>
-              ) : undefined}
-            />
-
-            <div className="space-y-2">
-              {clientAssignments.map(a => {
-                const isStrat = a.tipo === 'estrategista'
-                return (
-                  <div
-                    key={a.id}
-                    className={cn(
-                      'group/member flex items-center justify-between rounded-xl border px-3 py-2.5 transition-colors',
-                      isStrat
-                        ? 'border-primary/20 bg-primary/5 hover:bg-primary/10'
-                        : 'border-success/20 bg-success/5 hover:bg-success/10',
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className={cn(
-                        'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ring-2',
-                        isStrat ? 'bg-primary/20 text-primary ring-primary/30' : 'bg-success/20 text-success ring-success/30',
-                      )}>
-                        {a.users?.nome?.charAt(0)?.toUpperCase() ?? '?'}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{a.users?.nome ?? 'Usuário removido'}</p>
-                        <p className={cn(
-                          'text-[10px] font-bold uppercase tracking-wider',
-                          isStrat ? 'text-primary' : 'text-success',
-                        )}>
-                          {isStrat ? 'Estrategista' : 'Atendimento'}
-                        </p>
-                      </div>
-                    </div>
-                    {isAdmin && (
-                      <button
-                        onClick={() => deleteAssignment.mutate(a.id)}
-                        disabled={deleteAssignment.isPending}
-                        className="rounded-md p-1.5 text-muted-foreground opacity-0 group-hover/member:opacity-100 hover:text-danger hover:bg-danger/10 transition-all disabled:opacity-50"
-                        title="Remover vínculo"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-              {clientAssignments.length === 0 && !addingMember && (
-                <div className="rounded-xl border border-dashed border-border bg-muted/20 px-3 py-4 text-center">
-                  <Users className="h-5 w-5 mx-auto text-muted-foreground/50 mb-1" />
-                  <p className="text-xs text-muted-foreground">Nenhum especialista vinculado.</p>
-                  {isAdmin && (
-                    <button
-                      onClick={() => setAddingMember(true)}
-                      className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                    >
-                      <UserPlus className="h-3 w-3" /> Vincular agora
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Add member form (admin only) */}
-            {isAdmin && addingMember && (
-              <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
-                <select
-                  value={selectedUserId}
-                  onChange={e => setSelectedUserId(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Selecione um usuário...</option>
-                  {availableUsers.map(u => (
-                    <option key={u.id} value={u.id}>{u.nome} ({u.perfil})</option>
-                  ))}
-                </select>
-                <select
-                  value={selectedTipo}
-                  onChange={e => setSelectedTipo(e.target.value as 'estrategista' | 'atendimento')}
-                  className="w-full rounded-lg border border-input bg-card px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="atendimento">Atendimento</option>
-                  <option value="estrategista">Estrategista</option>
-                </select>
-                <div className="flex items-center justify-end gap-2 pt-1">
-                  <button
-                    onClick={() => { setAddingMember(false); setSelectedUserId('') }}
-                    className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (selectedUserId && id) {
-                        createAssignment.mutate(
-                          { user_id: selectedUserId, client_id: id, tipo: selectedTipo },
-                          { onSuccess: () => { setSelectedUserId(''); setAddingMember(false) } },
-                        )
-                      }
-                    }}
-                    disabled={!selectedUserId || createAssignment.isPending}
-                    className="rounded-lg px-3 py-1.5 text-xs font-semibold gradient-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
-                  >
-                    {createAssignment.isPending ? 'Salvando...' : 'Salvar'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         </SideCardCarousel></div>
 
         {/* Tabs section: Contracts + Products + Outros contatos — coluna principal à esquerda */}
         <div className="order-1 xl:order-1 min-w-0 space-y-3 sm:space-y-4 lg:space-y-6">
           {/* Tabs nav */}
-          <div className="flex items-center gap-1 border-b border-border overflow-x-auto">
-            {([
-              { id: 'contratos', label: 'Contratos', icon: ClipboardList, count: contratosRich.length + contracts.length },
-              { id: 'produtos', label: 'Produtos', icon: Package, count: produtosUnificados.length },
-              { id: 'financeiro', label: 'Financeiro', icon: Wallet, count: parcelasDoCliente },
-              { id: 'conversas', label: 'Conversas', icon: MessageSquare, count: conversasDoCliente.length },
-              { id: 'demandas', label: 'Demandas', icon: Headphones, count: demandasAbertas },
-              { id: 'contatos', label: 'Outros contatos', icon: Smartphone, count: clientContacts?.length ?? 0 },
-            ] as const).map(tab => {
-              const Icon = tab.icon
-              const isActive = activeTab === tab.id
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors',
-                    isActive
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border',
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  {tab.label}
-                  <span className={cn(
-                    'rounded-full px-1.5 py-0.5 text-2xs font-semibold',
-                    isActive ? 'bg-primary-muted text-primary' : 'bg-muted text-muted-foreground',
-                  )}>
-                    {tab.count}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          <AbasRolaveis
+            rotulo="Seções do cliente"
+            itens={([
+              { id: 'contratos', rotulo: 'Contratos', icone: ClipboardList, contador: contratosErro || contratosCarregando ? 0 : contratosRich.length + contracts.length },
+              { id: 'produtos', rotulo: 'Produtos', icone: Package, contador: produtosUnificados.length },
+              { id: 'financeiro', rotulo: 'Financeiro', icone: Wallet, contador: contratosErro || contratosCarregando ? 0 : parcelasDoCliente },
+              { id: 'conversas', rotulo: 'Conversas', icone: MessageSquare, contador: conversasDoCliente.length },
+              { id: 'demandas', rotulo: 'Tickets', icone: Headphones, contador: demandasAbertas },
+              { id: 'contatos', rotulo: 'Outros contatos', icone: Smartphone, contador: clientContacts?.length ?? 0 },
+            ] as const).map((tab): AbaItem => ({
+              ...tab,
+              ativo: activeTab === tab.id,
+              onClick: () => setActiveTab(tab.id),
+            }))}
+          />
+
+          {contratosErro && <p role="alert" className="rounded-lg border border-danger/30 bg-danger-light p-3 text-sm text-danger">Não foi possível carregar os contratos deste cliente. A contagem e os dados financeiros estão indisponíveis. Recarregue a ficha para tentar novamente.</p>}
+          {contratosCarregando && <p role="status" className="text-sm text-muted-foreground">Carregando contratos…</p>}
 
           {/* Tab: Contratos */}
           {activeTab === 'contratos' && (
           <div className="space-y-4">
             {/* Contratos ricos (tabela `contratos` - módulo Comissões) */}
-            {contratosRich.length > 0 && (
+            {!contratosErro && !contratosCarregando && contratosRich.length > 0 && (
               <div>
                 <SectionTitle icon={ClipboardList} title={`Contratos (${contratosRich.length})`}>
                   <button
@@ -1204,7 +1039,6 @@ export function ClienteDetailPage() {
                     <ContratoRichCard
                       key={c.id}
                       contrato={c}
-                      liveFollowers={liveFollowers?.followers}
                       onOpen={() => navigate(`/contratos/${c.id}`)}
                     />
                   ))}
@@ -1219,7 +1053,7 @@ export function ClienteDetailPage() {
                   <h3 className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground">
                     <ClipboardList className="h-3 w-3" />
                     Legados ({contracts.length})
-                    <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-warning normal-case">
+                    <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[11px] font-semibold text-warning normal-case">
                       origem antiga
                     </span>
                   </h3>
@@ -1239,7 +1073,7 @@ export function ClienteDetailPage() {
             )}
 
             {/* Empty state */}
-            {contratosRich.length === 0 && contracts.length === 0 && (
+            {!contratosErro && !contratosCarregando && contratosRich.length === 0 && contracts.length === 0 && (
               <div className="glass-card flex flex-col items-center justify-center py-8 text-center">
                 <ClipboardList className="mb-2 h-8 w-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Nenhum contrato cadastrado.</p>
@@ -1263,7 +1097,7 @@ export function ClienteDetailPage() {
           )}
 
           {/* Tab: Financeiro — parcelas do cronograma dos contratos ativos */}
-          {activeTab === 'financeiro' && <AbaFinanceiro contratos={contratosFluxo} />}
+          {activeTab === 'financeiro' && !contratosErro && !contratosCarregando && <AbaFinanceiro contratos={contratosFluxo} />}
 
           {/* Tab: Conversas — o que vive no app de Chat */}
           {activeTab === 'conversas' && <AbaConversas clientId={id} />}
@@ -1276,7 +1110,7 @@ export function ClienteDetailPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
-                <Package className="h-4 w-4 text-accent" />
+                <Package className="h-4 w-4 text-link" />
                 Produtos ({produtosUnificados.length})
               </h3>
               <button onClick={() => setProdutoModalOpen(true)}
@@ -1345,7 +1179,7 @@ export function ClienteDetailPage() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
-                  <Smartphone className="h-4 w-4 text-accent" />
+                  <Smartphone className="h-4 w-4 text-link" />
                   Outros contatos ({clientContacts?.length ?? 0})
                 </h3>
               </div>
@@ -1354,7 +1188,7 @@ export function ClienteDetailPage() {
                   {clientContacts.map(c => (
                     <button
                       key={c.id}
-                      onClick={() => navigate(`/chat?contato=${c.id}`)}
+                      onClick={() => navigate(`/conversas?contato=${c.id}`)}
                       className="glass-card entity-card-hover w-full text-left p-4 flex items-center gap-3"
                     >
                       {c.foto_url ? (
@@ -1409,7 +1243,7 @@ export function ClienteDetailPage() {
             <label className="block text-sm font-medium text-foreground mb-1.5">Nome *</label>
             <input required value={produtoForm.nome} onChange={e => setProdutoForm(p => ({ ...p, nome: e.target.value }))}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              placeholder="Ex: Social Media Premium" />
+              placeholder="Ex: Plano Premium" />
           </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1.5">Descrição</label>

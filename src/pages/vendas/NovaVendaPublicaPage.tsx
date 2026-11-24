@@ -5,6 +5,7 @@ import 'react-phone-number-input/style.css'
 import { supabase } from '@/lib/supabase'
 import { GuidedTour, type TourStep } from '@/components/ui/GuidedTour'
 import { lerComprovante, comprovanteEhLegivel, encerrarOcr } from '@/lib/ocrComprovante'
+import { BRAND } from '@/config/brand'
 
 const TOUR_STORAGE_KEY = 'omnx_tour_venda_v1'
 
@@ -385,7 +386,7 @@ export function NovaVendaPublicaPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen bg-background gradient-bg flex items-center justify-center p-6">
+      <div className="min-h-dvh bg-background gradient-bg flex items-center justify-center p-6">
         <div className="max-w-md w-full text-center space-y-5 glass-card p-10 animate-fade-in">
           <div className="mx-auto h-16 w-16 rounded-full bg-success/10 flex items-center justify-center">
             <CheckCircle2 className="h-9 w-9 text-success" />
@@ -402,18 +403,18 @@ export function NovaVendaPublicaPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background gradient-bg py-10 px-4">
+    <div className="min-h-dvh bg-background gradient-bg py-10 px-4">
       <div className="max-w-2xl mx-auto space-y-8">
         <header className="flex flex-col items-center text-center space-y-4 animate-fade-in">
           <div className="flex items-center gap-3">
-            <img src="/omnx-logo.png" alt="OMNX Desk" className="h-9 w-9 rounded-xl shadow-sm" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+            <img src="/omnx-logo.png" alt={BRAND.appName} className="h-9 w-9 rounded-xl shadow-sm" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
             <div className="flex flex-col items-start leading-none">
-              <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-muted-foreground">OMNX Desk</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] font-semibold text-muted-foreground">{BRAND.appName}</span>
               <span className="text-base font-bold text-foreground">Formulário de Cadastro</span>
             </div>
           </div>
           <div className="space-y-2 max-w-md">
-            <h1 className="text-3xl font-bold text-foreground tracking-tight">Registrar venda</h1>
+            <h1 className="text-2xl font-bold text-foreground tracking-tight sm:text-3xl">Registrar venda</h1>
             <p className="text-sm text-muted-foreground">
               Preencha os dados da venda que você acabou de fechar. O time de atendimento revisa e dá sequência ao fluxo.
             </p>
@@ -531,7 +532,7 @@ export function NovaVendaPublicaPage() {
                       onChange={(e) => setPagadorObservacao(e.target.value)}
                       rows={2}
                       placeholder="Algum detalhe sobre o arranjo de pagamento…"
-                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      className="w-full min-h-11 rounded-md border border-border bg-background px-3 py-2.5 text-base sm:min-h-0 sm:py-2 sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                     />
                   </div>
                 </div>
@@ -545,7 +546,7 @@ export function NovaVendaPublicaPage() {
                 value={produtoId}
                 onChange={(e) => setProdutoId(e.target.value)}
                 required
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full min-h-11 rounded-md border border-border bg-background px-3 py-2.5 text-base sm:min-h-0 sm:py-2 sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               >
                 <option value="">— selecione —</option>
                 {produtos.map((p) => (
@@ -594,7 +595,7 @@ export function NovaVendaPublicaPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-muted-foreground">Pagamento {idx + 1}</span>
                     {pagamentos.length > 1 && (
-                      <button type="button" onClick={() => removePagamento(idx)} className="p-1 rounded hover:bg-danger-light text-muted-foreground hover:text-danger">
+                      <button type="button" onClick={() => removePagamento(idx)} className="inline-flex h-11 w-11 items-center justify-center rounded hover:bg-danger-light text-muted-foreground hover:text-danger sm:h-8 sm:w-8">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     )}
@@ -615,7 +616,7 @@ export function NovaVendaPublicaPage() {
                       <select
                         value={(FORMAS as readonly string[]).includes(p.forma) ? p.forma : 'Outros'}
                         onChange={(e) => updatePagamento(idx, { forma: e.target.value === 'Outros' ? '' : e.target.value })}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        className="w-full min-h-11 rounded-md border border-border bg-background px-3 py-2.5 text-base sm:min-h-0 sm:py-2 sm:text-sm"
                       >
                         {FORMAS.map((f) => <option key={f} value={f}>{f}</option>)}
                         <option value="Outros">Outros</option>
@@ -633,7 +634,7 @@ export function NovaVendaPublicaPage() {
                       <select
                         value={(PLATAFORMAS as readonly string[]).includes(p.plataforma) ? p.plataforma : 'Outros'}
                         onChange={(e) => updatePagamento(idx, { plataforma: e.target.value === 'Outros' ? '' : e.target.value })}
-                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                        className="w-full min-h-11 rounded-md border border-border bg-background px-3 py-2.5 text-base sm:min-h-0 sm:py-2 sm:text-sm"
                       >
                         {PLATAFORMAS.map((f) => <option key={f} value={f}>{f}</option>)}
                         <option value="Outros">Outros</option>
@@ -668,7 +669,7 @@ export function NovaVendaPublicaPage() {
                           {p.arquivos.map((f, fIdx) => (
                             <li key={fIdx} className="flex items-center justify-between rounded-md border border-border px-2 py-1 text-xs">
                               <span className="truncate">{f.name} <span className="text-muted-foreground">({Math.round(f.size / 1024)} KB)</span></span>
-                              <button type="button" onClick={() => removeArquivoPagamento(idx, fIdx)} className="p-1 rounded hover:bg-danger-light text-muted-foreground hover:text-danger">
+                              <button type="button" onClick={() => removeArquivoPagamento(idx, fIdx)} className="inline-flex h-11 w-11 items-center justify-center rounded hover:bg-danger-light text-muted-foreground hover:text-danger sm:h-8 sm:w-8">
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </li>
@@ -702,7 +703,7 @@ export function NovaVendaPublicaPage() {
                     <button
                       type="button"
                       onClick={() => setQtdRepetir((v) => Math.max(1, v - 1))}
-                      className="flex h-8 w-8 items-center justify-center rounded-l-full text-muted-foreground hover:bg-muted"
+                      className="flex h-11 w-11 items-center justify-center rounded-l-full text-muted-foreground hover:bg-muted sm:h-8 sm:w-8"
                       aria-label="Diminuir"
                     >
                       <Minus className="h-3.5 w-3.5" />
@@ -711,7 +712,7 @@ export function NovaVendaPublicaPage() {
                     <button
                       type="button"
                       onClick={() => setQtdRepetir((v) => Math.min(48, v + 1))}
-                      className="flex h-8 w-8 items-center justify-center rounded-r-full text-muted-foreground hover:bg-muted"
+                      className="flex h-11 w-11 items-center justify-center rounded-r-full text-muted-foreground hover:bg-muted sm:h-8 sm:w-8"
                       aria-label="Aumentar"
                     >
                       <Plus className="h-3.5 w-3.5" />
@@ -721,7 +722,7 @@ export function NovaVendaPublicaPage() {
                   <button
                     type="button"
                     onClick={() => repetirUltima(qtdRepetir)}
-                    className="ml-auto flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                    className="ml-auto flex min-h-11 items-center gap-1.5 rounded-full bg-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground hover:opacity-90 sm:min-h-0"
                     title="Cria cópias da última parcela, mês a mês, numerando automaticamente"
                   >
                     <Copy className="h-3.5 w-3.5" /> Gerar parcelas
@@ -737,7 +738,7 @@ export function NovaVendaPublicaPage() {
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 rows={3}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="w-full min-h-11 rounded-md border border-border bg-background px-3 py-2.5 text-base sm:min-h-0 sm:py-2 sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </Field>
           </Card>
@@ -761,14 +762,14 @@ export function NovaVendaPublicaPage() {
                 <button
                   type="button"
                   onClick={addPagamento}
-                  className="flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:opacity-90 sm:min-h-0"
                 >
                   <Plus className="h-3.5 w-3.5" /> Adicionar as parcelas
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center rounded-full border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50 sm:min-h-0"
                 >
                   É só esse pagamento mesmo, enviar
                 </button>
@@ -786,7 +787,7 @@ export function NovaVendaPublicaPage() {
           </button>
 
           <p className="text-center text-[11px] text-muted-foreground pt-2">
-            OMNX Desk © {new Date().getFullYear()} — Aliança de Alto Valor
+            {BRAND.appName} © {new Date().getFullYear()}{BRAND.empresa ? ` — ${BRAND.empresa}` : ''}
           </p>
         </form>
       </div>
@@ -839,7 +840,7 @@ function Input({
       required={required}
       step={step}
       min={min}
-      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+      className="w-full min-h-11 rounded-md border border-border bg-background px-3 py-2.5 text-base sm:min-h-0 sm:py-2 sm:text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
     />
   )
 }

@@ -121,7 +121,7 @@ export function AbaConversas({ clientId }: { clientId: string | undefined }) {
     return (
       <Vazio
         icon={MessageSquare}
-        titulo="O app de Chat está desligado"
+        titulo="O módulo Conversas está desligado"
         explicacao="As conversas de WhatsApp deste cliente continuam guardadas. Um administrador pode religar o app em Apps."
       />
     )
@@ -153,10 +153,10 @@ export function AbaConversas({ clientId }: { clientId: string | undefined }) {
           {/* O inbox resolve a conversa a partir do contato (?contato=) — não
               existe rota por id de conversa. */}
           <Link
-            to={c.contato_id ? `/chat?contato=${c.contato_id}` : '/chat'}
+            to={c.contato_id ? `/conversas?contato=${c.contato_id}` : '/conversas'}
             className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
           >
-            Abrir no Chat <ExternalLink className="h-3 w-3" />
+            Abrir em Conversas <ExternalLink className="h-3 w-3" />
           </Link>
         </li>
       ))}
@@ -175,7 +175,7 @@ export function AbaDemandas({ clientId }: { clientId: string | undefined }) {
       <Vazio
         icon={Headphones}
         titulo="O app de Atendimento está desligado"
-        explicacao="As demandas registradas continuam guardadas. Um administrador pode religar o app em Apps."
+        explicacao="Os tickets registrados continuam guardados. Um administrador pode religar o módulo em Ajustes → Módulos ligados."
       />
     )
   }
@@ -186,7 +186,7 @@ export function AbaDemandas({ clientId }: { clientId: string | undefined }) {
     return (
       <Vazio
         icon={Headphones}
-        titulo="Nenhuma demanda registrada"
+        titulo="Nenhum ticket registrado"
         explicacao="Toda vez que este cliente pedir alguma coisa, registre no Atendimento: é o que faz o pedido parar de se perder na conversa."
       />
     )
@@ -202,7 +202,7 @@ export function AbaDemandas({ clientId }: { clientId: string | undefined }) {
           <li key={d.id} className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="min-w-0">
               <Link
-                to={`/atendimento/demandas/${d.id}`}
+                to={`/tickets/${d.id}`}
                 className="truncate text-sm font-medium text-foreground hover:text-primary"
               >
                 {d.codigo ? `${d.codigo} · ` : ''}{d.titulo}

@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { segmentoDe, type Segmento } from '@/lib/atendimentoSegmentos'
+import { ticketResolvido } from '@/lib/ticketStatus'
+import { LIMPAR_SUGESTAO_IRIS, SELECT_SUGESTAO_IRIS, type LinhaSugestaoIris } from '@/lib/sugestaoIris'
 
 /**
  * App Atendimento — demandas, tipos, etapas, comentários e histórico.
@@ -103,7 +105,7 @@ const SELECT_DEMANDA = `
  * `select` sem filtro devolve exatamente uma linha — a dele.
  *
  * Enquanto carrega, devolve o segmento padrão: é melhor a tela abrir com as abas
- * de Social Media e se ajustar do que piscar vazia esperando uma consulta.
+ * padrão e se ajustar do que piscar vazia esperando uma consulta.
  */
 export function useSegmentoAtendimento(): { segmento: Segmento; isLoading: boolean } {
   const { data, isLoading } = useQuery({
@@ -224,7 +226,7 @@ export function useExcluirEtapa() {
       if (error) {
         if (error.code === '23503') {
           throw new Error(
-            'Esta etapa ainda tem demandas. Mova as demandas para outra etapa antes de excluí-la.',
+            'Esta etapa ainda tem tickets. Mova os tickets para outra etapa antes de excluí-la.',
           )
         }
         throw error
@@ -302,6 +304,77 @@ export function useDemanda(id: string | undefined) {
   })
 }
 
+export interface OrigemWhatsAppDemanda extends LinhaSugestaoIris {
+  wa_origem_mensagem_id: string | null
+  wa_ultima_analise: string | null
+  wa_resolucao_mensagem_id: string | null
+  wa_resolvida_manualmente: boolean
+  wa_reaberta_em: string | null
+  /** Opcionais para manter a origem legível antes da migration da resolução natural. */
+  wa_resolucao_metodo?: 'ia' | null
+  wa_resolucao_motivo?: string | null
+  wa_resolucao_confianca?: number | null
+  wa_resolucao_evidencias?: string[]
+}
+
+const SELECT_ORIGEM_WHATSAPP = 'wa_origem_mensagem_id, wa_ultima_analise, wa_resolucao_mensagem_id, wa_resolvida_manualmente, wa_reaberta_em'
+const SELECT_RESOLUCAO_WHATSAPP = 'wa_resolucao_metodo, wa_resolucao_motivo, wa_resolucao_confianca, wa_resolucao_evidencias'
+const colunaWhatsAppAusente = (codigo: string | undefined) => codigo === '42703' || codigo === 'PGRST204'
+
+/**
+ * Consulta separada: banco ainda sem a ponte continua abrindo os tickets.
+ * Tenta do mais completo ao mais simples, para cada estágio da publicação:
+ * com a sugestão da Íris → só com a resolução automática → só a ponte.
+ */
+export function useOrigemWhatsAppDemanda(id: string | undefined) {
+  return useQuery({
+    queryKey: ['atendimento', 'origem-whatsapp', id],
+    enabled: Boolean(id),
+    queryFn: async (): Promise<OrigemWhatsAppDemanda | null> => {
+      const niveis = [
+        `${SELECT_ORIGEM_WHATSAPP}, ${SELECT_RESOLUCAO_WHATSAPP}, ${SELECT_SUGESTAO_IRIS}`,
+        `${SELECT_ORIGEM_WHATSAPP}, ${SELECT_RESOLUCAO_WHATSAPP}`,
+        SELECT_ORIGEM_WHATSAPP,
+      ]
+      for (const campos of niveis) {
+        const { data, error } = await (supabase as any).from('atendimento_demandas')
+          .select(campos).eq('id', id).single()
+        if (!error) return data as OrigemWhatsAppDemanda
+        // Não transformar falta de permissão/rede em ausência da funcionalidade.
+        if (!colunaWhatsAppAusente(error.code)) throw error
+      }
+      // Nem a ponte existe: a ficha segue como ticket manual.
+      return null
+    },
+    retry: false,
+  })
+}
+
+/**
+ * "Manter aberto": recusa a sugestão da Íris. A pessoa só pode limpar a
+ * sugestão (nunca criar ou editar); a RLS exige permissão de editar tickets e
+ * o banco registra "recusada" no histórico. A etapa não muda.
+ */
+export function useRecusarSugestaoIris() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await (supabase as any)
+        .from('atendimento_demandas')
+        .update(LIMPAR_SUGESTAO_IRIS)
+        .eq('id', id)
+        .select('id')
+      if (error) throw error
+      // Sem linha devolvida: a RLS não deixou gravar (sem permissão ou ticket de outra empresa).
+      if (!Array.isArray(data) || data.length === 0) {
+        throw new Error('Você não tem permissão para mudar este ticket.')
+      }
+    },
+    // Ficha, histórico, lista e quadro leem a sugestão: todos sob ['atendimento'].
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['atendimento'] }),
+  })
+}
+
 export type NovaDemanda = {
   titulo: string
   descricao?: string | null
@@ -329,15 +402,38 @@ export function useCriarDemanda() {
   })
 }
 
+/**
+ * Campos que a tela pode gravar num ticket. Tudo fora desta lista é ignorado:
+ * campos de sincronização com o WhatsApp (`wa_*`) são recusados pelo banco
+ * ("Metadados de sincronização não são editáveis") e `concluida_em` é calculado
+ * pelo gatilho a partir da etapa. Mandar o objeto inteiro quebraria o salvar.
+ */
+const CAMPOS_EDITAVEIS = [
+  'titulo', 'descricao', 'cliente_id', 'tipo_id', 'etapa_id', 'prioridade', 'prazo',
+  'responsavel_id', 'aprovacao', 'aprovacao_obs', 'anexos',
+] as const
+
+export type CamposEditaveisDemanda = Partial<Pick<Demanda, (typeof CAMPOS_EDITAVEIS)[number]>>
+
+export function payloadEditavelDemanda(campos: Record<string, unknown>): CamposEditaveisDemanda {
+  const payload: Record<string, unknown> = {}
+  for (const chave of CAMPOS_EDITAVEIS) {
+    if (Object.prototype.hasOwnProperty.call(campos, chave)) payload[chave] = campos[chave]
+  }
+  return payload as CamposEditaveisDemanda
+}
+
 export function useAtualizarDemanda() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, ...campos }: Partial<Demanda> & { id: string }) => {
+    mutationFn: async ({ id, ...campos }: CamposEditaveisDemanda & { id: string }) => {
       // O histórico é escrito pelo trigger no banco, não aqui: assim vale para
       // qualquer caminho de escrita, não só para esta tela.
+      const payload = payloadEditavelDemanda(campos)
+      if (Object.keys(payload).length === 0) return
       const { error } = await (supabase as any)
         .from('atendimento_demandas')
-        .update(campos)
+        .update(payload)
         .eq('id', id)
       if (error) throw error
     },
@@ -457,7 +553,10 @@ export function useMetricasAtendimento() {
   const inicioDoMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
 
   const lista = demandas ?? []
-  const abertas = lista.filter((d) => !d.concluida_em)
+  // "Resolvido" segue a etapa (final ou não), igual ao status mostrado na tela.
+  const resolvida = (d: Demanda) =>
+    ticketResolvido({ etapaFinal: d.etapa ? d.etapa.is_final : null, concluidaEm: d.concluida_em })
+  const abertas = lista.filter((d) => !resolvida(d))
 
   const prazoDe = (d: Demanda) => (d.prazo ? new Date(`${d.prazo}T00:00:00`) : null)
 
@@ -488,7 +587,7 @@ export function useMetricasAtendimento() {
     aguardandoAprovacao: abertas.filter((d) => d.aprovacao === 'aguardando').length,
     comAjustes: abertas.filter((d) => d.aprovacao === 'ajustes').length,
     concluidasNoMes: lista.filter(
-      (d) => d.concluida_em && new Date(d.concluida_em) >= inicioDoMes,
+      (d) => resolvida(d) && d.concluida_em && new Date(d.concluida_em) >= inicioDoMes,
     ).length,
     porEtapa: [...porEtapa.entries()].map(([etapa, v]) => ({ etapa, cor: v.cor, total: v.total })),
     porResponsavel: [...porResponsavel.entries()]

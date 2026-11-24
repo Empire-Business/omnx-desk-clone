@@ -31,7 +31,7 @@ export function SendMenuDialog({
   const [menuType, setMenuType] = useState<MenuType>('button')
   const [text, setText] = useState('')
   const [footerText, setFooterText] = useState('')
-  const [listButton, setListButton] = useState('Ver opcoes')
+  const [listButton, setListButton] = useState('Ver opções')
   const [selectableCount, setSelectableCount] = useState(1)
   const [choices, setChoices] = useState<string[]>([''])
 
@@ -119,7 +119,7 @@ export function SendMenuDialog({
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-sm font-medium text-foreground">
-              {menuType === 'poll' ? 'Opcoes de voto' : menuType === 'list' ? 'Itens da lista' : 'Botoes'} *
+              {menuType === 'poll' ? 'Opções de voto' : menuType === 'list' ? 'Itens da lista' : 'Botões'} *
             </label>
             <button
               type="button"
@@ -139,10 +139,10 @@ export function SendMenuDialog({
                   onChange={(e) => updateChoice(i, e.target.value)}
                   placeholder={
                     menuType === 'button'
-                      ? 'Texto do botao|id (ex: Suporte|suporte)'
+                      ? 'Texto do botão|id (ex.: Suporte|suporte)'
                       : menuType === 'list'
-                        ? '[Secao] ou Titulo|id|descricao'
-                        : 'Opcao de voto'
+                        ? '[Seção] ou Título|id|descrição'
+                        : 'Opção de voto'
                   }
                   className={cn(
                     'flex-1 rounded-lg border border-input bg-background px-3 py-1.5',
@@ -164,12 +164,12 @@ export function SendMenuDialog({
 
           {menuType === 'button' && (
             <p className="mt-1 text-2xs text-muted-foreground">
-              Formatos: "Texto|id", "Texto|https://url", "Texto|call:+5511999", "Texto|copy:codigo"
+              Formatos: "Texto|id", "Texto|https://url", "Texto|call:+5511999", "Texto|copy:código"
             </p>
           )}
           {menuType === 'list' && (
             <p className="mt-1 text-2xs text-muted-foreground">
-              Use [Nome] para criar secoes. Itens: "Titulo|id|descricao"
+              Use [Nome] para criar seções. Itens: "Título|id|descrição"
             </p>
           )}
         </div>
@@ -184,7 +184,7 @@ export function SendMenuDialog({
               type="text"
               value={footerText}
               onChange={(e) => setFooterText(e.target.value)}
-              placeholder="Escolha uma das opcoes"
+              placeholder="Escolha uma das opções"
               className={cn(
                 'w-full rounded-lg border border-input bg-background px-3 py-2',
                 'text-sm focus:outline-none focus:ring-2 focus:ring-ring',
@@ -196,12 +196,12 @@ export function SendMenuDialog({
         {/* List button text */}
         {menuType === 'list' && (
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">Texto do botao da lista</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Texto do botão da lista</label>
             <input
               type="text"
               value={listButton}
               onChange={(e) => setListButton(e.target.value)}
-              placeholder="Ver opcoes"
+              placeholder="Ver opções"
               className={cn(
                 'w-full rounded-lg border border-input bg-background px-3 py-2',
                 'text-sm focus:outline-none focus:ring-2 focus:ring-ring',
@@ -213,7 +213,7 @@ export function SendMenuDialog({
         {/* Poll selectable count */}
         {menuType === 'poll' && (
           <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">Opcoes selecionaveis</label>
+            <label className="mb-1 block text-sm font-medium text-foreground">Opções selecionáveis</label>
             <input
               type="number"
               value={selectableCount}

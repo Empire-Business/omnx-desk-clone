@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -70,7 +71,7 @@ export function useAddNote() {
       if (!user) throw new Error('Não autenticado')
       const { data, error } = await supabase
         .from('personal_notes')
-        .insert({ user_id: user.id, color: 'default', ...payload })
+        .insert({ ...({ user_id: user.id, color: 'default', ...payload }), tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error

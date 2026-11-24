@@ -2,17 +2,22 @@ import React, { useRef, useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Send, UserCheck, X, Bot, Mic, Image, FileText, Video,
-  Paperclip, StickyNote, User, Users, Trash2, Download, File,
+  Paperclip, User, Users, Trash2, Download, File,
   ArrowRightLeft, Check, CheckCheck, Sparkles, Star, MessageSquare,
   Smartphone, ExternalLink, Smile, Pencil, MoreVertical,
   MapPin, Contact, List, ChevronDown, ZoomIn, Ban, Building, Search, Link2,
-  Reply, AtSign, Loader2, RotateCcw, ShieldCheck, Play, Pause,
+  Reply, Loader2, ShieldCheck, Play, Pause, ArrowLeft, Lock, CircleAlert, MessageCircle,
 } from 'lucide-react'
+import { Modal } from '@/components/ui/Modal'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { useAudioRecorder } from '@/hooks/useAudioRecorder'
+import { mensagemErro } from '@/lib/mensagemErro'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePermissoes } from '@/hooks/usePermissoes'
 import { useUsers, useAssignments, useMyClientIds, useMyInstanceIds } from '@/hooks/useUsers'
 import { useClientes } from '@/hooks/useClientes'
 import { useAppSettings } from '@/hooks/useAppSettings'
+import { useNomeAssistente } from '@/hooks/useAutomacoesWa'
 import { cn, formatPhone } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -25,6 +30,8 @@ import { SendLocationDialog } from './SendLocationDialog'
 import { SendMenuDialog } from './SendMenuDialog'
 import { StartMeetingDialog } from './StartMeetingDialog'
 import { ChatActionsMenu, ChatDetailsOverlay } from './ChatActionsMenu'
+import { SeloTicketsDoCliente } from './TicketsDoCliente'
+import { TranscricaoMidia } from './TranscricaoMidia'
 import {
   useConversation,
   useMessages,
@@ -57,12 +64,19 @@ import {
   useUpdateNoteContent,
   useGroupMembers,
 } from '@/hooks/useChat'
-import type { ChatMessage, QuickReply, MessageReaction, ChatDepartment, GroupMember } from '@/hooks/useChat'
+import type { ChatMessage, QuickReply, MessageReaction, GroupMember } from '@/hooks/useChat'
+import { BRAND } from '@/config/brand'
+import { RECURSOS } from '@/config/recursos'
 
 interface ConversationViewProps {
+  historyOrigins?: readonly { id: string; nome: string }[]
   conversationId: string
+  draftText?: string
+  onDraftTextChange?: React.Dispatch<React.SetStateAction<string>>
   onToggleContactPanel?: () => void
   contactPanelOpen?: boolean
+  /** Celular: volta para a lista de conversas (botão no próprio cabeçalho). */
+  onBack?: () => void
 }
 
 // ── Triagem Banner — aparece quando conversa não tem departamento ─────────────
@@ -82,7 +96,6 @@ function TriagemBanner({
   isMobile?: boolean
   onlyTransfer?: boolean
 }) {
-  const { user: authUser } = useAuth()
   const { can } = usePermissoes()
   const { data: departments = [] } = useDepartments()
   const { data: users = [] } = useUsers()
@@ -95,7 +108,12 @@ function TriagemBanner({
   // redistribui para um estrategista específico.
   const podeAtribuirEstrategistaDireto = can('clientes.atribuir', 'editar')
   const gerentesComClientes = new Set(allAssignments.filter(a => a.tipo === 'estrategista').map(a => a.user_id))
-  const estrategistas = users.filter(u => u.ativo && (u.perfil === 'estrategista' || (u.perfil === 'gerente' && gerentesComClientes.has(u.id))))
+  // Admin e gerente com cliente vinculado como estrategista também contam: o perfil
+  // é um só, e promover um estrategista a admin não pode tirá-lo desta lista.
+  const estrategistas = users.filter(u => u.ativo && (
+    u.perfil === 'estrategista'
+    || ((u.perfil === 'gerente' || u.perfil === 'admin') && gerentesComClientes.has(u.id))
+  ))
   const currentDeptName = currentDepartmentId
     ? departments.find(d => d.id === currentDepartmentId)?.nome
     : null
@@ -115,49 +133,53 @@ function TriagemBanner({
   // On mobile: show compact toggle bar
   if (isMobile && !expanded) {
     return (
-      <div className="border-b border-border">
+      <div className="border-b border-border bg-card">
         <button
+          type="button"
           onClick={() => setExpanded(true)}
-          className="flex w-full items-center gap-2 px-3 py-1.5 bg-muted/50 text-xs"
+          aria-expanded={false}
+          className="flex min-h-11 w-full items-center gap-2 px-3 text-[13px] focus-ds"
         >
-          <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <span className="text-muted-foreground font-medium">
+          <ArrowRightLeft className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
+          <span className="min-w-0 truncate text-muted-foreground font-medium">
             {currentDeptName
-              ? <><span className="text-foreground">{currentDeptName}</span>{currentAgenteName && <> · <span className="text-primary">{currentAgenteName}</span></>}</>
-              : 'Atribuir'}
+              ? <><span className="text-foreground">{currentDeptName}</span>{currentAgenteName && <> · <span className="text-link">{currentAgenteName}</span></>}</>
+              : 'Encaminhar para uma fila'}
           </span>
-          <ChevronDown className="h-3 w-3 text-muted-foreground ml-auto" />
+          <ChevronDown className="h-4 w-4 text-muted-foreground ml-auto shrink-0" aria-hidden />
         </button>
       </div>
     )
   }
 
   return (
-    <div className="border-b border-border">
+    <div className="border-b border-border bg-card">
       {!onlyTransfer && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 flex-wrap">
+        <div className="flex items-center gap-2 px-3 sm:px-4 py-2 flex-wrap">
           {isMobile && (
-            <button onClick={() => setExpanded(false)} className="shrink-0 text-muted-foreground">
-              <X className="h-3.5 w-3.5" />
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="btn btn-ghost btn-icon btn-sm shrink-0"
+              aria-label="Recolher encaminhamento"
+            >
+              <X aria-hidden />
             </button>
           )}
-          <span className="text-xs font-medium text-muted-foreground shrink-0">
+          <span className="text-[12.5px] font-medium text-muted-foreground shrink-0">
             {currentDeptName
-              ? <><span className="text-foreground">{currentDeptName}</span>{currentAgenteName && <> · <span className="text-primary">{currentAgenteName}</span></>} —</>
-              : 'Atribuir a:'}
+              ? <><span className="text-foreground">{currentDeptName}</span>{currentAgenteName && <> · <span className="text-link">{currentAgenteName}</span></>} —</>
+              : 'Encaminhar para:'}
           </span>
-          <div className="flex flex-wrap gap-1.5 flex-1">
+          <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
             {activeDepts.map(dept => (
               <button
                 key={dept.id}
+                type="button"
                 onClick={() => handleQuickRoute(dept.id)}
                 disabled={transfer.isPending || dept.id === currentDepartmentId}
-                className={cn(
-                  'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors disabled:opacity-50',
-                  dept.id === currentDepartmentId
-                    ? 'bg-primary/15 border-primary/30 text-primary'
-                    : 'bg-muted hover:bg-muted/80 border-border text-muted-foreground hover:text-foreground',
-                )}
+                aria-pressed={dept.id === currentDepartmentId}
+                className="chip focus-ds disabled:cursor-default"
               >
                 {dept.id === currentDepartmentId ? dept.nome : `→ ${dept.nome}`}
               </button>
@@ -165,10 +187,12 @@ function TriagemBanner({
           </div>
           {podeAtribuirEstrategistaDireto && (
             <button
+              type="button"
               onClick={() => setShowEstrategistas(v => !v)}
+              aria-expanded={showEstrategistas}
               className={cn(
-                'shrink-0 text-xs font-medium underline transition-colors',
-                showEstrategistas ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
+                'btn btn-ghost btn-sm shrink-0',
+                showEstrategistas && 'text-link',
               )}
             >
               Atribuir a estrategista
@@ -178,23 +202,20 @@ function TriagemBanner({
       )}
 
       {showEstrategistas && podeAtribuirEstrategistaDireto && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-primary/5 flex-wrap">
-          <span className="text-xs font-medium text-primary shrink-0">Estrategista:</span>
-          <div className="flex flex-wrap gap-1.5 flex-1">
+        <div className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary-light/60 border-t border-stroke-weak flex-wrap">
+          <span className="text-[12.5px] font-semibold text-link shrink-0">Estrategista:</span>
+          <div className="flex flex-wrap gap-1.5 flex-1 min-w-0">
             {estrategistas.map(u => (
               <button
                 key={u.id}
+                type="button"
                 onClick={() => handleTransferTo(u.id)}
                 disabled={transfer.isPending || u.id === currentAgenteId}
+                aria-pressed={u.id === currentAgenteId}
+                title={u.perfil === 'gerente' ? 'Gestor' : undefined}
                 className={cn(
-                  'rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors disabled:opacity-50',
-                  u.id === currentAgenteId
-                    ? u.perfil === 'gerente'
-                      ? 'bg-amber-500/20 border-amber-500/40 text-amber-700 dark:text-amber-300'
-                      : 'bg-primary/15 border-primary/30 text-primary'
-                    : u.perfil === 'gerente'
-                      ? 'bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-700 dark:text-amber-300'
-                      : 'bg-primary/10 hover:bg-primary/20 border-primary/20 text-primary',
+                  'chip focus-ds disabled:cursor-default',
+                  u.perfil === 'gerente' && 'border-dashed',
                 )}
               >
                 {u.id === currentAgenteId ? u.nome : `→ ${u.nome}`}
@@ -223,10 +244,10 @@ function ReactionsDisplay({ reactions }: { reactions?: MessageReaction[] }) {
       {Object.entries(grouped).map(([emoji, count]) => (
         <span
           key={emoji}
-          className="inline-flex items-center gap-0.5 rounded-full bg-white/80 dark:bg-white/10 border border-border px-1.5 py-0.5 text-xs shadow-sm"
+          className="inline-flex items-center gap-0.5 rounded-full bg-card ring-hairline px-1.5 py-0.5 text-xs"
         >
           {emoji}
-          {count > 1 && <span className="text-[10px] text-muted-foreground">{count}</span>}
+          {count > 1 && <span className="mono text-[11px] text-muted-foreground">{count}</span>}
         </span>
       ))}
     </div>
@@ -264,9 +285,9 @@ function QuotedMessagePreview({
   return (
     <div
       onClick={onClick}
-      className="mb-1.5 rounded-lg border-l-[3px] border-primary/60 bg-black/5 dark:bg-white/5 px-2.5 py-1.5 cursor-pointer hover:bg-black/8 dark:hover:bg-white/8 transition-colors"
+      className="mb-1.5 rounded-md border-l-[3px] border-primary/60 bg-foreground/[0.04] px-2.5 py-1.5 cursor-pointer hover:bg-foreground/[0.07] transition-colors duration-fast"
     >
-      <p className="text-xs font-semibold text-primary truncate">{senderName}</p>
+      <p className="text-xs font-semibold text-link truncate">{senderName}</p>
       <p className="text-xs text-muted-foreground truncate leading-relaxed">{preview}</p>
     </div>
   )
@@ -291,32 +312,33 @@ function MessageActionBar({
     <div
       className={cn(
         'absolute -top-3.5 z-10 flex items-center gap-0.5 rounded-full px-1 py-0.5',
-        'bg-white/90 dark:bg-[#233138]/90 backdrop-blur-sm',
-        'shadow-[0_1px_6px_rgba(0,0,0,0.1)] dark:shadow-[0_1px_6px_rgba(0,0,0,0.3)]',
-        'border border-black/[0.06] dark:border-white/[0.08]',
+        'bg-popover shadow-pop ring-hairline',
         'animate-fade-in',
         position === 'left' ? 'left-1.5' : 'right-1.5',
       )}
     >
       <button
         onClick={onReply}
-        className="flex h-7 w-7 items-center justify-center rounded-full text-[#54656f] dark:text-[#aebac1] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition-colors"
+        className="flex h-7 w-7 items-center justify-center rounded-full text-fg-3 hover:bg-accent hover:text-foreground transition-colors duration-fast focus-ds"
         title="Responder"
+        aria-label="Responder"
       >
         <Reply className="h-[15px] w-[15px]" />
       </button>
       <button
         onClick={onReact}
-        className="flex h-7 w-7 items-center justify-center rounded-full text-[#54656f] dark:text-[#aebac1] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition-colors"
+        className="flex h-7 w-7 items-center justify-center rounded-full text-fg-3 hover:bg-accent hover:text-foreground transition-colors duration-fast focus-ds"
         title="Reagir"
+        aria-label="Reagir"
       >
         <Smile className="h-[15px] w-[15px]" />
       </button>
       {onEdit && (
         <button
           onClick={onEdit}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-[#54656f] dark:text-[#aebac1] hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition-colors"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-fg-3 hover:bg-accent hover:text-foreground transition-colors duration-fast focus-ds"
           title="Editar"
+          aria-label="Editar"
         >
           <Pencil className="h-[14px] w-[14px]" />
         </button>
@@ -324,8 +346,9 @@ function MessageActionBar({
       {onDelete && (
         <button
           onClick={onDelete}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-[#54656f] dark:text-[#aebac1] hover:bg-red-500/10 dark:hover:bg-red-400/10 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-fg-3 hover:bg-danger-light hover:text-danger transition-colors duration-fast focus-ds"
           title="Apagar para todos"
+          aria-label="Apagar para todos"
         >
           <Trash2 className="h-[14px] w-[14px]" />
         </button>
@@ -450,7 +473,7 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
         src={src}
         alt={alt}
         crossOrigin="anonymous"
-        className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+        className="max-h-[90dvh] max-w-[90vw] rounded-lg object-contain"
         onClick={(e) => e.stopPropagation()}
       />
     </div>
@@ -472,14 +495,17 @@ function getFileExtension(url: string | null, fallback = ''): string {
   return match ? match[1].toUpperCase() : fallback
 }
 
-const EXT_COLORS: Record<string, string> = {
-  PDF: '#E53E3E',
-  DOC: '#2B6CB0', DOCX: '#2B6CB0',
-  XLS: '#276749', XLSX: '#276749',
-  PPT: '#C05621', PPTX: '#C05621',
-  ZIP: '#6B46C1', RAR: '#6B46C1',
-  TXT: '#718096', CSV: '#718096',
+/** Cor do tipo de arquivo, só com tokens do DS (sem roxo). */
+const EXT_TONS: Record<string, { fundo: string; texto: string; selo: string }> = {
+  PDF: { fundo: 'bg-danger-light', texto: 'text-danger', selo: 'bg-danger' },
+  DOC: { fundo: 'bg-primary-light', texto: 'text-link', selo: 'bg-primary' },
+  DOCX: { fundo: 'bg-primary-light', texto: 'text-link', selo: 'bg-primary' },
+  XLS: { fundo: 'bg-success-light', texto: 'text-success', selo: 'bg-success' },
+  XLSX: { fundo: 'bg-success-light', texto: 'text-success', selo: 'bg-success' },
+  PPT: { fundo: 'bg-warning-light', texto: 'text-warning', selo: 'bg-warning' },
+  PPTX: { fundo: 'bg-warning-light', texto: 'text-warning', selo: 'bg-warning' },
 }
+const EXT_TOM_PADRAO = { fundo: 'bg-bg-2', texto: 'text-fg-2', selo: 'bg-fg-3' }
 
 function AudioPlayer({ src }: { src: string }) {
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -501,7 +527,7 @@ function AudioPlayer({ src }: { src: string }) {
   }
 
   return (
-    <div className="flex items-center gap-2.5 min-w-[210px]">
+    <div className="flex items-center gap-2.5 min-w-[180px] sm:min-w-[210px]">
       <audio
         ref={audioRef}
         src={src}
@@ -514,9 +540,10 @@ function AudioPlayer({ src }: { src: string }) {
       />
       <button
         onClick={toggle}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#00a884] text-white hover:bg-[#00a884]/90 transition-colors"
+        aria-label={playing ? 'Pausar áudio' : 'Ouvir áudio'}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground hover:bg-primary-hover transition-colors duration-fast focus-ds"
       >
-        {playing ? <Pause className="h-4 w-4 fill-white" /> : <Play className="h-4 w-4 fill-white" />}
+        {playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="h-4 w-4 fill-current" />}
       </button>
       <div className="flex flex-col flex-1 gap-1.5 min-w-0">
         <input
@@ -530,9 +557,10 @@ function AudioPlayer({ src }: { src: string }) {
             setCurrent(t)
             if (audioRef.current) audioRef.current.currentTime = t
           }}
-          className="w-full h-[3px] cursor-pointer accent-[#00a884] rounded-full"
+          aria-label="Posição do áudio"
+          className="w-full h-[3px] cursor-pointer accent-[var(--primary)] rounded-full"
         />
-        <span className="text-[11px] text-[#667781] dark:text-[#8696a0] tabular-nums">
+        <span className="mono text-[11px] text-muted-foreground">
           {playing ? fmt(current) : duration > 0 ? fmt(duration) : fmt(current)}
         </span>
       </div>
@@ -543,28 +571,33 @@ function AudioPlayer({ src }: { src: string }) {
 function MessageContent({ msg, onImageClick }: { msg: ChatMessage; onImageClick?: (url: string) => void }) {
   if (msg.tipo === 'audio') {
     const isPlayable = msg.media_url && !msg.media_url.includes('.enc')
+    // Só áudio guardado no Storage entra na fila de transcrição (wa-midia-processar).
+    const temTranscricao = Boolean(msg.id && msg.media_url?.includes('/storage/v1/object/public/chat-media/'))
     return (
+      <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2.5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#00a884]/15 dark:bg-[#00a884]/20">
-          <Mic className="h-4 w-4 text-[#00a884]" />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10">
+          <Mic className="h-4 w-4 text-link" aria-hidden />
         </div>
         {isPlayable ? (
           <AudioPlayer src={msg.media_url!} />
         ) : (
-          <div className="flex flex-col flex-1 gap-0.5 min-w-[160px]">
+          <div className="flex flex-col flex-1 gap-0.5 min-w-[140px]">
             <span className="text-sm font-medium">Mensagem de voz</span>
             {msg.media_url && (
               <a
                 href={msg.media_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-0.5"
+                className="inline-flex items-center gap-1 text-xs text-link hover:underline mt-0.5"
               >
                 <Download className="h-3 w-3" /> Baixar áudio
               </a>
             )}
           </div>
         )}
+      </div>
+      {temTranscricao && <TranscricaoMidia messageId={msg.id} />}
       </div>
     )
   }
@@ -573,14 +606,15 @@ function MessageContent({ msg, onImageClick }: { msg: ChatMessage; onImageClick?
       <div className="flex flex-col gap-1.5">
         <button
           onClick={() => onImageClick?.(msg.media_url!)}
-          className="group relative text-left cursor-zoom-in"
+          className="group relative block max-w-full text-left cursor-zoom-in rounded-lg focus-ds"
+          aria-label="Ampliar imagem"
         >
-          <img src={msg.media_url} alt="imagem" crossOrigin="anonymous" className="max-w-[220px] sm:max-w-[260px] rounded-lg" loading="lazy" />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors">
-            <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+          <img src={msg.media_url} alt="imagem" crossOrigin="anonymous" className="max-w-[min(260px,100%)] rounded-lg" loading="lazy" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/20 rounded-lg transition-colors duration-fast">
+            <ZoomIn className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-fast" />
           </div>
         </button>
-        {msg.conteudo && <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{msg.conteudo}</p>}
+        {msg.conteudo && <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>}
       </div>
     )
   }
@@ -588,36 +622,33 @@ function MessageContent({ msg, onImageClick }: { msg: ChatMessage; onImageClick?
     if (msg.media_url) {
       return (
         <div className="flex flex-col gap-1.5">
-          <video src={msg.media_url} controls crossOrigin="anonymous" className="max-w-[240px] sm:max-w-[280px] rounded-lg" preload="metadata" />
-          {msg.conteudo && <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">{msg.conteudo}</p>}
+          <video src={msg.media_url} controls crossOrigin="anonymous" className="max-w-[min(280px,100%)] rounded-lg" preload="metadata" />
+          {msg.conteudo && <p className="whitespace-pre-wrap break-words">{msg.conteudo}</p>}
         </div>
       )
     }
     return (
-      <div className="flex items-center gap-2 rounded-lg bg-black/5 dark:bg-white/5 px-3 py-2">
-        <Video className="h-4 w-4 shrink-0 text-[#8696a0]" />
-        <span className="text-sm italic text-[#8696a0]">[vídeo não disponível]</span>
+      <div className="flex items-center gap-2 rounded-md bg-foreground/[0.04] px-3 py-2">
+        <Video className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="text-sm italic text-muted-foreground">Vídeo não disponível</span>
       </div>
     )
   }
   if (msg.tipo === 'documento') {
     const ext = getFileExtension(msg.media_url, 'DOC')
     const fileName = msg.conteudo || 'Documento'
-    const extColor = EXT_COLORS[ext] ?? '#00a884'
+    const tom = EXT_TONS[ext] ?? EXT_TOM_PADRAO
     return (
-      <div className="flex items-center gap-3 rounded-xl bg-black/5 dark:bg-white/5 p-3 min-w-[200px] sm:min-w-[240px] max-w-[280px] sm:max-w-[320px]">
-        <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${extColor}15` }}>
-          <FileText className="h-5 w-5" style={{ color: extColor }} />
-          <span
-            className="absolute -bottom-1 -right-1 rounded px-1 py-0.5 text-[8px] font-bold text-white leading-none"
-            style={{ backgroundColor: extColor }}
-          >
+      <div className="flex items-center gap-3 rounded-lg bg-foreground/[0.04] p-3 w-full min-w-0 sm:min-w-[240px] max-w-[320px]">
+        <div className={cn('relative flex h-12 w-12 shrink-0 items-center justify-center rounded-lg', tom.fundo)}>
+          <FileText className={cn('h-5 w-5', tom.texto)} aria-hidden />
+          <span className={cn('mono absolute -bottom-1 -right-1 rounded-sm px-1 py-0.5 text-[10px] font-bold text-white leading-none', tom.selo)}>
             {ext}
           </span>
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium leading-tight">{fileName}</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
+          <p className="text-[12px] text-muted-foreground mt-0.5">
             Documento {getFileExtLabel(msg.media_url ?? '')}
           </p>
           {msg.media_url ? (
@@ -625,7 +656,7 @@ function MessageContent({ msg, onImageClick }: { msg: ChatMessage; onImageClick?
               href={msg.media_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline mt-1"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-link hover:underline mt-1"
             >
               <Download className="h-3.5 w-3.5" /> Baixar
             </a>
@@ -641,9 +672,9 @@ function MessageContent({ msg, onImageClick }: { msg: ChatMessage; onImageClick?
   }
   if (msg.tipo === 'imagem' && !msg.media_url) {
     return (
-      <div className="flex items-center gap-2 rounded-lg bg-black/5 dark:bg-white/5 px-3 py-2">
-        <Image className="h-4 w-4 shrink-0 text-[#8696a0]" />
-        <span className="text-sm italic text-[#8696a0]">Imagem indisponível</span>
+      <div className="flex items-center gap-2 rounded-md bg-foreground/[0.04] px-3 py-2">
+        <Image className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="text-sm italic text-muted-foreground">Imagem indisponível</span>
       </div>
     )
   }
@@ -651,9 +682,9 @@ function MessageContent({ msg, onImageClick }: { msg: ChatMessage; onImageClick?
   if (msg.media_url && !msg.conteudo) {
     const ext = getFileExtension(msg.media_url)
     return (
-      <div className="flex items-center gap-3 rounded-xl bg-black/5 dark:bg-white/5 p-3 min-w-[200px]">
+      <div className="flex items-center gap-3 rounded-lg bg-foreground/[0.04] p-3 min-w-0 sm:min-w-[200px]">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-          <File className="h-5 w-5 text-primary" />
+          <File className="h-5 w-5 text-link" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">Arquivo{ext ? ` ${ext}` : ''}</p>
@@ -661,7 +692,7 @@ function MessageContent({ msg, onImageClick }: { msg: ChatMessage; onImageClick?
             href={msg.media_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline mt-0.5"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-link hover:underline mt-0.5"
           >
             <Download className="h-3.5 w-3.5" /> Baixar arquivo
           </a>
@@ -685,9 +716,9 @@ function MessageContent({ msg, onImageClick }: { msg: ChatMessage; onImageClick?
     } catch { /* ignore */ }
 
     return (
-      <div className="flex items-center gap-2 rounded-lg bg-black/5 dark:bg-white/5 px-3 py-2">
-        <File className="h-4 w-4 shrink-0 text-[#8696a0]" />
-        <span className="text-sm italic text-[#8696a0]">{mediaType} indisponível</span>
+      <div className="flex items-center gap-2 rounded-md bg-foreground/[0.04] px-3 py-2">
+        <File className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        <span className="text-sm italic text-muted-foreground">{mediaType} indisponível</span>
       </div>
     )
   }
@@ -695,9 +726,9 @@ function MessageContent({ msg, onImageClick }: { msg: ChatMessage; onImageClick?
   // Deleted message — styled indicator
   if (msg.conteudo?.includes('Mensagem apagada')) {
     return (
-      <div className="flex items-center gap-1.5 py-0.5">
-        <Ban className="h-3.5 w-3.5 opacity-50 shrink-0" />
-        <span className="text-[13px] italic opacity-50">
+      <div className="flex items-center gap-1.5 py-0.5 text-muted-foreground">
+        <Ban className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        <span className="text-[13px] italic">
           Mensagem apagada
         </span>
       </div>
@@ -705,7 +736,7 @@ function MessageContent({ msg, onImageClick }: { msg: ChatMessage; onImageClick?
   }
 
   return (
-    <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+    <p className="whitespace-pre-wrap break-words">
       {msg.conteudo ? linkify(msg.conteudo) : <span className="italic opacity-60">[mídia não suportada]</span>}
     </p>
   )
@@ -723,7 +754,7 @@ function linkify(text: string): React.ReactNode[] {
         href={part}
         target="_blank"
         rel="noopener noreferrer"
-        className="underline text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 break-all"
+        className="underline underline-offset-2 text-link hover:opacity-80 break-all"
         onClick={e => e.stopPropagation()}
       >
         {part}
@@ -736,17 +767,18 @@ function linkify(text: string): React.ReactNode[] {
 
 // ─── Group message sender helpers ────────────────────────────────────────────
 
-const SENDER_COLORS = [
-  '#25d366', '#00a884', '#53bdeb', '#7c94b6', '#e6855e',
-  '#d4a574', '#a38fdb', '#e88da0', '#5cc7c0', '#c0965e',
-]
+/**
+ * Tom do remetente no grupo: um dos 6 tons de avatar do DS (`.av[data-h]`).
+ * O nome usa a mesma família de cor, sempre com contraste AA.
+ */
+const SENDER_TEXT_TONS = ['text-link', 'text-iris-fg', 'text-warning', 'text-success', 'text-st-reopen-fg', 'text-fg-2']
 
-function getSenderColor(name: string): string {
+function getSenderTone(name: string): number {
   let hash = 0
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash)
   }
-  return SENDER_COLORS[Math.abs(hash) % SENDER_COLORS.length]
+  return Math.abs(hash) % SENDER_TEXT_TONS.length
 }
 
 function parseGroupSender(conteudo: string | null): { sender: string | null; text: string | null } {
@@ -754,6 +786,13 @@ function parseGroupSender(conteudo: string | null): { sender: string | null; tex
   const match = conteudo.match(/^\[([^\]]+)\]\s?(.*)$/s)
   if (match) return { sender: match[1], text: match[2] || null }
   return { sender: null, text: conteudo }
+}
+
+/** Remetente no grupo: o prefixo "[Nome]" do texto; sem ele (mídia), o autor_nome gravado pelo webhook. */
+function groupSenderOf(msg: { conteudo: string | null; autor_nome?: string | null }): { sender: string | null; text: string | null } {
+  const parsed = parseGroupSender(msg.conteudo)
+  if (parsed.sender) return parsed
+  return { sender: msg.autor_nome?.trim() || null, text: msg.conteudo }
 }
 
 // ─── Day Grouping ────────────────────────────────────────────────────────────
@@ -830,30 +869,36 @@ function FilePreviewBar({
   sending: boolean
 }) {
   const iconMap: Record<string, React.ReactNode> = {
-    imagem: <Image className="h-5 w-5 text-primary" />,
-    video: <Video className="h-5 w-5 text-primary" />,
-    audio: <Mic className="h-5 w-5 text-primary" />,
-    documento: <File className="h-5 w-5 text-primary" />,
+    imagem: <Image className="h-5 w-5 text-link" />,
+    video: <Video className="h-5 w-5 text-link" />,
+    audio: <Mic className="h-5 w-5 text-link" />,
+    documento: <File className="h-5 w-5 text-link" />,
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3">
+    <div className="flex flex-col gap-2 rounded-xl bg-card p-3 ring-hairline">
       <div className="flex items-start gap-3">
         {preview.tipo === 'imagem' && preview.previewUrl ? (
           <img src={preview.previewUrl} alt="" className="h-16 w-16 rounded-lg object-cover" />
         ) : preview.tipo === 'video' && preview.previewUrl ? (
           <video src={preview.previewUrl} className="h-16 w-16 rounded-lg object-cover" muted />
         ) : (
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary/10">
-            {iconMap[preview.tipo] ?? <File className="h-5 w-5 text-primary" />}
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-primary-light">
+            {iconMap[preview.tipo] ?? <File className="h-5 w-5 text-link" />}
           </div>
         )}
         <div className="flex-1 min-w-0">
           <p className="truncate text-sm font-medium text-foreground">{preview.file.name}</p>
-          <p className="text-xs text-muted-foreground">{formatFileSize(preview.file.size)}</p>
+          <p className="mono text-xs text-muted-foreground">{formatFileSize(preview.file.size)}</p>
         </div>
-        <button onClick={onCancel} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg hover:bg-muted transition-colors">
-          <X className="h-4 w-4 text-muted-foreground" />
+        <button
+          type="button"
+          disabled={sending}
+          onClick={onCancel}
+          className="btn btn-ghost btn-icon btn-sm shrink-0"
+          aria-label="Cancelar envio do arquivo"
+        >
+          <X aria-hidden />
         </button>
       </div>
 
@@ -863,26 +908,21 @@ function FilePreviewBar({
           value={caption}
           onChange={(e) => onCaptionChange(e.target.value)}
           placeholder={preview.tipo === 'documento' ? 'Nome do arquivo (opcional)' : 'Legenda (opcional)'}
-          className="rounded-lg border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          aria-label={preview.tipo === 'documento' ? 'Nome do arquivo' : 'Legenda'}
+          className="input"
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSend() } }}
         />
       )}
 
       <button
+        type="button"
         onClick={onSend}
         disabled={sending}
-        className={cn(
-          'flex items-center justify-center gap-2 rounded-xl px-4 py-2',
-          'gradient-primary text-primary-foreground text-sm font-medium',
-          'transition-opacity disabled:opacity-50',
-        )}
+        aria-busy={sending}
+        className={cn('btn btn-primary w-full', sending && 'is-loading')}
       >
-        {sending ? (
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-        ) : (
-          <Send className="h-4 w-4" />
-        )}
-        {sending ? 'Enviando...' : 'Enviar'}
+        {sending ? <span className="btn-spin" aria-hidden /> : <Send aria-hidden />}
+        <span>{sending ? 'Enviando…' : 'Enviar'}</span>
       </button>
     </div>
   )
@@ -890,94 +930,48 @@ function FilePreviewBar({
 
 // ─── Audio Recorder Hook ───────────────────────────────────────────────────────
 
-function useAudioRecorder() {
-  const [isRecording, setIsRecording] = useState(false)
-  const [duration, setDuration] = useState(0)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm',
-      })
-      mediaRecorderRef.current = mediaRecorder
-      chunksRef.current = []
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data) }
-      mediaRecorder.start(100)
-      setIsRecording(true)
-      setDuration(0)
-      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000)
-    } catch (err) {
-      console.error('Failed to start recording:', err)
-    }
-  }, [])
-
-  const stopRecording = useCallback((): Promise<globalThis.File | null> => {
-    return new Promise((resolve) => {
-      const recorder = mediaRecorderRef.current
-      if (!recorder || recorder.state === 'inactive') { resolve(null); return }
-      recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-        const file = new globalThis.File([blob], `audio_${Date.now()}.webm`, { type: 'audio/webm' })
-        recorder.stream.getTracks().forEach((t) => t.stop())
-        resolve(file)
-      }
-      recorder.stop()
-      setIsRecording(false)
-      if (timerRef.current) clearInterval(timerRef.current)
-    })
-  }, [])
-
-  const cancelRecording = useCallback(() => {
-    const recorder = mediaRecorderRef.current
-    if (recorder && recorder.state !== 'inactive') {
-      recorder.onstop = null
-      recorder.stop()
-      recorder.stream.getTracks().forEach((t) => t.stop())
-    }
-    setIsRecording(false)
-    setDuration(0)
-    if (timerRef.current) clearInterval(timerRef.current)
-  }, [])
-
-  const formatDuration = useCallback((s: number) => {
-    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-  }, [])
-
-  return { isRecording, duration, startRecording, stopRecording, cancelRecording, formatDuration }
-}
-
 // ─── Message Ticks (delivery status) ─────────────────────────────────────────
 
-function MessageTicks({ status, onRetry }: { status?: string | null; onRetry?: () => void }) {
-  if (status === 'falha') {
-    return (
-      <button
-        onClick={onRetry}
-        disabled={!onRetry}
-        title="Reenviar mensagem"
-        className="text-red-500 hover:text-red-400 transition-colors disabled:opacity-50"
-      >
-        <RotateCcw className="h-3.5 w-3.5" />
-      </button>
-    )
-  }
+function MessageTicks({ status }: { status?: string | null }) {
+  // A falha não vira ícone: o balão ganha a faixa "Não enviada · Tentar de novo" (DS).
+  if (status === 'falha') return null
   if (status === 'enviando') {
-    return <Loader2 className="h-3.5 w-3.5 text-[#667781] dark:text-[#8696a0] animate-spin" />
+    return <Loader2 className="h-3.5 w-3.5 text-muted-foreground animate-spin" aria-label="Enviando" />
   }
   if (status === 'lida') {
-    return <CheckCheck className="h-[18px] w-[18px] text-[#53bdeb]" />
+    return <CheckCheck className="h-[15px] w-[15px] text-link" aria-label="Lida" />
   }
   if (status === 'entregue') {
-    return <CheckCheck className="h-[18px] w-[18px] text-[#667781] dark:text-[#8696a0]" />
+    return <CheckCheck className="h-[15px] w-[15px] text-muted-foreground" aria-label="Entregue" />
   }
   // enviada
-  return <Check className="h-4 w-4 text-[#667781] dark:text-[#8696a0]" />
+  return <Check className="h-[14px] w-[14px] text-muted-foreground" aria-label="Enviada" />
+}
+
+/** Faixa do DS para mensagem da equipe que não chegou ao WhatsApp. */
+function FalhaEnvio({ onRetry, tentando }: { onRetry?: () => void; tentando?: boolean }) {
+  return (
+    <div
+      role="alert"
+      className="mt-1.5 flex flex-wrap items-center gap-1.5 border-t border-dashed border-danger/40 pt-1.5 text-[12.5px] font-semibold text-danger"
+    >
+      <CircleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      Não enviada
+      {onRetry && (
+        <>
+          <span aria-hidden>·</span>
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={tentando}
+            className="min-h-6 rounded-sm px-0.5 font-bold text-link underline underline-offset-2 disabled:opacity-50 focus-ds"
+          >
+            {tentando ? 'Enviando…' : 'Tentar de novo'}
+          </button>
+        </>
+      )}
+    </div>
+  )
 }
 
 // ─── Mention Picker ──────────────────────────────────────────────────────────
@@ -1028,12 +1022,12 @@ function MentionPicker({
   return (
     <div
       ref={listRef}
-      className="absolute bottom-full mb-2 left-0 right-0 z-50 rounded-xl border border-border bg-card shadow-xl overflow-hidden max-h-64 overflow-y-auto"
+      className="absolute bottom-full mb-2 left-0 right-0 z-50 rounded-xl bg-popover shadow-pop ring-hairline overflow-hidden max-h-64 overflow-y-auto animate-fade-in-up"
     >
       {filteredUsers.length > 0 && (
         <div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border bg-muted/40">
-            <User className="h-3 w-3" /> Usuários
+          <div className="t-h6 flex items-center gap-1.5 px-3 py-1.5 border-b border-border bg-bg-0">
+            <User className="h-3 w-3" aria-hidden /> Equipe
           </div>
           {filteredUsers.map((u) => {
             const idx = allItems.findIndex((it) => it.id === u.id && it.type === 'user')
@@ -1043,14 +1037,14 @@ function MentionPicker({
                 onClick={() => onSelect(u.nome ?? '', 'user', u.id)}
                 className={cn(
                   'w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors',
-                  idx === activeIndex ? 'bg-violet-50 dark:bg-violet-900/30' : 'hover:bg-muted',
+                  idx === activeIndex ? 'bg-primary-light' : 'hover:bg-accent',
                 )}
               >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/50 shrink-0">
-                  <User className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-light shrink-0">
+                  <User className="h-3.5 w-3.5 text-link" aria-hidden />
                 </span>
-                <span className="font-medium">{u.nome}</span>
-                <span className="ml-auto text-[11px] text-muted-foreground capitalize">{u.perfil}</span>
+                <span className="min-w-0 truncate font-medium">{u.nome}</span>
+                <span className="ml-auto shrink-0 text-[12px] text-muted-foreground capitalize">{u.perfil}</span>
               </button>
             )
           })}
@@ -1058,8 +1052,8 @@ function MentionPicker({
       )}
       {filteredContacts.length > 0 && (
         <div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border bg-muted/40">
-            <Contact className="h-3 w-3" /> Contatos
+          <div className="t-h6 flex items-center gap-1.5 px-3 py-1.5 border-b border-border bg-bg-0">
+            <Contact className="h-3 w-3" aria-hidden /> Contatos
           </div>
           {filteredContacts.map((c) => {
             const idx = allItems.findIndex((it) => it.id === c.id && it.type === 'contact')
@@ -1069,15 +1063,15 @@ function MentionPicker({
                 onClick={() => onSelect(c.nome ?? '', 'contact', c.id)}
                 className={cn(
                   'w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors',
-                  idx === activeIndex ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'hover:bg-muted',
+                  idx === activeIndex ? 'bg-success-light' : 'hover:bg-accent',
                 )}
               >
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50 shrink-0">
-                  <Contact className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success-light shrink-0">
+                  <Contact className="h-3.5 w-3.5 text-success" aria-hidden />
                 </span>
-                <span className="font-medium">{c.nome}</span>
+                <span className="min-w-0 truncate font-medium">{c.nome}</span>
                 {c.numero_whatsapp && (
-                  <span className="ml-auto text-[11px] text-muted-foreground">{formatPhone(c.numero_whatsapp)}</span>
+                  <span className="mono ml-auto shrink-0 text-[12px] text-muted-foreground">{formatPhone(c.numero_whatsapp)}</span>
                 )}
               </button>
             )
@@ -1091,20 +1085,27 @@ function MentionPicker({
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function ConversationView({
+  historyOrigins,
   conversationId,
   onToggleContactPanel,
   contactPanelOpen,
+  draftText,
+  onDraftTextChange,
+  onBack,
 }: ConversationViewProps) {
   const { user } = useAuth()
   const { can } = usePermissoes()
+  const canSend = can('chat', 'editar')
   const navigate = useNavigate()
   const isMobile = useIsMobile()
   const { data: appSettings } = useAppSettings()
   const showAgentNameInPanel = appSettings?.chat_mostrar_nome_agente_painel !== 'false'
-  const { data: conversation, isLoading: convLoading } = useConversation(conversationId)
-  const { data: messages = [], isLoading: msgLoading } = useMessages(conversationId)
+  // Mensagens do assistente da equipe (fonte_envio 'assistente') mostram o nome dele.
+  const nomeAssistente = useNomeAssistente()
+  const { data: conversation, isLoading: convLoading, error: convError, refetch: refetchConversation } = useConversation(conversationId)
+  const { data: messages = [], isLoading: msgLoading, error: messagesError, refetch: refetchMessages } = useMessages(conversationId, historyOrigins?.map(origin => origin.id))
   const { data: instance } = useInstance(conversation?.instance_id ?? '')
-  useRealtimeMessages(conversationId)
+  useRealtimeMessages(conversationId, historyOrigins?.map(origin => origin.id))
 
   // Fetch group size/members when opening a group conversation
   const fetchGroupInfo = useFetchProfilePic()
@@ -1188,18 +1189,30 @@ export function ConversationView({
     return () => document.removeEventListener('mousedown', handler)
   }, [showLinkClient])
 
-  const [inputValue, setInputValue] = useState('')
+  const [localDraftText, setLocalDraftText] = useState('')
+  const inputValue = draftText ?? localDraftText
+  const setInputValue = onDraftTextChange ?? setLocalDraftText
+  const [composerError, setComposerError] = useState<string | null>(null)
+  const [composerWarning, setComposerWarning] = useState<string | null>(null)
+  const submittingRef = useRef(false)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
   const [closeDialogOpen, setCloseDialogOpen] = useState(false)
   const [transferDialogOpen, setTransferDialogOpen] = useState(false)
   const [noteMode, setNoteMode] = useState(false)
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editNoteText, setEditNoteText] = useState('')
   const [mentionPicker, setMentionPicker] = useState<{ query: string; atPos: number } | null>(null)
-  const [mentionIndex, setMentionIndex] = useState(0)
   const [showQuickReplies, setShowQuickReplies] = useState(false)
   const [quickReplySearch, setQuickReplySearch] = useState('')
   const [uploading, setUploading] = useState(false)
   const [filePreview, setFilePreview] = useState<FilePreviewData | null>(null)
+  useEffect(() => () => {
+    if (filePreview?.previewUrl) URL.revokeObjectURL(filePreview.previewUrl)
+  }, [filePreview])
   const [mediaCaption, setMediaCaption] = useState('')
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -1381,7 +1394,6 @@ export function ConversationView({
       const mentionMatch = textUpToCursor.match(/@(\w*)$/)
       if (mentionMatch) {
         setMentionPicker({ query: mentionMatch[1], atPos: pos - mentionMatch[0].length })
-        setMentionIndex(0)
       } else {
         setMentionPicker(null)
       }
@@ -1411,10 +1423,11 @@ export function ConversationView({
 
   const handleMentionClick = useCallback(
     (type: 'user' | 'contact', name: string) => {
+      // Pessoa da equipe não tem tela própria: a menção fica só como destaque.
       if (type === 'user') {
-        navigate('/chat/equipe')
+        return
       } else {
-        navigate(`/chat?cliente=${encodeURIComponent(name)}`)
+        navigate(`/conversas?cliente=${encodeURIComponent(name)}`)
       }
     },
     [navigate],
@@ -1432,10 +1445,10 @@ export function ConversationView({
             key={i}
             onClick={() => handleMentionClick(type as 'user' | 'contact', name)}
             className={cn(
-              'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[13px] font-semibold transition-colors',
+              'inline-flex items-center gap-0.5 rounded-sm px-1.5 py-0.5 text-[13px] font-semibold transition-colors duration-fast',
               isUser
-                ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-800/50'
-                : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-800/50',
+                ? 'bg-primary-light text-link hover:bg-primary-200'
+                : 'bg-success-light text-success hover:opacity-80',
             )}
           >
             {isUser ? <User className="h-3 w-3" /> : <Contact className="h-3 w-3" />}
@@ -1466,26 +1479,32 @@ export function ConversationView({
 
   // ── Send message ───────────────────────────────────────────────────────────
 
-  function handleSend() {
-    const text = inputValue.trim()
-    if (!text || isEncerrada || isSending) return
-
-    if (noteMode) {
-      if (!user) return
-      noteMutation.mutate({ conversation_id: conversationId, conteudo: text, agente_id: user.id })
-    } else {
-      sendMutation.mutate({
-        conversation_id: conversationId,
-        conteudo: text,
-        reply_to_id: replyTo?.id,
-      })
-    }
-    setInputValue('')
-    setReplyTo(null)
-
-    // Reset textarea height
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
+  async function handleSend() {
+    const draft = inputValue
+    const text = draft.trim()
+    if (!canSend || !text || isEncerrada || isSending || submittingRef.current) return
+    if (noteMode && !user) return
+    const sentReplyId = replyTo?.id
+    submittingRef.current = true
+    setComposerError(null)
+    setComposerWarning(null)
+    try {
+      if (noteMode) {
+        await noteMutation.mutateAsync({ conversation_id: conversationId, conteudo: text, agente_id: user!.id })
+      } else {
+        const receipt = await sendMutation.mutateAsync({ conversation_id: conversationId, conteudo: text, reply_to_id: sentReplyId })
+        if (mountedRef.current && receipt && typeof receipt.warning === 'string') setComposerWarning(receipt.warning)
+      }
+      // The setter belongs to the original conversation, even after navigation.
+      setInputValue(current => current === draft ? '' : current)
+      if (mountedRef.current) {
+        setReplyTo(current => current?.id === sentReplyId ? null : current)
+        if (textareaRef.current) textareaRef.current.style.height = 'auto'
+      }
+    } catch (error) {
+      if (mountedRef.current) setComposerError(mensagemErro(error))
+    } finally {
+      submittingRef.current = false
     }
   }
 
@@ -1542,7 +1561,7 @@ export function ConversationView({
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file || isEncerrada) return
+    if (!canSend || !file || isEncerrada) return
     e.target.value = '' // Reset so same file can be re-selected
 
     const tipo = forcedFileTypeRef.current ?? getFileType(file)
@@ -1555,55 +1574,70 @@ export function ConversationView({
     setMediaCaption('')
   }
 
-  async function handleSendMedia() {
-    if (!filePreview || uploading || sendMutation.isPending) return
+  async function sendMedia(preview: FilePreviewData, caption: string) {
+    if (!canSend || isEncerrada || submittingRef.current) return
+    submittingRef.current = true
+    setComposerError(null)
+    setComposerWarning(null)
     setUploading(true)
+    const sentReplyId = replyTo?.id
     try {
-      const publicUrl = await uploadChatMedia(filePreview.file, conversationId)
-      const caption = mediaCaption.trim() || (filePreview.tipo === 'documento' ? filePreview.file.name : '')
-      sendMutation.mutate({
+      const publicUrl = await uploadChatMedia(preview.file, conversationId)
+      if (!mountedRef.current) return
+      const receipt = await sendMutation.mutateAsync({
         conversation_id: conversationId,
-        conteudo: caption,
-        tipo: filePreview.tipo,
+        conteudo: caption.trim() || (preview.tipo === 'documento' ? preview.file.name : ''),
+        tipo: preview.tipo,
         media_url: publicUrl,
-        reply_to_id: replyTo?.id,
+        reply_to_id: sentReplyId,
       })
-      setReplyTo(null)
-      if (filePreview.previewUrl) URL.revokeObjectURL(filePreview.previewUrl)
-      setFilePreview(null)
-      setMediaCaption('')
-    } catch (err) {
-      console.error('Upload failed:', err)
+      if (mountedRef.current) {
+        if (receipt && typeof receipt.warning === 'string') setComposerWarning(receipt.warning)
+        setReplyTo(current => current?.id === sentReplyId ? null : current)
+        setFilePreview(current => current?.file === preview.file ? null : current)
+        setMediaCaption(current => current === caption ? '' : current)
+      }
+    } catch (error) {
+      if (mountedRef.current) setComposerError(mensagemErro(error))
     } finally {
-      setUploading(false)
+      submittingRef.current = false
+      if (mountedRef.current) setUploading(false)
     }
   }
 
+  async function handleSendMedia() {
+    if (!filePreview || isSending) return
+    await sendMedia(filePreview, mediaCaption)
+  }
+
   function cancelFilePreview() {
-    if (filePreview?.previewUrl) URL.revokeObjectURL(filePreview.previewUrl)
+    if (isSending || submittingRef.current) return
     setFilePreview(null)
     setMediaCaption('')
+    setComposerError(null)
   }
 
   // ── Audio recording ──────────────────────────────────────────────────────────
 
-  async function handleStopRecording() {
-    const audioFile = await recorder.stopRecording()
-    if (!audioFile) return
-    setUploading(true)
+  async function handleStartRecording() {
+    if (!canSend || isSending) return
+    setComposerError(null)
     try {
-      const publicUrl = await uploadChatMedia(audioFile, conversationId)
-      sendMutation.mutate({
-        conversation_id: conversationId,
-        conteudo: recorder.formatDuration(recorder.duration),
-        tipo: 'audio',
-        media_url: publicUrl,
-      })
-    } catch (err) {
-      console.error('Audio upload failed:', err)
-    } finally {
-      setUploading(false)
+      await recorder.startRecording()
+    } catch (error) {
+      if (mountedRef.current) setComposerError(`Não foi possível gravar: ${mensagemErro(error)}`)
     }
+  }
+
+  async function handleStopRecording() {
+    if (submittingRef.current) return
+    const audioFile = await recorder.stopRecording()
+    if (!audioFile || !mountedRef.current) return
+    const preview: FilePreviewData = { file: audioFile, tipo: 'audio', previewUrl: null }
+    const caption = recorder.formatDuration(recorder.duration)
+    setFilePreview(preview)
+    setMediaCaption(caption)
+    await sendMedia(preview, caption)
   }
 
   // ── Assign ─────────────────────────────────────────────────────────────────
@@ -1615,15 +1649,55 @@ export function ConversationView({
 
   // ── Loading / Empty ────────────────────────────────────────────────────────
 
-  if (convLoading || msgLoading) {
+  if (convError || messagesError) {
     return (
-      <div className="flex flex-1 min-h-0 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center" role="alert">
+        {onBack && (
+          <button type="button" onClick={onBack} className="btn btn-ghost btn-sm self-start">
+            <ArrowLeft aria-hidden /> Voltar para a lista
+          </button>
+        )}
+        <p className="text-sm text-danger">Não foi possível carregar esta conversa.</p>
+        <button type="button" className="btn btn-secondary" onClick={() => { void refetchConversation(); void refetchMessages() }}>
+          Tentar de novo
+        </button>
       </div>
     )
   }
 
-  if (!conversation) return null
+  if (convLoading || msgLoading) {
+    // Esqueleto no lugar do spinner (DS): cabeçalho + alguns balões.
+    return (
+      <div className="flex flex-1 min-h-0 flex-col" aria-busy="true" aria-label="Carregando conversa">
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-3 sm:px-4">
+          <div className="sk h-9 w-9 rounded-full" />
+          <div className="grid flex-1 gap-1.5">
+            <div className="sk h-3.5 w-40 max-w-[60%]" />
+            <div className="sk h-3 w-24 max-w-[40%]" />
+          </div>
+        </div>
+        <div className="flex flex-1 flex-col gap-3 px-3 py-5 sm:px-6 chat-bg">
+          <div className="sk h-12 w-[62%] max-w-[360px] rounded-xl" />
+          <div className="sk h-9 w-[48%] max-w-[300px] self-end rounded-xl" />
+          <div className="sk h-16 w-[70%] max-w-[420px] rounded-xl" />
+          <div className="sk h-9 w-[40%] max-w-[240px] self-end rounded-xl" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!conversation) {
+    return (
+      <div className="m-auto flex flex-col items-center gap-3 p-6 text-center">
+        <p className="text-sm text-muted-foreground">Conversa não encontrada ou sem acesso.</p>
+        {onBack && (
+          <button type="button" onClick={onBack} className="btn btn-secondary">
+            <ArrowLeft aria-hidden /> Voltar para a lista
+          </button>
+        )}
+      </div>
+    )
+  }
 
   const groups = groupMessagesByDay(messages)
 
@@ -1661,61 +1735,75 @@ export function ConversationView({
     <div className="flex flex-1 min-h-0 flex-col">
       {/* ── Header ────────────────────────────────────────────────────────── */}
       <div className="shrink-0 bg-card border-b border-border">
-        <div className="flex items-center justify-between h-[52px] sm:h-[59px] px-2 sm:px-4">
+        <div className="flex items-center justify-between gap-1 min-h-14 sm:min-h-[60px] px-1.5 sm:px-4 py-1.5">
+          {/* Celular: voltar para a lista */}
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="btn btn-ghost btn-icon shrink-0"
+              aria-label="Voltar para a lista de conversas"
+              title="Voltar"
+            >
+              <ArrowLeft aria-hidden />
+            </button>
+          )}
           {/* Left: Avatar + Name */}
           <div
             role="button"
             tabIndex={0}
             onClick={onToggleContactPanel}
             onKeyDown={(e) => e.key === 'Enter' && onToggleContactPanel?.()}
-            className="flex items-center gap-3 min-w-0 flex-1 group cursor-pointer"
+            aria-label={`Ver detalhes de ${contactName}`}
+            className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 group cursor-pointer rounded-md focus-ds"
           >
             {isGroupConv ? (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary">
-                <Users className="h-5 w-5" />
+              <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-primary-light text-link">
+                <Users className="h-5 w-5" aria-hidden />
               </div>
             ) : contact?.foto_url && !headerImgFailed ? (
               <img
                 src={contact.foto_url}
                 alt={contactName}
-                className="h-10 w-10 shrink-0 rounded-full object-cover"
+                className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-full object-cover"
                 onError={() => setHeaderImgFailed(true)}
               />
             ) : (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary font-semibold text-sm">
+              <div className="av av-xl !h-9 !w-9 sm:!h-10 sm:!w-10 text-sm" data-h="0" aria-hidden>
                 {contactName.slice(0, 2).toUpperCase()}
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-semibold text-foreground group-hover:underline decoration-1 underline-offset-2">
+              <p className="truncate text-[15px] font-[650] text-foreground group-hover:underline decoration-1 underline-offset-2">
                 {contactName}
               </p>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground leading-[18px] min-w-0">
+              <div className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground leading-[18px] min-w-0">
                 {isGroupConv ? (
                   <>
                     {contact?.group_size != null && (
                       <button
+                        type="button"
                         onClick={(e) => { e.stopPropagation(); setShowMembersModal(true) }}
-                        className="text-muted-foreground hover:text-primary hover:underline underline-offset-2 transition-colors"
+                        className="text-muted-foreground hover:text-link hover:underline underline-offset-2 transition-colors duration-fast"
                       >
                         {contact.group_size} membros
                       </button>
                     )}
                     {conversation.sla_primeira_resposta_violado && (
-                      <span className="rounded px-1 py-0.5 text-2xs font-bold bg-danger-light text-danger leading-none">SLA 1ª resp.</span>
+                      <span className="st st-sm shrink-0" data-s="atrasado" title="Passou do prazo da primeira resposta"><span className="st-g" aria-hidden />1ª resposta atrasada</span>
                     )}
                     {conversation.sla_resolucao_violado && (
-                      <span className="rounded px-1 py-0.5 text-2xs font-bold bg-danger-light text-danger leading-none">SLA resolução</span>
+                      <span className="st st-sm shrink-0" data-s="atrasado" title="Passou do prazo de resolução"><span className="st-g" aria-hidden />Resolução atrasada</span>
                     )}
                   </>
                 ) : (
                   <>
-                    <span className="truncate">{formatPhone(contact?.numero_whatsapp)}</span>
+                    <span className="mono truncate">{formatPhone(contact?.numero_whatsapp)}</span>
                     {conversation.sla_primeira_resposta_violado && (
-                      <span className="shrink-0 rounded px-1 py-0.5 text-2xs font-bold bg-danger-light text-danger leading-none">SLA 1ª resp.</span>
+                      <span className="st st-sm shrink-0" data-s="atrasado" title="Passou do prazo da primeira resposta"><span className="st-g" aria-hidden /><span className="hidden sm:inline">1ª resposta atrasada</span><span className="sm:hidden">Atrasada</span></span>
                     )}
                     {conversation.sla_resolucao_violado && (
-                      <span className="shrink-0 rounded px-1 py-0.5 text-2xs font-bold bg-danger-light text-danger leading-none">SLA resolução</span>
+                      <span className="st st-sm shrink-0 max-sm:hidden" data-s="atrasado" title="Passou do prazo de resolução"><span className="st-g" aria-hidden />Resolução atrasada</span>
                     )}
                   </>
                 )}
@@ -1723,65 +1811,66 @@ export function ConversationView({
             </div>
           </div>
 
+          {/* Tickets deste cliente — selo com a lista; some sem cliente vinculado. */}
+          <div className="shrink-0">
+            <SeloTicketsDoCliente clienteId={contactClientId} />
+          </div>
+
           {/* Link contact to client — button + dropdown (hidden on mobile) */}
           <div className="relative shrink-0 hidden sm:block" ref={linkClientRef}>
             {contactClientId ? (
               <button
+                type="button"
                 onClick={() => setShowLinkClient(!showLinkClient)}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors',
-                  showLinkClient
-                    ? 'border-accent bg-accent/10 text-accent'
-                    : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
+                aria-expanded={showLinkClient}
+                className={cn('btn btn-secondary btn-sm max-w-[180px]', showLinkClient && '!border-primary !text-link')}
                 title={`Vinculado: ${headerClientName ?? 'Cliente'}`}
               >
-                <Building className="h-3.5 w-3.5" />
-                <span className="font-medium hidden sm:inline max-w-[120px] truncate">{headerClientName ?? 'Cliente'}</span>
+                <Building aria-hidden />
+                <span className="truncate">{headerClientName ?? 'Cliente'}</span>
               </button>
             ) : (
               <button
+                type="button"
                 onClick={() => setShowLinkClient(!showLinkClient)}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-full px-2 py-1 text-2xs font-medium transition-colors',
-                  showLinkClient
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
+                aria-expanded={showLinkClient}
+                className={cn('btn btn-ghost btn-sm', showLinkClient && 'text-link')}
                 title="Vincular contato a um cliente"
               >
-                <Link2 className="h-3 w-3" />
-                <span className="hidden sm:inline">Vincular cliente</span>
+                <Link2 aria-hidden />
+                <span>Vincular cliente</span>
               </button>
             )}
             {showLinkClient && (
-              <div className="absolute right-0 top-full mt-1 z-30 rounded-xl border border-border bg-card shadow-lg w-[280px] py-1">
+              <div className="absolute right-0 top-full mt-1 z-30 rounded-xl bg-popover shadow-pop ring-hairline w-[min(280px,calc(100vw-2rem))] py-1 animate-fade-in-up">
                 {/* If already linked, show confirmation first */}
                 {contactClientId && !linkClientSearch.trim() && (
                   <div className="px-3 py-2.5 border-b border-border space-y-2">
                     <div className="flex items-center gap-2">
-                      <Building className="h-3.5 w-3.5 text-accent shrink-0" />
-                      <span className="text-xs font-medium text-foreground truncate">{headerClientName}</span>
+                      <Building className="h-3.5 w-3.5 text-link shrink-0" aria-hidden />
+                      <span className="text-[13px] font-medium text-foreground truncate">{headerClientName}</span>
                     </div>
-                    <p className="text-2xs text-muted-foreground">Este contato já está vinculado. Busque abaixo para trocar ou desvincule.</p>
+                    <p className="text-[12px] text-muted-foreground">Este contato já está vinculado. Busque abaixo para trocar ou desvincule.</p>
                     <button
+                      type="button"
                       onClick={handleUnlinkClient}
-                      className="flex items-center gap-1.5 w-full rounded-md px-2 py-1.5 text-xs text-destructive hover:bg-destructive/10 transition-colors"
+                      className="btn btn-ghost btn-sm w-full justify-start text-danger hover:!bg-danger-light"
                     >
-                      <X className="h-3 w-3" />
+                      <X aria-hidden />
                       Desvincular
                     </button>
                   </div>
                 )}
                 <div className="px-2 py-1.5">
                   <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                     <input
                       type="text"
                       value={linkClientSearch}
                       onChange={(e) => setLinkClientSearch(e.target.value)}
-                      placeholder={contactClientId ? 'Buscar para trocar...' : 'Buscar cliente...'}
-                      className="w-full rounded-lg border border-input bg-background pl-7 pr-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                      placeholder={contactClientId ? 'Buscar para trocar…' : 'Buscar cliente…'}
+                      aria-label="Buscar cliente"
+                      className="input !h-8 !pl-8 text-[13px]"
                       autoFocus
                     />
                   </div>
@@ -1789,23 +1878,25 @@ export function ConversationView({
                 <div className="max-h-[220px] overflow-y-auto">
                   {/* Confirm swap overlay */}
                   {confirmSwap && (
-                    <div className="px-3 py-3 space-y-2 border-b border-border bg-warning/5">
-                      <p className="text-xs text-foreground">
+                    <div className="px-3 py-3 space-y-2 border-b border-border bg-warning-light">
+                      <p className="text-[13px] text-foreground">
                         Trocar de <strong>{headerClientName}</strong> para <strong>{confirmSwap.nome}</strong>?
                       </p>
                       <div className="flex gap-2">
                         <button
+                          type="button"
                           onClick={() => {
                             handleLinkClient(confirmSwap.id)
                             setConfirmSwap(null)
                           }}
-                          className="flex-1 rounded-md bg-primary px-2 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                          className="btn btn-primary btn-sm flex-1"
                         >
                           Confirmar troca
                         </button>
                         <button
+                          type="button"
                           onClick={() => setConfirmSwap(null)}
-                          className="flex-1 rounded-md border border-border px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition-colors"
+                          className="btn btn-secondary btn-sm flex-1"
                         >
                           Cancelar
                         </button>
@@ -1813,10 +1904,11 @@ export function ConversationView({
                     </div>
                   )}
                   {linkableClients.length === 0 && linkClientSearch.trim() && (
-                    <p className="px-3 py-2 text-xs text-muted-foreground">Nenhum cliente encontrado</p>
+                    <p className="px-3 py-2 text-[13px] text-muted-foreground">Nenhum cliente encontrado</p>
                   )}
                   {!confirmSwap && linkableClients.map((c) => (
                     <button
+                      type="button"
                       key={c.id}
                       onClick={() => {
                         if (c.id === contactClientId) return
@@ -1827,13 +1919,13 @@ export function ConversationView({
                         }
                       }}
                       className={cn(
-                        'flex items-center gap-2 w-full px-3 py-2 text-xs hover:bg-muted transition-colors text-left',
-                        c.id === contactClientId && 'bg-accent/10 text-accent font-medium',
+                        'flex items-center gap-2 w-full px-3 py-2 text-[13px] hover:bg-accent transition-colors duration-fast text-left',
+                        c.id === contactClientId && 'bg-primary-light text-link font-medium',
                       )}
                     >
-                      <Building className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <Building className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                       <span className="truncate">{c.nome}</span>
-                      {c.id === contactClientId && <span className="ml-auto text-2xs text-accent">atual</span>}
+                      {c.id === contactClientId && <span className="ml-auto text-[12px] text-link">atual</span>}
                     </button>
                   ))}
                 </div>
@@ -1843,25 +1935,23 @@ export function ConversationView({
 
           {/* Instance indicator + picker (hidden on mobile) */}
           {instance && (
-            <div className="relative shrink-0 mr-2 hidden sm:block" ref={instancePickerRef}>
+            <div className="relative shrink-0 hidden sm:block" ref={instancePickerRef}>
               <button
+                type="button"
                 onClick={() => setShowInstancePicker(!showInstancePicker)}
-                className={cn(
-                  'flex items-center gap-1 rounded-full px-2 py-1 text-2xs font-medium transition-colors',
-                  showInstancePicker
-                    ? 'bg-primary-muted text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
+                disabled={(historyOrigins?.length ?? 0) > 1}
+                aria-expanded={showInstancePicker}
+                className={cn('btn btn-ghost btn-sm', showInstancePicker && 'bg-primary-light text-link')}
                 title={`Enviando via ${instance.nome}${instance.numero_whatsapp ? ` (${formatPhone(instance.numero_whatsapp)})` : ''} — clique para trocar`}
               >
-                <Smartphone className="h-3 w-3" />
+                <Smartphone aria-hidden />
                 <span className="max-w-[100px] truncate">{instance.nome}</span>
-                <ChevronDown className={cn('h-3 w-3 transition-transform', showInstancePicker && 'rotate-180')} />
+                <ChevronDown className={cn('transition-transform duration-fast', showInstancePicker && 'rotate-180')} aria-hidden />
               </button>
 
               {showInstancePicker && allInstances.length > 1 && (
-                <div className="absolute right-0 top-full mt-1 z-20 rounded-xl border border-border bg-card shadow-lg min-w-[240px] py-1 max-h-[280px] overflow-y-auto">
-                  <span className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                <div className="absolute right-0 top-full mt-1 z-20 rounded-xl bg-popover shadow-pop ring-hairline w-[min(260px,calc(100vw-2rem))] py-1 max-h-[280px] overflow-y-auto animate-fade-in-up">
+                  <span className="t-h6 px-3 py-1.5 block">
                     Trocar número de envio
                   </span>
                   {allInstances.filter(i => i.status === 'conectado').map((inst) => {
@@ -1882,15 +1972,15 @@ export function ConversationView({
                         }}
                         disabled={changeInstanceMutation.isPending || isOff}
                         className={cn(
-                          'w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-muted transition-colors text-left',
-                          isCurrent && 'bg-primary-muted',
+                          'w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-accent transition-colors duration-fast text-left',
+                          isCurrent && 'bg-primary-light',
                           isOff && 'opacity-60 cursor-not-allowed hover:bg-transparent',
                         )}
                       >
                         <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
                           <div className={cn(
                             'flex h-8 w-8 items-center justify-center rounded-full',
-                            isCurrent ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
+                            isCurrent ? 'bg-primary text-primary-foreground' : 'bg-bg-2 text-muted-foreground',
                           )}>
                             <Smartphone className="h-3.5 w-3.5" />
                           </div>
@@ -1901,23 +1991,18 @@ export function ConversationView({
                           />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className={cn('text-sm font-medium flex items-center gap-1.5', isCurrent && 'text-primary')}>
+                          <p className={cn('text-sm font-medium flex items-center gap-1.5', isCurrent && 'text-link')}>
                             <span className="truncate">{inst.nome}</span>
-                            <span className={cn(
-                              'shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
-                              isOff
-                                ? 'bg-muted text-muted-foreground'
-                                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-                            )}>
-                              {isOff ? 'Off' : 'On'}
+                            <span className={cn('tag shrink-0 !h-5 !text-[11px]', isOff ? '' : 'tag-success')}>
+                              {isOff ? 'Desligado' : 'Ligado'}
                             </span>
                           </p>
                           {inst.numero_whatsapp && (
-                            <p className="text-[11px] text-muted-foreground font-mono">{formatPhone(inst.numero_whatsapp)}</p>
+                            <p className="mono text-[12px] text-muted-foreground">{formatPhone(inst.numero_whatsapp)}</p>
                           )}
                         </div>
                         {isCurrent && (
-                          <Check className="h-4 w-4 text-primary shrink-0" />
+                          <Check className="h-4 w-4 text-link shrink-0" aria-label="Número atual" />
                         )}
                       </button>
                     )
@@ -1938,13 +2023,12 @@ export function ConversationView({
                   return !s
                 })
               }}
-              className={cn(
-                'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
-                showSearch ? 'text-primary bg-primary-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
+              aria-pressed={showSearch}
+              className={cn('btn btn-ghost btn-icon', showSearch && 'bg-primary-light text-link')}
               title="Buscar mensagens"
+              aria-label="Buscar mensagens"
             >
-              <Search className="h-[18px] w-[18px]" />
+              <Search aria-hidden />
             </button>
 
             {/* Summarize — hidden on mobile */}
@@ -1957,43 +2041,46 @@ export function ConversationView({
                 })
               }}
               disabled={summarizeMutation.isPending}
-              className="hidden sm:flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
+              className="btn btn-ghost btn-icon hidden sm:inline-flex"
               title="Resumir conversa"
+              aria-label="Resumir conversa"
+              aria-busy={summarizeMutation.isPending}
             >
               {summarizeMutation.isPending ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <span className="btn-spin !inline-block" aria-hidden />
               ) : (
-                <FileText className="h-[18px] w-[18px]" />
+                <FileText aria-hidden />
               )}
             </button>
 
             {/* Contact panel */}
             {onToggleContactPanel && (
               <button
+                type="button"
                 onClick={onToggleContactPanel}
-                className={cn(
-                  'flex h-10 w-10 items-center justify-center rounded-lg transition-colors',
-                  contactPanelOpen
-                    ? 'text-primary bg-primary-muted'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-                title="Painel do contato"
+                aria-pressed={contactPanelOpen}
+                className={cn('btn btn-ghost btn-icon', contactPanelOpen && 'bg-primary-light text-link')}
+                title="Detalhes do contato"
+                aria-label="Detalhes do contato"
               >
-                <User className="h-[18px] w-[18px]" />
+                <User aria-hidden />
               </button>
             )}
 
             {/* More actions dropdown — mobile only */}
             <div className="relative sm:hidden" ref={chatActionsRef}>
               <button
+                type="button"
                 onClick={() => setShowChatActions(!showChatActions)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                aria-expanded={showChatActions}
+                className={cn('btn btn-ghost btn-icon', showChatActions && 'bg-accent')}
                 title="Mais opções"
+                aria-label="Mais opções"
               >
-                <MoreVertical className="h-[18px] w-[18px]" />
+                <MoreVertical aria-hidden />
               </button>
               {showChatActions && (
-                <div className="absolute right-0 top-full mt-1 z-20 flex flex-col rounded-lg border border-border bg-card shadow-lg min-w-[200px] py-1">
+                <div className="absolute right-0 top-full mt-1 z-30 flex flex-col rounded-xl bg-popover shadow-pop ring-hairline w-[min(280px,calc(100vw-1.5rem))] max-h-[70dvh] overflow-y-auto py-1 animate-fade-in-up">
                   {/* Resumir — visível apenas no mobile (no desktop tem botão dedicado) */}
                   {isMobile && (
                     <button
@@ -2006,7 +2093,7 @@ export function ConversationView({
                         })
                       }}
                       disabled={summarizeMutation.isPending}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                      className="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-accent transition-colors duration-fast disabled:opacity-50"
                     >
                       <FileText className="h-4 w-4 text-muted-foreground" />
                       {summarizeMutation.isPending ? 'Resumindo…' : 'Resumir conversa'}
@@ -2019,24 +2106,24 @@ export function ConversationView({
                         <div className="relative">
                           <button
                             onClick={() => { setShowAssignSubmenu(!showAssignSubmenu); setAssignSearch('') }}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                            className="w-full flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-accent transition-colors duration-fast"
                           >
                             <UserCheck className="h-4 w-4 text-muted-foreground" />
                             Atribuir a...
                             <ChevronDown className={cn('h-3 w-3 ml-auto text-muted-foreground transition-transform', showAssignSubmenu && 'rotate-180')} />
                           </button>
                           {showAssignSubmenu && (
-                            <div className="border-t border-border bg-muted/30">
+                            <div className="border-t border-border bg-bg-0">
                               {/* Quick: atribuir a mim */}
                               <button
                                 onClick={() => { handleAssign(); setShowChatActions(false); setShowAssignSubmenu(false) }}
                                 disabled={assignMutation.isPending}
                                 className={cn(
-                                  'w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-50',
+                                  'w-full flex min-h-11 items-center gap-3 px-4 py-2 text-sm hover:bg-accent transition-colors duration-fast disabled:opacity-50',
                                   conversation.agente_id === user?.id ? 'text-primary font-medium' : 'text-foreground',
                                 )}
                               >
-                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-[11px] font-bold">
                                   {user?.nome?.slice(0, 2).toUpperCase() ?? 'EU'}
                                 </div>
                                 <span>Atribuir a mim</span>
@@ -2052,7 +2139,8 @@ export function ConversationView({
                                   placeholder="Buscar agente..."
                                   value={assignSearch}
                                   onChange={(e) => setAssignSearch(e.target.value)}
-                                  className="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                                  aria-label="Buscar agente"
+                                  className="input"
                                   onClick={(e) => e.stopPropagation()}
                                 />
                               </div>
@@ -2073,16 +2161,16 @@ export function ConversationView({
                                       }}
                                       disabled={assignMutation.isPending}
                                       className={cn(
-                                        'w-full flex items-center gap-3 px-4 py-2 text-sm hover:bg-muted transition-colors disabled:opacity-50',
+                                        'w-full flex min-h-11 items-center gap-3 px-4 py-2 text-sm hover:bg-accent transition-colors duration-fast disabled:opacity-50',
                                         conversation.agente_id === agent.id ? 'text-primary font-medium' : 'text-foreground',
                                       )}
                                     >
-                                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary text-[10px] font-bold">
+                                      <div className="av !h-7 !w-7 text-[11px]" data-h="0" aria-hidden>
                                         {agent.nome.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
                                       </div>
                                       <div className="min-w-0 flex-1 text-left">
                                         <p className="text-sm truncate">{agent.nome}</p>
-                                        <p className="text-[10px] text-muted-foreground">{agent.perfil}</p>
+                                        <p className="text-[12px] text-muted-foreground capitalize">{agent.perfil}</p>
                                       </div>
                                       {conversation.agente_id === agent.id && (
                                         <Check className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -2097,7 +2185,7 @@ export function ConversationView({
                         <button
                           onClick={() => { handleAssign(); setShowChatActions(false) }}
                           disabled={assignMutation.isPending}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                          className="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-accent transition-colors duration-fast disabled:opacity-50"
                         >
                           <UserCheck className="h-4 w-4 text-muted-foreground" />
                           Atribuir a mim
@@ -2105,14 +2193,14 @@ export function ConversationView({
                       )}
                       <button
                         onClick={() => { setTransferDialogOpen(true); setShowChatActions(false) }}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                        className="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-accent transition-colors duration-fast"
                       >
                         <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
                         Atribuir
                       </button>
                       <button
                         onClick={() => { setCloseDialogOpen(true); setShowChatActions(false) }}
-                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-danger hover:bg-muted transition-colors"
+                        className="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-danger hover:bg-danger-light transition-colors duration-fast"
                       >
                         <X className="h-4 w-4" />
                         Encerrar conversa
@@ -2126,16 +2214,18 @@ export function ConversationView({
                         csatMutation.mutate(
                           { conversation_id: conversationId, contact_id: contact.id },
                           {
-                            onSuccess: () => {
+                            onSuccess: receipt => {
+                              if (receipt.warning) setComposerWarning(receipt.warning)
                               setCsatSentToast(true)
                               setTimeout(() => setCsatSentToast(false), 3000)
                               setShowChatActions(false)
                             },
+                            onError: error => setComposerError(mensagemErro(error)),
                           },
                         )
                       }}
-                      disabled={csatMutation.isPending || csatAlreadySent}
-                      className="flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                      disabled={!canSend || csatMutation.isPending || csatAlreadySent}
+                      className="flex min-h-11 items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-accent transition-colors duration-fast disabled:opacity-50"
                     >
                       <Star className="h-4 w-4 text-muted-foreground" />
                       {csatAlreadySent ? 'CSAT já enviado' : 'Enviar CSAT'}
@@ -2164,8 +2254,8 @@ export function ConversationView({
 
       {/* ── Search bar ─────────────────────────────────────────────────────── */}
       {showSearch && (
-        <div className="shrink-0 border-b border-border bg-card px-3 py-2 flex items-center gap-2">
-          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="shrink-0 border-b border-border bg-card px-3 py-1.5 flex items-center gap-1.5 animate-band-in">
+          <Search className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
           <input
             ref={searchInputRef}
             type="text"
@@ -2180,11 +2270,12 @@ export function ConversationView({
                 document.getElementById(`msg-${searchResults[next].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
               }
             }}
-            placeholder="Buscar nas mensagens..."
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+            placeholder="Buscar nas mensagens…"
+            aria-label="Buscar nas mensagens"
+            className="min-h-10 min-w-0 flex-1 bg-transparent text-base sm:text-sm text-foreground placeholder:text-fg-placeholder focus:outline-none"
           />
           {searchQuery.trim().length >= 2 && (
-            <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+            <span className="mono text-xs text-muted-foreground shrink-0" aria-live="polite">
               {searchResults.length === 0 ? 'Sem resultados' : `${searchIndex + 1} / ${searchResults.length}`}
             </span>
           )}
@@ -2196,10 +2287,11 @@ export function ConversationView({
                   setSearchIndex(prev)
                   document.getElementById(`msg-${searchResults[prev].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded hover:bg-muted transition-colors"
+                className="btn btn-ghost btn-icon btn-sm"
                 title="Anterior"
+                aria-label="Resultado anterior"
               >
-                <ChevronDown className="h-4 w-4 rotate-180" />
+                <ChevronDown className="rotate-180" aria-hidden />
               </button>
               <button
                 onClick={() => {
@@ -2207,18 +2299,21 @@ export function ConversationView({
                   setSearchIndex(next)
                   document.getElementById(`msg-${searchResults[next].id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                 }}
-                className="flex h-7 w-7 items-center justify-center rounded hover:bg-muted transition-colors"
+                className="btn btn-ghost btn-icon btn-sm"
                 title="Próximo"
+                aria-label="Próximo resultado"
               >
-                <ChevronDown className="h-4 w-4" />
+                <ChevronDown aria-hidden />
               </button>
             </>
           )}
           <button
+            type="button"
             onClick={() => { setShowSearch(false); setSearchQuery(''); setSearchIndex(0) }}
-            className="flex h-7 w-7 items-center justify-center rounded hover:bg-muted transition-colors"
+            className="btn btn-ghost btn-icon btn-sm"
+            aria-label="Fechar busca"
           >
-            <X className="h-4 w-4 text-muted-foreground" />
+            <X aria-hidden />
           </button>
         </div>
       )}
@@ -2236,47 +2331,50 @@ export function ConversationView({
       )}
 
       {/* ── Messages ──────────────────────────────────────────────────────── */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden px-3 sm:px-6 py-4 space-y-1 chat-bg">
+      <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-2 sm:px-5 py-3 sm:py-4 space-y-1 chat-bg wpp-scroll text-[15px] sm:text-[14px] leading-[1.45]">
         {groupsWithDivider.map((group) => (
           <div key={group.label} className="space-y-1">
-            {/* Day separator */}
-            <div className="flex justify-center py-3">
-              <span className="rounded-lg bg-white/80 dark:bg-white/10 px-4 py-1.5 text-xs font-medium text-[#54656f] dark:text-[#8696a0] shadow-sm backdrop-blur-sm">
+            {/* Separador de dia (DS: pílula com anel fino) */}
+            <div className="flex justify-center py-2">
+              <span className="rounded-full bg-card ring-hairline px-2.5 py-[3px] text-[11.5px] font-semibold text-muted-foreground">
                 {group.label}
               </span>
             </div>
 
             {group.items.map((item, itemIndex) => {
-              // Divisor "X novas mensagens" estilo WhatsApp
+              // Divisor "X novas mensagens"
               if ('_divider' in item) {
                 return (
-                  <div key="__unread_divider__" ref={firstUnreadRef} className="flex items-center gap-3 py-3 px-2">
-                    <div className="flex-1 h-px bg-[#25d366]/50 dark:bg-[#25d366]/30" />
-                    <span className="shrink-0 rounded-full border border-[#25d366]/40 bg-[#25d366]/10 dark:bg-[#25d366]/10 px-3 py-1 text-[12px] font-medium text-[#128c7e] dark:text-[#25d366]">
+                  <div key="__unread_divider__" ref={firstUnreadRef} className="flex items-center gap-3 py-3 px-2" role="separator">
+                    <div className="flex-1 h-px bg-primary/35" />
+                    <span className="shrink-0 rounded-full bg-primary-light px-3 py-1 text-[12px] font-semibold text-link">
                       {item.count} {item.count === 1 ? 'nova mensagem' : 'novas mensagens'}
                     </span>
-                    <div className="flex-1 h-px bg-[#25d366]/50 dark:bg-[#25d366]/30" />
+                    <div className="flex-1 h-px bg-primary/35" />
                   </div>
                 )
               }
               const msg = item
+              const originIsSelected = msg.conversation_id === conversationId
+              const originName = historyOrigins && historyOrigins.length > 1
+                ? historyOrigins.find(origin => origin.id === msg.conversation_id)?.nome : null
               // Internal note
               if (msg.tipo === 'nota_interna') {
                 const isEditingThis = editingNoteId === msg.id
                 return (
-                  <div key={msg.id} className="flex justify-center px-4 py-1 group/note">
-                    <div className="rounded-xl bg-[#fff3cd]/90 dark:bg-amber-950/50 border border-amber-200/60 dark:border-amber-800/30 px-4 py-2.5 max-w-[85%] shadow-sm backdrop-blur-sm w-full">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <StickyNote className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-                          Nota interna
-                        </span>
-                        {!isEditingThis && (
+                  <div key={msg.id} className="px-1 sm:px-2 py-1 group/note">
+                    {/* Nota interna (DS): largura toda, fundo âmbar, borda tracejada. Nunca vai ao WhatsApp. */}
+                    <div className="w-full rounded-lg border border-dashed border-note-border bg-note px-3 py-[9px] text-[14px] sm:text-[13.5px] animate-row-in">
+                      <div className="flex items-center gap-1.5 mb-[3px] text-[11.5px] font-[650] text-note-fg">
+                        <Lock className="h-[13px] w-[13px]" aria-hidden />
+                        <span>Nota interna · só a equipe vê</span>
+                        {!isEditingThis && originIsSelected && (
                           <button
+                            type="button"
                             onClick={() => { setEditingNoteId(msg.id); setEditNoteText(msg.conteudo ?? '') }}
-                            className="ml-auto opacity-0 group-hover/note:opacity-100 transition-opacity flex items-center gap-1 text-[11px] text-amber-600/70 dark:text-amber-500/70 hover:text-amber-700 dark:hover:text-amber-400"
+                            className="ml-auto inline-flex min-h-6 items-center gap-1 rounded-sm px-1 text-[12px] font-semibold text-note-fg opacity-0 transition-opacity duration-fast group-hover/note:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 focus-ds"
                           >
-                            <Pencil className="h-3 w-3" />
+                            <Pencil className="h-3 w-3" aria-hidden />
                             Editar
                           </button>
                         )}
@@ -2286,7 +2384,8 @@ export function ConversationView({
                           <textarea
                             value={editNoteText}
                             onChange={(e) => setEditNoteText(e.target.value)}
-                            className="w-full resize-none rounded-lg px-3 py-2 text-[14px] text-amber-900 dark:text-amber-100 bg-amber-50 dark:bg-amber-900/30 ring-1 ring-amber-300 dark:ring-amber-700 focus:outline-none focus:ring-2"
+                            aria-label="Editar nota interna"
+                            className="textarea !min-h-[72px] !bg-card text-base sm:text-[14px]"
                             rows={3}
                             autoFocus
                             onInput={(e) => {
@@ -2297,12 +2396,14 @@ export function ConversationView({
                           />
                           <div className="flex items-center justify-end gap-2">
                             <button
+                              type="button"
                               onClick={() => setEditingNoteId(null)}
-                              className="text-xs text-amber-600/70 hover:text-amber-700 px-2 py-1 rounded transition-colors"
+                              className="btn btn-ghost btn-sm"
                             >
                               Cancelar
                             </button>
                             <button
+                              type="button"
                               disabled={updateNoteMutation.isPending || !editNoteText.trim()}
                               onClick={() => {
                                 updateNoteMutation.mutate(
@@ -2310,19 +2411,19 @@ export function ConversationView({
                                   { onSuccess: () => setEditingNoteId(null) },
                                 )
                               }}
-                              className="text-xs font-semibold bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white px-3 py-1 rounded-lg transition-colors"
+                              className="btn btn-primary btn-sm"
                             >
                               {updateNoteMutation.isPending ? 'Salvando…' : 'Salvar'}
                             </button>
                           </div>
                         </div>
                       ) : (
-                        <p className="text-[15px] leading-relaxed text-amber-900 dark:text-amber-100 whitespace-pre-wrap break-words">
+                        <p className="text-foreground whitespace-pre-wrap break-words">
                           {renderNoteContent(msg.conteudo ?? '')}
                         </p>
                       )}
-                      <p className="mt-1.5 text-[11px] text-amber-600/70 dark:text-amber-500/70 text-right">
-                        {formatTime(msg.criado_em)}
+                      <p className="mono mt-1 text-[11px] text-muted-foreground text-right">
+                        {originName && <span title={originIsSelected ? "Número de origem" : "Selecione este número acima para agir nesta mensagem"}>{originName} · </span>}{formatTime(msg.criado_em)}
                       </p>
                     </div>
                   </div>
@@ -2332,9 +2433,9 @@ export function ConversationView({
               // Received message (customer)
               if (!msg.enviado_por_agente && !msg.enviado_por_ia) {
                 const { sender: groupSender, text: groupText } = isGroupConv
-                  ? parseGroupSender(msg.conteudo)
+                  ? groupSenderOf(msg)
                   : { sender: null, text: msg.conteudo }
-                const senderColor = groupSender ? getSenderColor(groupSender) : undefined
+                const senderTone = groupSender ? getSenderTone(groupSender) : 0
                 const displayMsg = isGroupConv && groupSender
                   ? { ...msg, conteudo: groupText }
                   : msg
@@ -2343,24 +2444,25 @@ export function ConversationView({
                 const prevItem = itemIndex > 0 ? group.items[itemIndex - 1] : null
                 const prevMsg = prevItem && !('_divider' in prevItem) ? prevItem : null
                 const prevSender = isGroupConv && prevMsg && !prevMsg.enviado_por_agente && !prevMsg.enviado_por_ia
-                  ? parseGroupSender(prevMsg.conteudo).sender
+                  ? groupSenderOf(prevMsg).sender
                   : null
                 const isSameSender = isGroupConv && !!groupSender && groupSender === prevSender
 
                 const isSearchMatch = showSearch && searchResults.some(r => r.id === msg.id)
                 const isCurrentSearch = isSearchMatch && searchResults[searchIndex]?.id === msg.id
                 return (
-                  <SwipeableMessage key={msg.id} onSwipe={() => { setReplyTo(msg); textareaRef.current?.focus() }} direction="right">
-                  <div id={`msg-${msg.id}`} className={cn("flex justify-start px-2 gap-2 rounded transition-colors", isSameSender ? "py-[1px]" : "py-0.5", isCurrentSearch && "bg-warning/20")}>
+                  <SwipeableMessage key={msg.id} onSwipe={() => { if (originIsSelected) { setReplyTo(msg); textareaRef.current?.focus() } }} direction="right">
+                  <div id={`msg-${msg.id}`} className={cn("flex justify-start px-1 sm:px-2 gap-2 rounded-md transition-colors duration-base", isSameSender ? "py-[1px]" : "py-0.5", isCurrentSearch && "bg-warning-light")}>
                     {isGroupConv && (
                       groupSender ? (
                         isSameSender ? (
                           <div className="w-7 shrink-0" />
                         ) : (
                           <div
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white text-[10px] font-bold mt-1"
-                            style={{ backgroundColor: senderColor }}
+                            className="av !h-7 !w-7 mt-1 text-[11px]"
+                            data-h={senderTone}
                             title={groupSender}
+                            aria-hidden
                           >
                             {groupSender.slice(0, 2).toUpperCase()}
                           </div>
@@ -2369,29 +2471,33 @@ export function ConversationView({
                         <div className="w-7 shrink-0" />
                       )
                     )}
+                    {/* Balão do cliente (DS .msg-in): cartão com anel fino, canto inferior esquerdo fechado */}
                     <div
                       className={cn(
-                        "relative bg-white dark:bg-[#202c33] px-3 py-2 max-w-[75%] shadow-sm text-[#111b21] dark:text-[#e9edef] group/msg",
-                        isSameSender ? "rounded-xl" : "rounded-xl rounded-tl-sm",
+                        "relative min-w-0 bg-card text-foreground ring-hairline px-3 pt-2 pb-1.5 max-w-[84%] sm:max-w-[78%] group/msg animate-row-in [overflow-wrap:anywhere]",
+                        isSameSender ? "rounded-xl" : "rounded-xl rounded-bl-[4px]",
                       )}
                       onMouseEnter={() => setHoveredMsgId(msg.id)}
                       onMouseLeave={() => { if (reactionMsgId !== msg.id) setHoveredMsgId(null) }}
                     >
                       {isGroupConv && groupSender && !isSameSender && (
-                        <p className="text-xs font-semibold mb-0.5" style={{ color: senderColor }}>
+                        <p className={cn('text-[11.5px] font-[650] mb-0.5', SENDER_TEXT_TONS[senderTone])}>
                           {groupSender}
+                          {msg.autor_tipo === 'equipe' && (
+                            <span className="ml-1 font-normal text-muted-foreground">· equipe</span>
+                          )}
                         </p>
                       )}
                       {msg.replied_message && (
                         <QuotedMessagePreview msg={msg.replied_message} contactName={contactName} />
                       )}
                       <MessageContent msg={displayMsg} onImageClick={setLightboxUrl} />
-                      <p className="mt-1 text-[11px] text-[#667781] dark:text-[#8696a0] text-right">
-                        {formatTime(msg.criado_em)}
+                      <p className="mono mt-0.5 text-[11px] text-muted-foreground text-right">
+                        {originName && <span title={originIsSelected ? "Número de origem" : "Selecione este número acima para agir nesta mensagem"}>{originName} · </span>}{formatTime(msg.criado_em)}
                       </p>
                       <ReactionsDisplay reactions={msg.reactions} />
                       {/* Hover action bar */}
-                      {hoveredMsgId === msg.id && instance && contact && (
+                      {hoveredMsgId === msg.id && originIsSelected && instance && contact && (
                         <MessageActionBar
                           position="right"
                           onReply={() => { setReplyTo(msg); textareaRef.current?.focus() }}
@@ -2433,17 +2539,22 @@ export function ConversationView({
               if (msg.enviado_por_ia) {
                 const isCurrentSearchIa = showSearch && searchResults[searchIndex]?.id === msg.id
                 return (
-                  <div id={`msg-${msg.id}`} key={msg.id} className={cn("flex justify-start px-2 py-0.5 rounded transition-colors", isCurrentSearchIa && "bg-warning/20")}>
-                    <div className="relative rounded-xl rounded-tl-sm bg-[#f0f4ff] dark:bg-[#1a2332] px-3 py-2 max-w-[75%] shadow-sm border border-blue-100/50 dark:border-blue-900/30">
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <Bot className="h-3.5 w-3.5 text-blue-500 dark:text-blue-400" />
-                        <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">IA Bot</span>
+                  <div id={`msg-${msg.id}`} key={msg.id} className={cn("flex justify-end px-1 sm:px-2 py-0.5 rounded-md transition-colors duration-base", isCurrentSearchIa && "bg-warning-light")}>
+                    {/* Balão da Íris/IA (DS .msg-iris): à direita, verde-água, com a marca da Íris */}
+                    <div className="relative min-w-0 rounded-xl rounded-br-[4px] bg-iris-light text-foreground px-3 pt-2 pb-1.5 max-w-[84%] sm:max-w-[78%] shadow-[inset_0_0_0_1px_var(--iris-line)] animate-row-in [overflow-wrap:anywhere]">
+                      <div className="flex items-center gap-1.5 mb-0.5 text-[11.5px] font-[650] text-iris-fg">
+                        {msg.fonte_envio === 'assistente'
+                          ? <span className="iris-mark sm" aria-hidden />
+                          : <Bot className="h-3.5 w-3.5" aria-hidden />}
+                        <span>
+                          {msg.fonte_envio === 'assistente' ? `${nomeAssistente ?? 'Assistente'} · IA` : 'IA Bot'}
+                        </span>
                       </div>
-                      <p className="text-[15px] leading-relaxed text-[#111b21] dark:text-[#e9edef] whitespace-pre-wrap break-words">
+                      <p className="whitespace-pre-wrap break-words">
                         {msg.conteudo}
                       </p>
-                      <p className="mt-1 text-[11px] text-[#667781] dark:text-[#8696a0] text-right">
-                        {formatTime(msg.criado_em)}
+                      <p className="mono mt-0.5 text-[11px] text-muted-foreground text-right">
+                        {originName && <span title={originIsSelected ? "Número de origem" : "Selecione este número acima para agir nesta mensagem"}>{originName} · </span>}{formatTime(msg.criado_em)}
                       </p>
                       <ReactionsDisplay reactions={msg.reactions} />
                     </div>
@@ -2454,22 +2565,35 @@ export function ConversationView({
               // Sent by agent
               const isEditing = editingMsg?.id === msg.id
               const isCurrentSearchSent = showSearch && searchResults[searchIndex]?.id === msg.id
+              const falhou = msg.status_envio === 'falha'
+              const retry = originIsSelected && msg.enviado_por_agente && msg.conteudo ? () => sendMutation.mutate({
+                conversation_id: msg.conversation_id,
+                conteudo: msg.conteudo!,
+                tipo: msg.tipo,
+                media_url: msg.media_url ?? undefined,
+              }) : undefined
               return (
-                <SwipeableMessage key={msg.id} onSwipe={() => { setReplyTo(msg); textareaRef.current?.focus() }} direction="left">
-                <div id={`msg-${msg.id}`} className={cn("flex justify-end px-2 py-0.5 rounded transition-colors", isCurrentSearchSent && "bg-warning/20")}>
+                <SwipeableMessage key={msg.id} onSwipe={() => { if (originIsSelected) { setReplyTo(msg); textareaRef.current?.focus() } }} direction="left">
+                <div id={`msg-${msg.id}`} className={cn("flex justify-end px-1 sm:px-2 py-0.5 rounded-md transition-colors duration-base", isCurrentSearchSent && "bg-warning-light")}>
+                  {/* Balão da equipe (DS .msg-out): azul claro à direita; não enviada = cartão com borda vermelha */}
                   <div
-                    className="relative rounded-xl rounded-tr-sm bg-[#d9fdd3] dark:bg-[#005c4b] px-3 py-2 max-w-[75%] shadow-sm group/sent"
+                    className={cn(
+                      'relative min-w-0 rounded-xl rounded-br-[4px] px-3 pt-2 pb-1.5 max-w-[84%] sm:max-w-[78%] text-foreground group/sent animate-row-in [overflow-wrap:anywhere]',
+                      falhou
+                        ? 'bg-card shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--danger)_65%,transparent)]'
+                        : 'bg-primary-light shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_14%,transparent)]',
+                    )}
                     onMouseEnter={() => setHoveredMsgId(msg.id)}
                     onMouseLeave={() => { if (reactionMsgId !== msg.id) setHoveredMsgId(null) }}
                   >
                     {/* Agent name label */}
                     {msg.fonte_envio === 'externo' ? (
-                      <p className="text-xs font-semibold mb-0.5 flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                        <ExternalLink className="h-3 w-3" />
-                        Enviado fora do OMNX Desk
+                      <p className="text-[11.5px] font-[650] mb-0.5 flex items-center gap-1 text-warning">
+                        <ExternalLink className="h-3 w-3" aria-hidden />
+                        Enviado fora do {BRAND.appName}
                       </p>
                     ) : showAgentNameInPanel && msg.enviado_por_agente && msg.agente?.nome && (
-                      <p className="text-xs font-semibold mb-0.5 text-emerald-700 dark:text-emerald-400">
+                      <p className="text-[11.5px] font-[650] mb-0.5 text-fg-2">
                         {conversation?.chat_departments?.nome
                           ? `${conversation.chat_departments.nome} - ${msg.agente.nome}`
                           : msg.agente.nome}
@@ -2484,7 +2608,8 @@ export function ConversationView({
                         <textarea
                           value={editText}
                           onChange={(e) => setEditText(e.target.value)}
-                          className="w-full min-w-0 rounded-lg border border-primary/30 bg-white/50 dark:bg-black/20 px-2 py-1.5 text-sm text-[#111b21] dark:text-[#e9edef] focus:outline-none resize-none"
+                          aria-label="Editar mensagem"
+                          className="textarea !min-h-[60px] w-full min-w-0 !bg-card text-base sm:text-sm resize-none"
                           rows={2}
                           autoFocus
                           onKeyDown={(e) => {
@@ -2505,12 +2630,14 @@ export function ConversationView({
                         />
                         <div className="flex justify-end gap-1.5">
                           <button
+                            type="button"
                             onClick={() => setEditingMsg(null)}
-                            className="rounded px-2 py-0.5 text-xs text-muted-foreground hover:bg-black/10 transition-colors"
+                            className="btn btn-ghost btn-sm"
                           >
                             Cancelar
                           </button>
                           <button
+                            type="button"
                             onClick={() => {
                               if (editText.trim() && msg.message_id_wpp) {
                                 editMsgMutation.mutate({
@@ -2523,7 +2650,7 @@ export function ConversationView({
                               }
                             }}
                             disabled={editMsgMutation.isPending}
-                            className="rounded px-2 py-0.5 text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+                            className="btn btn-primary btn-sm"
                           >
                             Salvar
                           </button>
@@ -2531,28 +2658,19 @@ export function ConversationView({
                       </div>
                     ) : (
                       <>
-                        <div className="text-[#111b21] dark:text-[#e9edef]">
-                          <MessageContent msg={msg} onImageClick={setLightboxUrl} />
-                        </div>
-                        <div className="mt-1 flex items-center justify-end gap-1">
-                          <span className="text-[11px] text-[#667781] dark:text-[#8696a0]">
-                            {formatTime(msg.criado_em)}
+                        <MessageContent msg={msg} onImageClick={setLightboxUrl} />
+                        <div className="mt-0.5 flex items-center justify-end gap-1">
+                          <span className="mono text-[11px] text-muted-foreground">
+                            {originName && <span title={originIsSelected ? "Número de origem" : "Selecione este número acima para agir nesta mensagem"}>{originName} · </span>}{formatTime(msg.criado_em)}
                           </span>
-                          <MessageTicks
-                            status={msg.status_envio}
-                            onRetry={msg.enviado_por_agente && msg.conteudo ? () => sendMutation.mutate({
-                              conversation_id: msg.conversation_id,
-                              conteudo: msg.conteudo!,
-                              tipo: msg.tipo,
-                              media_url: msg.media_url ?? undefined,
-                            }) : undefined}
-                          />
+                          <MessageTicks status={msg.status_envio} />
                         </div>
+                        {falhou && <FalhaEnvio onRetry={retry} tentando={sendMutation.isPending} />}
                         <ReactionsDisplay reactions={msg.reactions} />
                       </>
                     )}
                     {/* Hover action bar */}
-                    {hoveredMsgId === msg.id && !isEditing && instance && contact && (
+                    {hoveredMsgId === msg.id && originIsSelected && !isEditing && instance && contact && (
                       <MessageActionBar
                         position="left"
                         onReply={() => { setReplyTo(msg); textareaRef.current?.focus() }}
@@ -2570,11 +2688,13 @@ export function ConversationView({
                     {/* Emoji picker */}
                     {reactionMsgId === msg.id && msg.message_id_wpp && (
                       <EmojiReactionPicker
+                        align="right"
                         onSelect={(emoji) => {
                           reactMutation.mutate({
                             instance_id: instance!.instance_id,
                             number: contact!.numero_whatsapp,
                             message_id: msg.message_id_wpp!,
+                            conversation_id: conversationId,
                             emoji,
                           })
                           setReactionMsgId(null)
@@ -2584,6 +2704,7 @@ export function ConversationView({
                             instance_id: instance!.instance_id,
                             number: contact!.numero_whatsapp,
                             message_id: msg.message_id_wpp!,
+                            conversation_id: conversationId,
                             emoji: '',
                           })
                           setReactionMsgId(null)
@@ -2600,11 +2721,13 @@ export function ConversationView({
         ))}
 
         {messages.length === 0 && (
-          <div className="flex h-full items-center justify-center py-16">
-            <div className="rounded-xl bg-white/80 dark:bg-white/10 px-6 py-4 shadow-sm backdrop-blur-sm text-center">
-              <MessageSquare className="mx-auto mb-2 h-8 w-8 text-[#8696a0]" />
-              <p className="text-sm text-[#667781] dark:text-[#8696a0]">Nenhuma mensagem ainda</p>
-            </div>
+          <div className="flex h-full items-center justify-center py-10">
+            <EmptyState
+              compact
+              icon={MessageSquare}
+              title="Nenhuma mensagem ainda"
+              description={canSend && !isEncerrada ? 'Escreva abaixo para começar a conversa.' : undefined}
+            />
           </div>
         )}
 
@@ -2613,11 +2736,11 @@ export function ConversationView({
 
       {/* ── Reply preview bar ──────────────────────────────────────────── */}
       {replyTo && !isEncerrada && (
-        <div className="shrink-0 bg-card border-t border-border px-3 sm:px-4 pt-2">
-          <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-primary bg-primary/5 px-3 py-2">
-            <Reply className="h-4 w-4 text-primary shrink-0" />
+        <div className="shrink-0 px-2 sm:px-4 pt-2 animate-band-in">
+          <div className="flex items-center gap-2 rounded-lg border-l-[3px] border-primary bg-primary-light px-3 py-2">
+            <Reply className="h-4 w-4 text-link shrink-0" aria-hidden />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-primary truncate">
+              <p className="text-xs font-semibold text-link truncate">
                 {replyTo.enviado_por_agente
                   ? replyTo.agente?.nome ?? 'Estrategista'
                   : replyTo.enviado_por_ia
@@ -2635,10 +2758,12 @@ export function ConversationView({
               </p>
             </div>
             <button
+              type="button"
               onClick={() => setReplyTo(null)}
-              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full hover:bg-muted transition-colors"
+              className="btn btn-ghost btn-icon btn-sm shrink-0"
+              aria-label="Cancelar resposta"
             >
-              <X className="h-3.5 w-3.5 text-muted-foreground" />
+              <X aria-hidden />
             </button>
           </div>
         </div>
@@ -2646,8 +2771,8 @@ export function ConversationView({
 
       {/* ── Typing indicator ──────────────────────────────────────────────── */}
       {typingNames.length > 0 && (
-        <div className="shrink-0 px-4 py-1 flex items-center gap-2">
-          <div className="flex gap-[3px] items-end h-3">
+        <div className="shrink-0 px-4 py-1 flex items-center gap-2" aria-live="polite">
+          <div className="flex gap-[3px] items-end h-3" aria-hidden>
             <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
             <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '150ms' }} />
             <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -2661,29 +2786,38 @@ export function ConversationView({
       )}
 
       {/* ── Send error banner ─────────────────────────────────────────────── */}
-      {sendMutation.isError && (
-        <div className="shrink-0 bg-danger/10 border-t border-danger/20 px-4 py-2 flex items-center gap-2">
-          <span className="text-xs text-danger font-medium">
-            Falha ao enviar:{' '}
-            {sendMutation.error instanceof Error
-              ? sendMutation.error.message
-              : 'Erro desconhecido'}
+      {(composerError || sendMutation.isError || noteMutation.isError) && (
+        <div role="alert" className="shrink-0 mx-2 sm:mx-4 mt-2 rounded-lg bg-danger-light px-3 py-2 flex items-start gap-2 animate-band-in">
+          <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden />
+          <span className="min-w-0 flex-1 text-[13px] text-danger font-medium">
+            Não deu para enviar:{' '}
+            {composerError ?? mensagemErro(sendMutation.error ?? noteMutation.error)}
           </span>
           <button
-            onClick={() => sendMutation.reset()}
-            className="ml-auto text-xs text-danger underline"
+            type="button"
+            onClick={() => { setComposerError(null); sendMutation.reset(); noteMutation.reset() }}
+            className="btn btn-ghost btn-sm shrink-0 -my-1 text-danger"
           >
             Fechar
           </button>
         </div>
       )}
 
-      {/* ── Input bar ─────────────────────────────────────────────────────── */}
-      <div className="shrink-0 bg-card border-t border-border px-3 sm:px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
+      {composerWarning && (
+        <div role="status" className="shrink-0 mx-2 sm:mx-4 mt-2 rounded-lg bg-warning-light px-3 py-2 flex items-start gap-2 text-[13px] text-warning animate-band-in">
+          <span className="min-w-0 flex-1">{composerWarning}</span>
+          <button type="button" className="btn btn-ghost btn-sm shrink-0 -my-1 text-warning" onClick={() => setComposerWarning(null)}>Fechar</button>
+        </div>
+      )}
+
+      {/* ── Campo de mensagem (DS .composer) ─────────────────────────────── */}
+      <div className="shrink-0 px-2 sm:px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:pb-4">
         {isEncerrada ? (
-          <div className="flex items-center justify-center py-2">
+          <div className="flex items-center justify-center rounded-xl bg-bg-1 ring-hairline py-3">
             <p className="text-sm text-muted-foreground">Esta conversa foi encerrada</p>
           </div>
+        ) : !canSend ? (
+          <p className="rounded-xl bg-bg-1 ring-hairline py-3 px-3 text-center text-sm text-muted-foreground">Seu acesso a esta conversa é somente para consulta.</p>
         ) : filePreview ? (
           /* File preview mode */
           <FilePreviewBar
@@ -2696,47 +2830,81 @@ export function ConversationView({
           />
         ) : recorder.isRecording ? (
           /* Audio recording mode */
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 flex-1">
-              <div className="h-3 w-3 rounded-full bg-danger animate-pulse" />
+          <div className="flex items-center gap-2 rounded-xl bg-card ring-hairline px-3 py-2" role="status">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="h-3 w-3 shrink-0 rounded-full bg-danger animate-pulse" aria-hidden />
               <span className="text-sm font-medium text-danger">Gravando</span>
-              <span className="text-sm text-muted-foreground font-mono">
+              <span className="mono text-sm text-muted-foreground">
                 {recorder.formatDuration(recorder.duration)}
               </span>
             </div>
             <button
+              type="button"
               onClick={recorder.cancelRecording}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border hover:bg-muted transition-colors"
+              className="btn btn-secondary btn-icon shrink-0 text-danger"
               title="Cancelar gravação"
+              aria-label="Cancelar gravação"
             >
-              <Trash2 className="h-4 w-4 text-danger" />
+              <Trash2 aria-hidden />
             </button>
             <button
+              type="button"
               onClick={handleStopRecording}
               disabled={uploading}
-              className={cn(
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
-                'gradient-primary text-primary-foreground',
-                'transition-opacity disabled:opacity-40',
-              )}
+              className="btn btn-primary btn-icon shrink-0"
               title="Enviar áudio"
+              aria-label="Enviar áudio"
             >
-              <Send className="h-4 w-4" />
+              <Send aria-hidden />
             </button>
           </div>
         ) : (
-          <div className="space-y-2">
-            {/* Note mode indicator */}
-            {noteMode && (
-              <div className="flex items-center gap-1.5 px-1">
-                <StickyNote className="h-3 w-3 text-amber-500" />
-                <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                  Modo nota interna — esta mensagem não será enviada ao contato
-                </span>
-              </div>
+          <div
+            className={cn(
+              'relative rounded-xl ring-hairline transition-[box-shadow,background-color] duration-base',
+              noteMode
+                ? 'bg-note focus-within:shadow-[0_0_0_1px_var(--warning),0_0_0_4px_rgb(168_90_6/.15)]'
+                : 'bg-card focus-within:shadow-[0_0_0_1px_var(--ring),0_0_0_4px_var(--primary-glow)]',
             )}
+          >
+            {/* Abas do campo (DS .composer-tabs): responder no WhatsApp ou nota interna */}
+            <div className="flex items-center gap-0.5 px-1.5 pt-1.5" role="group" aria-label="Tipo de mensagem">
+              <button
+                type="button"
+                onClick={() => setNoteMode(false)}
+                aria-pressed={!noteMode}
+                className={cn(
+                  'inline-flex h-8 sm:h-[26px] items-center gap-[5px] rounded-md px-2 text-[12.5px] font-semibold transition-colors duration-fast focus-ds',
+                  !noteMode ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
+              >
+                <MessageCircle className="h-[13px] w-[13px]" aria-hidden />
+                <span className="sm:hidden">WhatsApp</span>
+                <span className="hidden sm:inline">Responder no WhatsApp</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setNoteMode(true)}
+                aria-pressed={noteMode}
+                title="Nota interna"
+                className={cn(
+                  'inline-flex h-8 sm:h-[26px] items-center gap-[5px] rounded-md px-2 text-[12.5px] font-semibold transition-colors duration-fast focus-ds',
+                  noteMode ? 'bg-note-border/35 text-note-fg' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
+              >
+                <Lock className="h-[13px] w-[13px]" aria-hidden />
+                Nota interna
+              </button>
+              {noteMode && (
+                <span className="ml-auto hidden truncate pr-1 text-[12px] text-note-fg md:inline">
+                  Não vai para o cliente
+                </span>
+              )}
+            </div>
 
-            <div className="relative flex items-end gap-2">
+            {/* Celular: tudo numa linha (anexo · Íris · texto · enviar). A partir de 640 px:
+                texto na linha de cima e ações no rodapé do campo, como no DS. */}
+            <div className="relative flex flex-wrap items-end gap-1 px-1.5 pb-1.5">
               {/* Mention picker */}
               {mentionPicker && noteMode && (
                 <MentionPicker
@@ -2756,83 +2924,56 @@ export function ConversationView({
               )}
 
               {/* Attachment menu */}
-              <div className="relative" ref={attachMenuRef}>
+              <div className="relative shrink-0" ref={attachMenuRef}>
                 <button
+                  type="button"
                   onClick={() => setShowAttachMenu(!showAttachMenu)}
                   disabled={uploading || noteMode}
-                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/5 transition-colors disabled:opacity-40"
+                  aria-expanded={showAttachMenu}
+                  className={cn('btn btn-ghost btn-icon', showAttachMenu && 'bg-accent')}
                   title="Anexar arquivo"
+                  aria-label="Anexar arquivo"
                 >
-                  <Paperclip className="h-5 w-5" />
+                  <Paperclip aria-hidden />
                 </button>
 
                 {showAttachMenu && (
-                  <div className="absolute bottom-12 left-0 z-10 flex flex-col gap-1 rounded-xl border border-border bg-card p-2 shadow-lg min-w-[140px] sm:min-w-[160px]">
-                    <button
-                      onClick={() => handleFilePickerOpen('image/*')}
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors"
-                    >
-                      <Image className="h-4 w-4 text-primary" />
-                      Imagem
-                    </button>
-                    <button
-                      onClick={() => handleFilePickerOpen('video/*')}
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors"
-                    >
-                      <Video className="h-4 w-4 text-primary" />
-                      Vídeo
-                    </button>
-                    <button
-                      onClick={() => handleFilePickerOpen(ACCEPT_MAP.documento, 'documento')}
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors"
-                    >
-                      <FileText className="h-4 w-4 text-primary" />
-                      Documento
-                    </button>
-                    <button
-                      onClick={() => handleFilePickerOpen('audio/*')}
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors"
-                    >
-                      <Mic className="h-4 w-4 text-primary" />
-                      Áudio
-                    </button>
-                    <div className="border-t border-border my-1" />
-                    <button
-                      onClick={() => { setShowAttachMenu(false); setSendContactOpen(true) }}
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors"
-                    >
-                      <Contact className="h-4 w-4 text-primary" />
-                      Contato (vCard)
-                    </button>
-                    <button
-                      onClick={() => { setShowAttachMenu(false); setSendLocationOpen(true) }}
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors"
-                    >
-                      <MapPin className="h-4 w-4 text-primary" />
-                      Localização
-                    </button>
-                    <button
-                      onClick={() => { setShowAttachMenu(false); setSendMenuOpen(true) }}
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors"
-                    >
-                      <List className="h-4 w-4 text-primary" />
-                      Menu interativo
-                    </button>
-                    <button
-                      onClick={() => { setShowAttachMenu(false); setStartMeetingOpen(true) }}
-                      className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors"
-                    >
-                      <Video className="h-4 w-4 text-primary" />
-                      Videochamada
-                    </button>
+                  <div className="absolute bottom-full mb-2 left-0 z-20 flex flex-col gap-0.5 rounded-xl bg-popover p-1.5 shadow-pop ring-hairline w-[min(220px,calc(100vw-2rem))] max-h-[60dvh] overflow-y-auto animate-fade-in-up">
+                    {([
+                      { icone: Image, rotulo: 'Imagem', acao: () => handleFilePickerOpen('image/*') },
+                      { icone: Video, rotulo: 'Vídeo', acao: () => handleFilePickerOpen('video/*') },
+                      { icone: FileText, rotulo: 'Documento', acao: () => handleFilePickerOpen(ACCEPT_MAP.documento, 'documento') },
+                      { icone: Mic, rotulo: 'Áudio', acao: () => handleFilePickerOpen('audio/*') },
+                      null,
+                      { icone: Contact, rotulo: 'Contato (vCard)', acao: () => { setShowAttachMenu(false); setSendContactOpen(true) } },
+                      { icone: MapPin, rotulo: 'Localização', acao: () => { setShowAttachMenu(false); setSendLocationOpen(true) } },
+                      { icone: List, rotulo: 'Menu interativo', acao: () => { setShowAttachMenu(false); setSendMenuOpen(true) } },
+                      { icone: Video, rotulo: 'Videochamada', acao: () => { setShowAttachMenu(false); setStartMeetingOpen(true) } },
+                    ] as const)
+                      // Videochamada só com a sala de vídeo configurada (src/config/recursos.ts).
+                      .filter((item) => item === null || item.rotulo !== 'Videochamada' || RECURSOS.reuniaoVideo)
+                      .map((item, i) => item === null ? (
+                      <div key={`sep-${i}`} className="border-t border-border my-1" />
+                    ) : (
+                      <button
+                        key={item.rotulo}
+                        type="button"
+                        onClick={item.acao}
+                        className="flex min-h-11 sm:min-h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-foreground hover:bg-accent transition-colors duration-fast focus-ds"
+                      >
+                        <item.icone className="h-4 w-4 text-link" aria-hidden />
+                        {item.rotulo}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
               <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange} />
 
               {/* Suggest reply */}
-              <div className="relative">
+              <div className="relative shrink-0">
                 <button
+                  type="button"
                   onClick={() => {
                     if (showSuggestions) {
                       setShowSuggestions(false)
@@ -2847,24 +2988,22 @@ export function ConversationView({
                     })
                   }}
                   disabled={suggestReplyMutation.isPending || noteMode}
-                  className={cn(
-                    'flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full transition-colors',
-                    showSuggestions
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/5',
-                    'disabled:opacity-40',
-                  )}
-                  title="Sugerir resposta (IA)"
+                  aria-expanded={showSuggestions}
+                  aria-busy={suggestReplyMutation.isPending}
+                  className={cn('btn btn-ghost btn-icon !text-iris-fg', showSuggestions && 'bg-iris-light')}
+                  title="Sugerir resposta com IA"
+                  aria-label="Sugerir resposta com IA"
                 >
                   {suggestReplyMutation.isPending ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    <span className="btn-spin !inline-block" aria-hidden />
                   ) : (
-                    <Sparkles className="h-5 w-5" />
+                    <Sparkles aria-hidden />
                   )}
                 </button>
                 {showSuggestions && suggestions.length > 0 && (
-                  <div className="absolute bottom-12 left-0 z-10 flex flex-col gap-1 rounded-xl border border-border bg-card p-2 shadow-lg min-w-[200px] sm:min-w-[280px] max-w-[calc(100vw-2rem)] sm:max-w-[400px]">
-                    <span className="px-2 py-1 text-2xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <div className="absolute bottom-full mb-2 left-0 z-20 flex flex-col gap-0.5 rounded-xl bg-popover p-1.5 shadow-pop ring-hairline w-[min(400px,calc(100vw-2rem))] max-h-[60dvh] overflow-y-auto animate-fade-in-up">
+                    <span className="t-h6 flex items-center gap-1.5 px-2 py-1 !text-iris-fg">
+                      <span className="iris-mark sm" aria-hidden />
                       Sugestões de resposta
                     </span>
                     {suggestions.map((s, i) => {
@@ -2872,16 +3011,17 @@ export function ConversationView({
                       const tone = typeof s === 'string' ? '' : s.tone
                       return (
                         <button
+                          type="button"
                           key={i}
                           onClick={() => {
                             setInputValue(text)
                             setShowSuggestions(false)
                             textareaRef.current?.focus()
                           }}
-                          className="text-left rounded-lg px-3 py-2 text-sm hover:bg-muted transition-colors text-foreground"
+                          className="min-h-11 sm:min-h-9 text-left rounded-md px-2.5 py-2 text-sm hover:bg-accent transition-colors duration-fast text-foreground focus-ds"
                         >
                           {text}
-                          {tone && <span className="ml-2 text-2xs text-muted-foreground">({tone})</span>}
+                          {tone && <span className="ml-2 text-[12px] text-muted-foreground">({tone})</span>}
                         </button>
                       )
                     })}
@@ -2889,40 +3029,24 @@ export function ConversationView({
                 )}
               </div>
 
-              {/* Note toggle */}
-              <button
-                onClick={() => setNoteMode((prev) => !prev)}
-                className={cn(
-                  'flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full transition-colors',
-                  noteMode
-                    ? 'bg-amber-100 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'
-                    : 'text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/5',
-                )}
-                title="Nota interna"
-              >
-                <StickyNote className="h-5 w-5" />
-              </button>
-
               {/* Text input */}
               <textarea
                 ref={textareaRef}
                 value={inputValue}
                 onChange={(e) => handleInputChange(e.target.value, e.target.selectionStart ?? undefined)}
                 onKeyDown={handleKeyDown}
+                aria-label={noteMode ? 'Nota interna' : 'Mensagem para o cliente'}
                 placeholder={
                   noteMode
-                    ? (isMobile ? 'Nota interna... (@)' : 'Escreva uma nota interna... (@ para mencionar alguém)')
-                    : (isMobile ? 'Mensagem...' : 'Digite uma mensagem... (/ para respostas rápidas)')
+                    ? (isMobile ? 'Só a equipe vê… (@)' : 'Só a equipe vê. Use @ para chamar alguém.')
+                    : (isMobile ? 'Mensagem…' : 'Escreva a resposta… (/ para respostas prontas)')
                 }
                 rows={1}
                 className={cn(
-                  'flex-1 resize-none rounded-lg px-4 py-2.5',
-                  'text-[15px] text-[#111b21] dark:text-[#e9edef] placeholder:text-[#8696a0]',
+                  'min-w-0 flex-1 resize-none bg-transparent px-2 sm:px-2.5 py-2.5 sm:order-first sm:basis-full',
+                  'text-base sm:text-[14px] leading-[1.45] text-foreground placeholder:text-fg-placeholder',
                   'focus:outline-none',
-                  'min-h-[42px] max-h-32 transition-colors',
-                  noteMode
-                    ? 'bg-amber-50 dark:bg-amber-950/20 ring-1 ring-amber-300 dark:ring-amber-700'
-                    : 'bg-white dark:bg-[#2a3942] ring-0',
+                  'min-h-11 max-h-32',
                 )}
                 style={{ height: 'auto' }}
                 onInput={(e) => {
@@ -2932,40 +3056,35 @@ export function ConversationView({
                 }}
               />
 
+              <span className="hidden sm:order-1 sm:block sm:flex-1" aria-hidden />
+
               {/* Send or Record button */}
-              {inputValue.trim() ? (
+              {inputValue.trim() || noteMode ? (
                 <button
+                  type="button"
                   onClick={handleSend}
-                  disabled={isSending}
-                  className={cn(
-                    'flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full transition-all disabled:opacity-40',
-                    noteMode
-                      ? 'bg-amber-500 text-white hover:bg-amber-600'
-                      : 'bg-[#00a884] hover:bg-[#008f72] text-white',
-                  )}
-                  title="Enviar mensagem"
+                  disabled={isSending || !inputValue.trim()}
+                  aria-busy={isSending}
+                  className="btn btn-primary shrink-0 max-sm:w-11 max-sm:px-0 sm:order-2"
+                  title={noteMode ? 'Salvar nota interna' : 'Enviar mensagem'}
+                  aria-label={noteMode ? 'Salvar nota interna' : 'Enviar mensagem'}
                 >
                   {uploading ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    <span className="btn-spin !inline-block" aria-hidden />
                   ) : (
-                    <Send className="h-5 w-5" />
+                    <Send aria-hidden />
                   )}
-                </button>
-              ) : !noteMode ? (
-                <button
-                  onClick={recorder.startRecording}
-                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full text-[#54656f] dark:text-[#aebac1] hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                  title="Gravar áudio"
-                >
-                  <Mic className="h-5 w-5" />
+                  <span className="hidden sm:inline">{noteMode ? 'Salvar nota' : 'Enviar'}</span>
                 </button>
               ) : (
                 <button
-                  onClick={handleSend}
-                  disabled={!inputValue.trim() || isSending}
-                  className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-amber-500 text-white hover:bg-amber-600 transition-all disabled:opacity-40"
+                  type="button"
+                  onClick={handleStartRecording}
+                  className="btn btn-ghost btn-icon shrink-0 sm:order-2"
+                  title="Gravar áudio"
+                  aria-label="Gravar áudio"
                 >
-                  <Send className="h-5 w-5" />
+                  <Mic aria-hidden />
                 </button>
               )}
             </div>
@@ -2974,33 +3093,26 @@ export function ConversationView({
       </div>
 
       {/* CSAT sent toast */}
+      {/* Aviso "pesquisa enviada": no toaster do DS (acima da barra inferior no celular,
+          ao lado da barra lateral no computador) — nunca sobre o campo de mensagem. */}
       {csatSentToast && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-xl border border-success/30 bg-success-light px-4 py-3 shadow-lg animate-fade-in">
-          <Star className="h-4 w-4 text-success" />
-          <span className="text-sm font-medium text-success">Pesquisa CSAT enviada com sucesso!</span>
-        </div>
-      )}
-
-      {/* Summary overlay */}
-      {summaryText !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <FileText className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold text-foreground">Resumo da conversa</h3>
-              </div>
-              <button
-                onClick={() => setSummaryText(null)}
-                className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-muted transition-colors"
-              >
-                <X className="h-4 w-4 text-muted-foreground" />
-              </button>
-            </div>
-            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{summaryText}</p>
+        <div className="toaster" aria-live="polite">
+          <div role="status" className="flex items-center gap-2.5 rounded-xl bg-popover px-4 py-3 shadow-pop ring-hairline animate-toast-in">
+            <Star className="h-4 w-4 shrink-0 text-success" aria-hidden />
+            <span className="text-sm font-medium text-foreground">Pesquisa de satisfação enviada.</span>
           </div>
         </div>
       )}
+
+      {/* Resumo da conversa: Modal do DS (vira sheet no celular, altura em dvh) */}
+      <Modal
+        open={summaryText !== null}
+        onClose={() => setSummaryText(null)}
+        title="Resumo da conversa"
+        size="sm"
+      >
+        <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{summaryText}</p>
+      </Modal>
 
       {/* Close conversation confirm dialog */}
       <ConfirmDialog
@@ -3042,7 +3154,7 @@ export function ConversationView({
           }
         }}
         title="Apagar mensagem"
-        description="Tem certeza que deseja apagar esta mensagem para todos? Esta acao nao pode ser desfeita."
+        description="Tem certeza que deseja apagar esta mensagem para todos? Esta ação não pode ser desfeita."
         confirmLabel="Apagar"
         loading={deleteMsgMutation.isPending}
       />
@@ -3081,7 +3193,7 @@ export function ConversationView({
       )}
 
       {/* Start Meeting Dialog */}
-      {contact && (
+      {contact && RECURSOS.reuniaoVideo && (
         <StartMeetingDialog
           open={startMeetingOpen}
           onClose={() => setStartMeetingOpen(false)}
@@ -3110,13 +3222,12 @@ export function ConversationView({
       )}
 
       {/* Group Members Modal */}
-      {showMembersModal && (
-        <GroupMembersModal
-          members={groupMembers}
-          groupName={contactName}
-          onClose={() => setShowMembersModal(false)}
-        />
-      )}
+      <GroupMembersModal
+        open={showMembersModal}
+        members={groupMembers}
+        groupName={contactName}
+        onClose={() => setShowMembersModal(false)}
+      />
     </div>
   )
 }
@@ -3124,10 +3235,12 @@ export function ConversationView({
 // ── Group Members Modal ────────────────────────────────────────────────────────
 
 function GroupMembersModal({
+  open,
   members,
   groupName,
   onClose,
 }: {
+  open: boolean
   members: GroupMember[]
   groupName: string
   onClose: () => void
@@ -3136,64 +3249,44 @@ function GroupMembersModal({
   const regular = members.filter((m) => !m.is_admin && !m.is_super_admin)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-void/60 backdrop-blur-sm" onClick={onClose}>
-      <div
-        className="relative flex flex-col w-full max-w-sm max-h-[80vh] rounded-xl bg-card border border-border shadow-xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-          <div>
-            <h3 className="text-sm font-semibold text-foreground">Membros do grupo</h3>
-            <p className="text-xs text-muted-foreground truncate max-w-[220px]">{groupName} · {members.length} membros</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-border/50">
-          {members.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-muted-foreground text-center">
-              Nenhum membro encontrado.<br />Reabra o painel para atualizar.
-            </p>
-          ) : (
-            <>
-              {admins.length > 0 && (
-                <>
-                  <p className="px-4 py-2 text-2xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30">
-                    Admins ({admins.length})
+    <Modal open={open} onClose={onClose} title="Membros do grupo" description={`${groupName} · ${members.length} membros`} size="sm">
+      <div className="-mx-4 -mb-4 sm:-mx-[18px] divide-y divide-stroke-weak">
+        {members.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-muted-foreground text-center">
+            Nenhum membro encontrado.<br />Reabra o painel para atualizar.
+          </p>
+        ) : (
+          <>
+            {admins.length > 0 && (
+              <>
+                <p className="t-h6 px-4 py-2 bg-bg-0">
+                  Administradores ({admins.length})
+                </p>
+                {admins.map((m) => <MemberRow key={m.id} member={m} />)}
+              </>
+            )}
+            {regular.length > 0 && (
+              <>
+                {admins.length > 0 && (
+                  <p className="t-h6 px-4 py-2 bg-bg-0">
+                    Membros ({regular.length})
                   </p>
-                  {admins.map((m) => <MemberRow key={m.id} member={m} />)}
-                </>
-              )}
-              {regular.length > 0 && (
-                <>
-                  {admins.length > 0 && (
-                    <p className="px-4 py-2 text-2xs font-semibold text-muted-foreground uppercase tracking-wider bg-muted/30">
-                      Membros ({regular.length})
-                    </p>
-                  )}
-                  {regular.map((m) => <MemberRow key={m.id} member={m} />)}
-                </>
-              )}
-            </>
-          )}
-        </div>
+                )}
+                {regular.map((m) => <MemberRow key={m.id} member={m} />)}
+              </>
+            )}
+          </>
+        )}
       </div>
-    </div>
+    </Modal>
   )
 }
 
 function MemberRow({ member }: { member: GroupMember }) {
   const initials = (member.nome ?? member.numero_whatsapp).slice(0, 2).toUpperCase()
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40 transition-colors">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary text-xs font-semibold">
+    <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors duration-fast">
+      <div className="av av-lg !h-8 !w-8 text-xs" data-h="0" aria-hidden>
         {initials}
       </div>
       <div className="min-w-0 flex-1">
@@ -3201,15 +3294,15 @@ function MemberRow({ member }: { member: GroupMember }) {
           {member.nome ?? formatPhone(member.numero_whatsapp)}
         </p>
         {member.nome && (
-          <p className="text-2xs text-muted-foreground font-mono truncate">
+          <p className="mono text-[12px] text-muted-foreground truncate">
             {formatPhone(member.numero_whatsapp)}
           </p>
         )}
       </div>
       {(member.is_admin || member.is_super_admin) && (
         <ShieldCheck
-          className="h-4 w-4 shrink-0 text-primary"
-          title={member.is_super_admin ? 'Super Admin' : 'Admin'}
+          className="h-4 w-4 shrink-0 text-link"
+          aria-label={member.is_super_admin ? 'Administrador principal' : 'Administrador'}
         />
       )}
     </div>

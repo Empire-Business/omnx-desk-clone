@@ -1,18 +1,35 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { cifrarWebPush, WEB_PUSH_MAX_TEXTO } from "../_shared/web-push-cifra.ts"
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+// Contato exigido pelo VAPID (mailto: ou https:). Endereço do app quando configurado.
+const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT")?.trim() || Deno.env.get("APP_URL")?.trim() || "mailto:admin@empiredesk.com"
 
 // ── Web Push helpers (no npm dependency — uses Web Crypto API) ──────────────
 
-async function getVapidKeys() {
-  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
-  const { data: secrets } = await supabase.rpc("get_secrets", {
-    secret_names: ["VAPID_PRIVATE_KEY", "VAPID_PUBLIC_KEY"],
-  })
-  const priv = secrets?.find((s: { name: string; secret: string }) => s.name === "VAPID_PRIVATE_KEY")?.secret
-  const pub = secrets?.find((s: { name: string; secret: string }) => s.name === "VAPID_PUBLIC_KEY")?.secret
-  return { privateKey: priv, publicKey: pub }
+// Chaves VAPID: segredos das funções VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY (o instalador
+// gera um par por instalação). Fallback legado: RPC get_secrets, que existe só em
+// bancos antigos; se ela não existir, o erro é ignorado e o push fica sem chave.
+async function getVapidKeys(): Promise<{ privateKey?: string; publicKey?: string }> {
+  const privEnv = Deno.env.get("VAPID_PRIVATE_KEY")?.trim()
+  const pubEnv = Deno.env.get("VAPID_PUBLIC_KEY")?.trim()
+  if (privEnv && pubEnv) return { privateKey: privEnv, publicKey: pubEnv }
+  try {
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+    const { data: secrets, error } = await supabase.rpc("get_secrets", {
+      secret_names: ["VAPID_PRIVATE_KEY", "VAPID_PUBLIC_KEY"],
+    })
+    if (error || !Array.isArray(secrets)) return {}
+    const lista = secrets as { name: string; secret: string }[]
+    return {
+      privateKey: lista.find((s) => s.name === "VAPID_PRIVATE_KEY")?.secret,
+      publicKey: lista.find((s) => s.name === "VAPID_PUBLIC_KEY")?.secret,
+    }
+  } catch {
+    return {}
+  }
 }
 
 function base64UrlToUint8Array(base64Url: string): Uint8Array {
@@ -30,9 +47,21 @@ function uint8ArrayToBase64Url(arr: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
 }
 
-async function importVapidPrivateKey(base64Url: string) {
-  const raw = base64UrlToUint8Array(base64Url)
-  return crypto.subtle.importKey("raw", raw, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"])
+// Web Crypto não importa chave privada EC em formato "raw": monta o JWK com o
+// escalar privado (d) e o ponto público (x, y) tirado da chave pública não comprimida
+// (0x04 || x || y, 65 bytes, como gerada pelo instalador e pelo web-push).
+async function importVapidPrivateKey(privateB64Url: string, publicB64Url: string) {
+  const ponto = base64UrlToUint8Array(publicB64Url)
+  if (ponto.length !== 65 || ponto[0] !== 4) throw new Error("VAPID_PUBLIC_KEY inválida")
+  const jwk: JsonWebKey = {
+    kty: "EC",
+    crv: "P-256",
+    d: privateB64Url.replace(/=+$/, ""),
+    x: uint8ArrayToBase64Url(ponto.slice(1, 33)),
+    y: uint8ArrayToBase64Url(ponto.slice(33, 65)),
+    ext: false,
+  }
+  return crypto.subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"])
 }
 
 async function createJWT(audience: string, subject: string, vapidPrivateKey: CryptoKey) {
@@ -85,31 +114,74 @@ async function sendPushNotification(
   const url = new URL(subscription.endpoint)
   const audience = `${url.protocol}//${url.host}`
 
-  const jwt = await createJWT(audience, "mailto:admin@empiredesk.com", vapidPrivateKey)
+  const jwt = await createJWT(audience, VAPID_SUBJECT, vapidPrivateKey)
 
-  // Encrypt payload using Web Push encryption
-  // For simplicity, we send unencrypted to push services that support it
-  // Most modern push services accept this
+  // Corpo cifrado conforme RFC 8291 (aes128gcm): os serviços de push recusam
+  // corpo em texto puro. Chave efêmera e sal novos a cada envio.
+  const { corpo } = await cifrarWebPush({
+    texto: payload,
+    uaPublic: subscription.p256dh,
+    authSecret: subscription.auth,
+  })
+
   const response = await fetch(subscription.endpoint, {
     method: "POST",
     headers: {
       "Authorization": `vapid t=${jwt}, k=${vapidPublicKey}`,
-      "Content-Type": "application/json",
+      "Content-Encoding": "aes128gcm",
+      "Content-Type": "application/octet-stream",
       "TTL": "86400",
     },
-    body: payload,
+    body: corpo,
   })
+  await response.body?.cancel()
 
   return { ok: response.ok, status: response.status }
 }
 
+/** Monta o JSON da notificação cortando o texto para caber num registro (4 KB). */
+function montarPayload(dados: { title: unknown; body: unknown; url: unknown; tag: unknown }): string {
+  const bytes = (s: string) => new TextEncoder().encode(s).length
+  let corpo = typeof dados.body === "string" ? dados.body : dados.body == null ? undefined : String(dados.body)
+  let json = JSON.stringify({ title: dados.title, body: corpo, url: dados.url, tag: dados.tag })
+  while (corpo && bytes(json) > WEB_PUSH_MAX_TEXTO) {
+    corpo = corpo.slice(0, Math.max(0, Math.floor(corpo.length * 0.8) - 1)) + "…"
+    json = JSON.stringify({ title: dados.title, body: corpo, url: dados.url, tag: dados.tag })
+    if (corpo.length <= 1) break
+  }
+  return json
+}
+
+// Só o servidor chama esta função (uazapi-webhook, com a service_role). Sem isto,
+// com verify_jwt = false, qualquer pessoa mandaria notificação para qualquer usuário.
+function iguaisTempoConstante(a: string, b: string): boolean {
+  const ea = new TextEncoder().encode(a)
+  const eb = new TextEncoder().encode(b)
+  let diff = ea.length ^ eb.length
+  for (let i = 0; i < Math.max(ea.length, eb.length); i++) diff |= (ea[i] ?? 0) ^ (eb[i] ?? 0)
+  return diff === 0
+}
+
+function chamadaDoServidor(req: Request): boolean {
+  const auth = req.headers.get("authorization") ?? ""
+  const m = /^Bearer\s+(.+)$/i.exec(auth.trim())
+  return Boolean(SERVICE_ROLE_KEY) && m !== null && iguaisTempoConstante(m[1].trim(), SERVICE_ROLE_KEY)
+}
+
 // ── Edge Function handler ───────────────────────────────────────────────────
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*" },
     })
+  }
+
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "method_not_allowed" }), { status: 405 })
+  }
+  if (!chamadaDoServidor(req)) {
+    return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 })
   }
 
   try {
@@ -138,8 +210,8 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "VAPID keys not configured" }), { status: 500 })
     }
 
-    const vapidKey = await importVapidPrivateKey(privateKey)
-    const payload = JSON.stringify({ title, body, url, tag })
+    const vapidKey = await importVapidPrivateKey(privateKey, publicKey)
+    const payload = montarPayload({ title, body, url, tag })
 
     // Send to all subscriptions
     let sent = 0

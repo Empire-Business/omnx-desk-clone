@@ -1,7 +1,11 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { podeNoBanco } from '@/lib/permissaoRemota'
+import { invalidarClientesAposContrato } from '@/lib/clienteContratoCache'
 import type { Client, ClientContract, ClientWithProducts } from '@/types/database'
+
+export type ClientWithBaseline = Client & { client_contracts: { seguidores_inicio: number | null }[] }
 
 export const clientKeys = {
   all: ['clients'] as const,
@@ -15,26 +19,28 @@ export function useClientes() {
     queryKey: clientKeys.list(),
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return [] as Client[]
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError) throw authError
+      if (!user) throw new Error('Sua sessão não está disponível. Entre novamente.')
 
       // Quem vê a carteira inteira? A resposta vem da MESMA função que a RLS
       // usa (has_permissao), e não mais de uma lista de perfis no código. O
       // fallback repete o gate antigo, para falha de rede não mudar acesso.
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('users')
         .select('perfil')
         .eq('id', user.id)
         .single()
 
+      if (profileError) throw profileError
       const legado = ['admin', 'gerente', 'atendimento'].includes(profile?.perfil ?? '')
       if (await podeNoBanco('clientes.carteira', 'ver', legado)) {
         const { data, error } = await supabase
           .from('clients')
-          .select('*')
+          .select('*, client_contracts(seguidores_inicio)')
           .order('nome')
         if (error) throw error
-        return data as Client[]
+        return data as ClientWithBaseline[]
       }
 
       // Non-admin: only clients assigned to this user
@@ -42,18 +48,19 @@ export function useClientes() {
         .from('client_assignments')
         .select('client_id')
         .eq('user_id', user.id)
+        .eq('ativo', true)
 
       if (aErr) throw aErr
-      if (!assignments || assignments.length === 0) return [] as Client[]
+      if (!assignments || assignments.length === 0) return [] as ClientWithBaseline[]
 
       const clientIds = assignments.map(a => a.client_id)
       const { data, error } = await supabase
         .from('clients')
-        .select('*')
+        .select('*, client_contracts(seguidores_inicio)')
         .in('id', clientIds)
         .order('nome')
       if (error) throw error
-      return data as Client[]
+      return data as ClientWithBaseline[]
     },
   })
 }
@@ -111,7 +118,7 @@ export function useCreateCliente() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: { nome: string; razao_social?: string; cnpj?: string; email?: string; telefone?: string; segmento?: string; endereco?: string; instagram?: string; faturamento?: string; posicionamento?: string; notas?: string; whatsapp?: string; nicho?: string; empresa?: string }) => {
-      const { data, error } = await supabase.from('clients').insert(input).select().single()
+      const { data, error } = await supabase.from('clients').insert({ ...(input), tenant_id: await tenantDaSessao() }).select().single()
       if (error) throw error
       return data as Client
     },
@@ -139,13 +146,11 @@ export function useCreateContract() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: Partial<ClientContract> & { client_id: string }) => {
-      const { data, error } = await supabase.from('client_contracts').insert(input).select().single()
+      const { data, error } = await supabase.from('client_contracts').insert({ ...(input), tenant_id: await tenantDaSessao() }).select().single()
       if (error) throw error
       return data as ClientContract
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: clientKeys.detail(data.client_id) })
-    },
+    onSuccess: () => invalidarClientesAposContrato(queryClient),
   })
 }
 
@@ -157,9 +162,7 @@ export function useUpdateContract() {
       if (error) throw error
       return data as ClientContract
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: clientKeys.detail(data.client_id) })
-    },
+    onSuccess: () => invalidarClientesAposContrato(queryClient),
   })
 }
 
@@ -171,8 +174,6 @@ export function useDeleteContract() {
       if (error) throw error
       return client_id
     },
-    onSuccess: (client_id) => {
-      queryClient.invalidateQueries({ queryKey: clientKeys.detail(client_id) })
-    },
+    onSuccess: () => invalidarClientesAposContrato(queryClient),
   })
 }

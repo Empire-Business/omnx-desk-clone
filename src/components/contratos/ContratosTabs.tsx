@@ -1,7 +1,6 @@
-import { NavLink } from 'react-router-dom'
 import { LayoutDashboard, List, Columns3, ClipboardList, Package, Tags, TrendingUp } from 'lucide-react'
 import { usePermissoes } from '@/hooks/usePermissoes'
-import { cn } from '@/lib/utils'
+import { AbasRolaveis, type AbaItem } from '@/components/ui/AbasRolaveis'
 
 /**
  * Navegação em abas do módulo Contratos (Dashboard / Onboarding / Lista / Kanban / Produtos).
@@ -19,17 +18,17 @@ export function ContratosTabs() {
   // Trabalho do dia a dia: o que se abre para tocar contrato.
   const trabalho = [
     ...(podeContratos
-      ? [{ to: '/contratos', label: 'Dashboard', icon: LayoutDashboard, end: true }]
+      ? [{ to: '/contratos', label: 'Visão geral', icon: LayoutDashboard, end: true }]
       : []),
     // Onboarding fica em segundo, logo atrás do Dashboard
     ...(podeOnboarding
-      ? [{ to: '/contratos/onboarding', label: 'Onboarding', icon: ClipboardList, end: false }]
+      ? [{ to: '/contratos/onboarding', label: 'Vendas novas', icon: ClipboardList, end: false }]
       : []),
     ...(podeContratos
       ? [
           { to: '/contratos/lista', label: 'Contratos', icon: List, end: false },
-          { to: '/contratos/kanban', label: 'Kanban', icon: Columns3, end: false },
-          { to: '/contratos/recebiveis', label: 'Recebíveis', icon: TrendingUp, end: false },
+          { to: '/contratos/kanban', label: 'Quadro', icon: Columns3, end: false },
+          { to: '/contratos/recebiveis', label: 'A receber', icon: TrendingUp, end: false },
         ]
       : []),
   ]
@@ -41,37 +40,25 @@ export function ContratosTabs() {
   const configuracao = podeAdministrar
     ? [
         { to: '/contratos/produtos', label: 'Produtos', icon: Package, end: false },
-        { to: '/contratos/tags', label: 'Tags', icon: Tags, end: false },
+        { to: '/contratos/tags', label: 'Etiquetas', icon: Tags, end: false },
       ]
     : []
 
   if (trabalho.length + configuracao.length <= 1) return null
 
-  const classe = ({ isActive }: { isActive: boolean }) =>
-    cn(
-      'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
-      isActive ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-    )
+  // Faixa única que rola de lado no celular (antes estourava em 375 px).
+  const itens: AbaItem[] = [
+    ...trabalho.map((t) => ({ id: t.to, para: t.to, fim: t.end, rotulo: t.label, icone: t.icon })),
+    ...configuracao.map((t, i) => ({
+      id: t.to,
+      para: t.to,
+      fim: t.end,
+      rotulo: t.label,
+      icone: t.icon,
+      dica: 'Configuração do módulo',
+      separadorAntes: i === 0 && trabalho.length > 0,
+    })),
+  ]
 
-  return (
-    <div className="flex w-fit items-center gap-1 rounded-full bg-muted/50 p-1">
-      {trabalho.map((t) => (
-        <NavLink key={t.to} to={t.to} end={t.end} className={classe}>
-          <t.icon className="h-3.5 w-3.5" />
-          {t.label}
-        </NavLink>
-      ))}
-
-      {configuracao.length > 0 && (
-        <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
-      )}
-
-      {configuracao.map((t) => (
-        <NavLink key={t.to} to={t.to} end={t.end} className={classe} title="Configuração do módulo">
-          <t.icon className="h-3.5 w-3.5" />
-          {t.label}
-        </NavLink>
-      ))}
-    </div>
-  )
+  return <AbasRolaveis rotulo="Seções de Contratos" itens={itens} />
 }

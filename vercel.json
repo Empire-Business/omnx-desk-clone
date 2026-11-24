@@ -2,6 +2,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/docs/api", "destination": "/docs/api/index.html" },
+    { "source": "/docs/api/", "destination": "/docs/api/index.html" },
+    { "source": "/docs/mcp", "destination": "/docs/mcp.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
@@ -20,6 +23,20 @@
       "source": "/(reset-password|update-password)",
       "headers": [
         { "key": "Referrer-Policy", "value": "no-referrer" }
+      ]
+    },
+    {
+      "source": "/docs/api(.*)",
+      "headers": [
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://wuzmckatbmlpkdxtfhqr.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'none'" },
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/docs/mcp(.*)",
+      "headers": [
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://wuzmckatbmlpkdxtfhqr.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'none'" },
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
     }
   ]

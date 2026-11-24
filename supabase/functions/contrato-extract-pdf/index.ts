@@ -10,6 +10,7 @@
 //
 // Body: { contrato_id: string, anexo_id?: string }
 
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -57,7 +58,7 @@ Regras:
 - data_fechamento = data de assinatura do contrato.
 - _confidence: avalie sua confiança em cada campo crítico.`
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return corsJson({ error: 'method_not_allowed' }, 405)
 

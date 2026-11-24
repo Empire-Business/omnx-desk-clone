@@ -1,11 +1,16 @@
+import { sessaoDeskLiberada } from '../_shared/desk-session.ts'
 import { serve } from 'https://deno.land/std@0.208.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { travaDeLicenca } from '../_shared/htai-licenca.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const openrouterKey = Deno.env.get('OPENROUTER_API_KEY')!
 
 serve(async (req) => {
+  // Licença HTAI (desligada sem HTAI_ENTITLEMENTS_MODE; ver docs/LICENCA-HTAI.md)
+  const licencaNegada = await travaDeLicenca({})
+  if (licencaNegada) return licencaNegada
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
@@ -36,6 +41,14 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Invalid token' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    const deskSession = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } }, auth: { persistSession: false },
+    })
+    if (!await sessaoDeskLiberada(deskSession)) {
+      return new Response(JSON.stringify({ error: 'password_change_required' }), {
+        status: 403, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       })
     }
     userId = user.id

@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { deliveryKeys } from '@/hooks/useEntregas'
@@ -25,7 +26,7 @@ export function useCreateVersion() {
       // Step 1: Insert new delivery version
       const { data: version, error: versionError } = await supabase
         .from('delivery_versions')
-        .insert({ delivery_id, notas: notas ?? null })
+        .insert({ ...({ delivery_id, notas: notas ?? null }), tenant_id: await tenantDaSessao() })
         .select()
         .single()
 
@@ -63,14 +64,14 @@ export function useCreateVersion() {
 
         const { error: itemError } = await supabase
           .from('delivery_content_items')
-          .insert({
+          .insert({ ...({
             version_id,
             tipo: item.tipo,
             url: resolvedUrl,
             texto: item.texto ?? null,
             nome: resolvedNome,
             tamanho: resolvedTamanho,
-          })
+          }), tenant_id: await tenantDaSessao() })
 
         if (itemError) throw itemError
       }

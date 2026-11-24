@@ -158,3 +158,18 @@ atribuídos a você. É configurável.
 **Mudei um contrato e o valor não bate com o CRM.**
 A atualização é automática, mas leva alguns instantes. Se não bater depois disso,
 reporte o problema com o número do contrato.
+
+
+## Conversas financeiras
+
+Em **Cobrança → Conversas**, selecione uma instância com a categoria **Financeiro**
+para abrir seu histórico e responder pelo **OMNX Chat**. A lista respeita as
+instâncias disponíveis para seu acesso; as respostas usam o mesmo fluxo do Chat.
+
+Se a lista estiver vazia, solicite à administração uma instância financeira e a
+atribuição de acesso da equipe. Falhas na consulta exibem **Tentar novamente**;
+uma falha de leitura não significa que não existem conversas. Se o módulo Chat
+estiver desativado, a página informa a necessidade de ativá-lo.
+
+As réguas, os devedores e os registros de envio continuam na área de Cobrança.
+Os estados disponíveis dos devedores são ativa, pausada, encerrada e pago.

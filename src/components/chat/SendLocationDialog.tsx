@@ -65,14 +65,14 @@ export function SendLocationDialog({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Enviar localizacao" size="md">
+    <Modal open={open} onClose={onClose} title="Enviar localização" size="md">
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
             <MapPin className="h-5 w-5 text-primary" />
           </div>
           <div className="flex-1">
-            <p className="text-sm text-muted-foreground">Envie uma localizacao com mapa interativo</p>
+            <p className="text-sm text-muted-foreground">Envie uma localização com mapa interativo</p>
           </div>
           <button
             type="button"
@@ -83,7 +83,7 @@ export function SendLocationDialog({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium text-foreground">Latitude *</label>
             <input
@@ -160,7 +160,7 @@ export function SendLocationDialog({
             className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium gradient-primary text-primary-foreground disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
-            {sendLocationMutation.isPending ? 'Enviando...' : 'Enviar localizacao'}
+            {sendLocationMutation.isPending ? 'Enviando...' : 'Enviar localização'}
           </button>
         </div>
       </form>

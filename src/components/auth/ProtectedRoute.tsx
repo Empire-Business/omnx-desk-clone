@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ allowedProfiles }: ProtectedRouteProps) {
-  const { user, loading, signOut } = useAuth()
+  const { user, loading, signOut, passwordAccess, passwordAccessError, refreshAccess } = useAuth()
   const { data: domainTenant } = useTenantByDomain()
   const [wrongTenant, setWrongTenant] = useState(false)
 
@@ -42,6 +42,16 @@ export function ProtectedRoute({ allowedProfiles }: ProtectedRouteProps) {
       </div>
     )
   }
+
+  if (passwordAccessError) {
+    return <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6">
+      <p role="alert">Não foi possível confirmar o acesso desta sessão.</p>
+      <button type="button" onClick={() => { void refreshAccess().catch(() => {}) }}>Tentar novamente</button>
+      <button type="button" onClick={() => { void signOut().catch(() => {}) }}>Voltar ao login</button>
+    </div>
+  }
+
+  if (passwordAccess?.state === 'password_change_required') return <Navigate to="/trocar-senha" replace />
 
   if (!user || wrongTenant) {
     return <Navigate to="/login" replace />

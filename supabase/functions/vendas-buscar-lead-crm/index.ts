@@ -1,3 +1,5 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
+import { sessaoDeskLiberada } from '../_shared/desk-session.ts'
 // Intermediária EmpireDesk → GHL: busca candidatos de lead no CRM para vincular a uma venda.
 // Chamada pelo frontend autenticado (atendimento/admin/gerente); guarda o secret da ponte
 // no servidor e repassa a consulta para a edge function crm-buscar-lead do GHL.
@@ -33,7 +35,7 @@ async function autorizar(authHeader: string | null): Promise<{ ok: boolean; tena
     auth: { persistSession: false },
   })
   const { data: { user } } = await userClient.auth.getUser()
-  if (!user) return { ok: false, tenantId: null }
+  if (!user || !await sessaoDeskLiberada(userClient)) return { ok: false, tenantId: null }
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
   const { data } = await admin.from('users').select('perfil').eq('id', user.id).single()
@@ -45,7 +47,7 @@ async function autorizar(authHeader: string | null): Promise<{ ok: boolean; tena
   return { ok: true, tenantId: (tenantId as string | null) ?? null }
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
 

@@ -1,22 +1,15 @@
+import { OmnxMonograma } from './OmnxMonograma'
+
 interface OmnxLogoProps {
   className?: string
   size?: number
 }
 
 /**
- * Logo OMNX. Renderiza `public/omnx-logo.png`.
- * Pra trocar a logo, basta substituir esse arquivo.
+ * Logo OMNX (monograma 2×2 oficial) em vetor, seguindo o tema.
+ * Antes renderizava `public/omnx-logo.png`; o PNG continua no `public/`
+ * para ícones e materiais externos.
  */
 export function OmnxLogo({ className, size = 32 }: OmnxLogoProps) {
-  return (
-    <img
-      src="/omnx-logo.png"
-      width={size}
-      height={size}
-      alt="OMNX"
-      className={className}
-      draggable={false}
-      style={{ width: size, height: size, objectFit: 'contain' }}
-    />
-  )
+  return <OmnxMonograma height={size} className={className} />
 }

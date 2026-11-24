@@ -1,8 +1,8 @@
 /**
  * Segmentos do app Atendimento.
  *
- * O mesmo app serve ramos diferentes. Uma agência de social media trabalha com
- * peças que passam por aprovação do cliente; uma clínica trabalha com pacientes
+ * O mesmo app serve ramos diferentes. Uma empresa de serviços trabalha com
+ * solicitações que passam por retorno do cliente; uma clínica trabalha com pacientes
  * e retorno; um escritório, com processos e prazos. O que muda entre eles não é
  * o motor — é o **vocabulário**, as **abas** e as **métricas** que importam.
  *
@@ -46,7 +46,7 @@ export interface Segmento {
   metricas: ChaveMetrica[]
   /** Frase do estado vazio — é onde a pessoa entende para que serve o app. */
   textoVazio: string
-  /** Sugestões semeadas no banco quando a empresa adota o segmento. */
+  /** Sugestões de vocabulário. Presets já gravados no banco têm histórico próprio. */
   tipos: string[]
   etapas: Array<{ nome: string; cor: string; final?: boolean }>
 }
@@ -54,8 +54,9 @@ export interface Segmento {
 export const SEGMENTOS: Record<string, Segmento> = {
   social_media: {
     chave: 'social_media',
-    nome: 'Social Media',
-    descricao: 'Agências e times que produzem conteúdo para redes sociais.',
+    // A chave `social_media` é gravada no banco e não muda; só o nome exibido é neutro.
+    nome: 'Serviços',
+    descricao: 'Empresas que atendem pedidos de clientes pelo WhatsApp, com prazo e responsável.',
     rotuloApp: 'Atendimento',
     rotuloItem: 'demanda',
     rotuloItens: 'demandas',
@@ -63,22 +64,22 @@ export const SEGMENTOS: Record<string, Segmento> = {
     acaoNovo: 'Nova demanda',
     prefixoCodigo: 'DEM',
     abas: ['painel', 'demandas', 'kanban', 'sentimento', 'config'],
-    // Aprovação do cliente é o gargalo do ramo: peça pronta parada esperando
-    // resposta é o que mais atrasa entrega.
+    // Retorno do cliente é o gargalo do ramo: pedido pronto parado esperando
+    // resposta é o que mais atrasa o atendimento.
     metricas: [
       'atrasadas', 'venceHoje', 'venceEstaSemana', 'abertas',
       'aguardandoAprovacao', 'comAjustes', 'concluidasNoMes',
     ],
     textoVazio:
-      'Toda vez que um cliente pedir alguma coisa — um reels, um carrossel, um ajuste — registre aqui. É o que faz o pedido parar de se perder na conversa do WhatsApp.',
-    tipos: ['Reels', 'Carrossel', 'Story', 'Post único', 'Campanha', 'Outro'],
+      'Registre cada solicitação do cliente, com responsável e prazo, para acompanhar o retorno sem perder o pedido na conversa do WhatsApp.',
+    tipos: ['Solicitação', 'Ajuste', 'Dúvida', 'Retorno', 'Outro'],
     etapas: [
       { nome: 'Solicitado', cor: 'slate' },
       { nome: 'Em produção', cor: 'blue' },
       { nome: 'Em revisão interna', cor: 'amber' },
-      { nome: 'Aguardando aprovação', cor: 'violet' },
+      { nome: 'Aguardando cliente', cor: 'violet' },
       { nome: 'Aprovado', cor: 'emerald' },
-      { nome: 'Publicado', cor: 'green', final: true },
+      { nome: 'Resolvido', cor: 'green', final: true },
     ],
   },
 

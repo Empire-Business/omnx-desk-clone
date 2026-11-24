@@ -21,7 +21,8 @@ async function carregarTemplate(arquivoB64: string | null, arquivoNome: string |
   }
   if (arquivoNome) {
     const res = await fetch(`/modelos-contrato/${arquivoNome}`)
-    if (!res.ok) throw new Error('Modelo-base não encontrado no servidor.')
+    // A versão instalada não traz modelos .docx prontos (decisão do dono, 09/11/2026).
+    if (!res.ok) throw new Error('Este modelo ainda não tem arquivo. Suba o seu .docx na tela de Modelos.')
     return await res.arrayBuffer()
   }
   throw new Error('Este modelo ainda não tem arquivo. Suba um .docx na tela de Modelos.')

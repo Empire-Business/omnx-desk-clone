@@ -1,5 +1,9 @@
+import { carregarClientesContratos, type ClienteContrato } from '@/lib/contratoClientes'
+import type { TablesUpdate } from '@/integrations/supabase/types'
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { invalidarClientesAposContrato } from '@/lib/clienteContratoCache'
 import type { Tag } from '@/hooks/useTags'
 
 export type StatusComissao = 'prevista' | 'aprovada' | 'paga' | 'cancelada' | 'postergada'
@@ -7,7 +11,7 @@ export type StatusExtrato = 'rascunho' | 'aprovado' | 'pago'
 
 // Parcela de pagamento do contrato — mesmo formato da venda do onboarding
 // (vendas_pendentes.pagamentos), pra poder fluir do onboarding pro contrato.
-export interface ContratoPagamento {
+export type ContratoPagamento = {
   data: string
   valor: number
   forma: string
@@ -15,7 +19,26 @@ export interface ContratoPagamento {
   sinal: string
 }
 
+/** Valida o JSON persistido antes de usá-lo no cronograma financeiro. */
+function lerPagamentos(valor: unknown): ContratoPagamento[] {
+  if (valor == null) return []
+  if (!Array.isArray(valor)) throw new Error('O cronograma de pagamentos do contrato está inválido.')
+  return valor.map(item => {
+    if (!item || typeof item !== 'object' || typeof item.valor !== 'number' || !Number.isFinite(item.valor)) {
+      throw new Error('O cronograma de pagamentos do contrato contém um valor inválido.')
+    }
+    return {
+      data: typeof item.data === 'string' ? item.data : '',
+      valor: item.valor,
+      forma: typeof item.forma === 'string' ? item.forma : '',
+      plataforma: typeof item.plataforma === 'string' ? item.plataforma : '',
+      sinal: typeof item.sinal === 'string' ? item.sinal : '',
+    }
+  })
+}
+
 export interface Contrato {
+  clientes?: ClienteContrato[]
   id: string
   cliente_id: string | null
   cliente_nome: string
@@ -37,7 +60,10 @@ export interface Contrato {
   num_parcelas: number
   percentual_aplicado: number
   vencimento: string | null
-  status: 'ativo' | 'pausado' | 'cancelado' | 'concluido'
+  /** Prazo confirmado; independente de vencimentos financeiros. */
+  vigencia_fim?: string | null
+  vigencia_motivo?: string | null
+  status: 'rascunho' | 'ativo' | 'pausado' | 'cancelado' | 'concluido'
   status_secundario: string | null
   observacoes: string | null
   // Pagamento feito por terceiro (contrato no nome de um, pago por outro)
@@ -172,15 +198,16 @@ export function useContratos() {
       if (error) throw error
       // Achata contrato_tags[{tags}] em contrato.tags[] — ordenadas da mais antiga
       // para a mais recente (ordem de aplicação no contrato).
-      return ((data ?? []) as Array<Contrato & { contrato_tags?: Array<{ criado_em: string; tags: Tag | null }> }>).map(
+      return carregarClientesContratos(supabase, (data ?? []).map(
         ({ contrato_tags, ...c }) => ({
           ...c,
+          pagamentos: lerPagamentos(c.pagamentos),
           tags: (contrato_tags ?? [])
-            .filter((ct): ct is { criado_em: string; tags: Tag } => Boolean(ct.tags))
+            .filter(ct => Boolean(ct.tags))
             .sort((a, b) => String(a.criado_em).localeCompare(String(b.criado_em)))
             .map((ct) => ct.tags),
         }),
-      ) as Contrato[]
+      ) as Contrato[])
     },
   })
 }
@@ -190,13 +217,17 @@ export function useContratosByCliente(clienteId: string | undefined) {
   return useQuery({
     queryKey: ['comissoes', 'contratos', 'by-cliente', clienteId] as const,
     queryFn: async () => {
+      const vinculos = await supabase.from('contrato_clientes_atendidos').select('contrato_id').eq('cliente_id', clienteId!)
+      if (vinculos.error) throw vinculos.error
+      const ids = [...new Set((vinculos.data ?? []).flatMap(v => v.contrato_id ? [v.contrato_id] : []))]
+      if (!ids.length) return []
       const { data, error } = await supabase
         .from('contratos')
         .select('*')
-        .eq('cliente_id', clienteId!)
+        .in('id', ids)
         .order('data_fechamento', { ascending: false })
       if (error) throw error
-      return data as Contrato[]
+      return carregarClientesContratos(supabase, data.map(contrato => ({ ...contrato, pagamentos: lerPagamentos(contrato.pagamentos) })) as Contrato[])
     },
     enabled: Boolean(clienteId),
     staleTime: 2 * 60 * 1000,
@@ -207,13 +238,14 @@ export function useContrato(id: string | undefined) {
   return useQuery({
     queryKey: ['comissoes', 'contrato', id],
     queryFn: async () => {
+      if (!id) throw new Error('Contrato não informado.')
       const { data, error } = await supabase
         .from('contratos')
         .select('*')
         .eq('id', id)
         .single()
       if (error) throw error
-      return data as Contrato
+      return (await carregarClientesContratos(supabase, [{ ...data, pagamentos: lerPagamentos(data.pagamentos) } as Contrato]))[0]
     },
     enabled: Boolean(id),
   })
@@ -229,20 +261,23 @@ export type NovoContratoInput = {
   valor_total: number
   num_parcelas: number
   percentual_aplicado: number
-  status: 'ativo' | 'pausado' | 'cancelado' | 'concluido'
+  status: Contrato['status']
   observacoes?: string | null
 } & Partial<Contrato>
 
 export function useCreateContrato() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (input: NovoContratoInput) => {
-      const { data, error } = await supabase.from('contratos').insert(input).select().single()
+    mutationFn: async ({ tags: _tags, clientes: _clientes, ...input }: NovoContratoInput) => {
+      const { data, error } = await supabase.from('contratos').insert({ ...(input), tenant_id: await tenantDaSessao() }).select().single()
       if (error) throw error
-      return data as Contrato
+      return { ...data, pagamentos: lerPagamentos(data.pagamentos) } as Contrato
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['comissoes'] })
+      return Promise.all([
+        qc.invalidateQueries({ queryKey: ['comissoes'] }),
+        invalidarClientesAposContrato(qc),
+      ])
     },
   })
 }
@@ -250,12 +285,15 @@ export function useCreateContrato() {
 export function useUpdateContrato() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, ...patch }: Partial<Contrato> & { id: string }) => {
+    mutationFn: async ({ id, tags: _tags, clientes: _clientes, ...patch }: Partial<Contrato> & { id: string }) => {
       const { data, error } = await supabase.from('contratos').update(patch).eq('id', id).select().single()
       if (error) throw error
-      return data as Contrato
+      return { ...data, pagamentos: lerPagamentos(data.pagamentos) } as Contrato
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['comissoes'] }),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['comissoes'] }),
+      invalidarClientesAposContrato(qc),
+    ]),
   })
 }
 
@@ -266,7 +304,10 @@ export function useDeleteContrato() {
       const { error } = await supabase.from('contratos').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['comissoes'] }),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['comissoes'] }),
+      invalidarClientesAposContrato(qc),
+    ]),
   })
 }
 
@@ -305,7 +346,7 @@ export function useUpdateComissao() {
   return useMutation({
     mutationFn: async ({ id, ...patch }: Partial<Comissao> & { id: string }) => {
       const { data: { user } } = await supabase.auth.getUser()
-      const payload: Record<string, unknown> = { ...patch, editado_por: user?.id, editado_em: new Date().toISOString() }
+      const payload: TablesUpdate<'comissoes'> = { ...patch, editado_por: user?.id, editado_em: new Date().toISOString() }
       const { data, error } = await supabase.from('comissoes').update(payload).eq('id', id).select().single()
       if (error) throw error
       return data as Comissao
@@ -395,7 +436,7 @@ export function useUpsertProdutoComissao() {
     mutationFn: async (input: ProdutoComissao) => {
       const { data, error } = await supabase
         .from('produtos_comissao')
-        .upsert({ ...input, atualizado_em: new Date().toISOString() })
+        .upsert({ ...({ ...input, atualizado_em: new Date().toISOString() }), tenant_id: await tenantDaSessao() })
         .select().single()
       if (error) throw error
       return data
@@ -414,7 +455,7 @@ export function useCriarProdutoComissao() {
       // 1. Cria o produto de catálogo (client_id NULL)
       const { data: prod, error: errProd } = await supabase
         .from('products')
-        .insert({ nome, descricao: 'Oferta comercial — catálogo', ativo: true })
+        .insert({ ...({ nome, descricao: 'Oferta comercial — catálogo', ativo: true }), tenant_id: await tenantDaSessao() })
         .select('id, nome')
         .single()
       if (errProd) {
@@ -423,7 +464,7 @@ export function useCriarProdutoComissao() {
       }
 
       // 2. Cria a configuração de comissão vinculada
-      const { error: errCfg } = await supabase.from('produtos_comissao').insert({
+      const { error: errCfg } = await supabase.from('produtos_comissao').insert({ ...({
         produto_id: prod.id,
         tipo_comissao: input.tipo_comissao,
         valor_comissao_padrao: input.valor_comissao_padrao,
@@ -432,7 +473,7 @@ export function useCriarProdutoComissao() {
         valor_bonus: input.valor_bonus,
         bonus_condicional: input.bonus_condicional,
         observacoes: input.observacoes,
-      })
+      }), tenant_id: await tenantDaSessao() })
       if (errCfg) throw errCfg
 
       return prod
@@ -500,6 +541,7 @@ export function useAuditContrato(contratoId: string | undefined) {
   return useQuery({
     queryKey: ['comissoes', 'audit', contratoId],
     queryFn: async () => {
+      if (!contratoId) throw new Error('Contrato não informado.')
       const { data, error } = await supabase
         .from('contratos_audit_log')
         .select('*, usuario:users(nome)')
@@ -532,6 +574,7 @@ export function useAnexos(contratoId: string | undefined) {
   return useQuery({
     queryKey: ['comissoes', 'anexos', contratoId],
     queryFn: async () => {
+      if (!contratoId) throw new Error('Contrato não informado.')
       const { data, error } = await supabase
         .from('contrato_anexos')
         .select('*')
@@ -557,7 +600,7 @@ export function useUploadAnexo() {
       })
       if (e1) throw e1
       const { data: { user } } = await supabase.auth.getUser()
-      const { error: e2 } = await supabase.from('contrato_anexos').insert({
+      const { error: e2 } = await supabase.from('contrato_anexos').insert({ ...({
         contrato_id: contratoId,
         nome_original: file.name,
         storage_path: path,
@@ -565,7 +608,7 @@ export function useUploadAnexo() {
         tamanho_bytes: file.size,
         categoria,
         enviado_por: user?.id,
-      })
+      }), tenant_id: await tenantDaSessao() })
       if (e2) throw e2
     },
     onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: ['comissoes', 'anexos', vars.contratoId] }),
@@ -611,6 +654,7 @@ export function usePdfExtractions(contratoId: string | undefined) {
   return useQuery({
     queryKey: ['comissoes', 'pdf-extractions', contratoId],
     queryFn: async () => {
+      if (!contratoId) throw new Error('Contrato não informado.')
       const { data, error } = await supabase
         .from('contrato_pdf_extractions')
         .select('*')
@@ -645,16 +689,22 @@ export function useApplyExtraction() {
       extractionId: string; contratoId: string; dados: Record<string, unknown>
     }) => {
       // Aplica os campos não-nulos no contrato
-      const patch: Record<string, unknown> = {}
-      const camposPermitidos = [
-        'cliente_nome','empresa','cpf_cnpj','endereco','email','produto_nome',
-        'valor_total','valor_parcela','num_parcelas','entrada','data_fechamento',
-        'vencimento','plano_dias','forma_pagamento','observacoes',
-      ]
-      for (const k of camposPermitidos) {
-        const v = dados[k]
-        if (v !== undefined && v !== null && v !== '') patch[k] = v
+      const patch: TablesUpdate<'contratos'> = {}
+      const camposTexto = ['cliente_nome', 'empresa', 'cpf_cnpj', 'endereco', 'email', 'produto_nome', 'data_fechamento', 'vencimento', 'forma_pagamento', 'observacoes'] as const
+      const camposNumero = ['valor_total', 'valor_parcela', 'num_parcelas', 'entrada', 'plano_dias'] as const
+      for (const campo of camposTexto) {
+        const valor = dados[campo]
+        if (valor === undefined || valor === null || valor === '') continue
+        if (typeof valor !== 'string') throw new Error('A extração contém um campo de texto inválido. Revise os dados.')
+        patch[campo] = valor
       }
+      for (const campo of camposNumero) {
+        const valor = dados[campo]
+        if (valor === undefined || valor === null || valor === '') continue
+        if (typeof valor !== 'number' || !Number.isFinite(valor)) throw new Error('A extração contém um valor numérico inválido. Revise os dados.')
+        patch[campo] = valor
+      }
+      if (Object.keys(patch).length === 0) throw new Error('Não há campos válidos para aplicar.')
       const { data: { user } } = await supabase.auth.getUser()
       const { error: ec } = await supabase.from('contratos').update(patch).eq('id', contratoId)
       if (ec) throw ec
@@ -688,7 +738,7 @@ export function useAliases() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('estrategista_aliases')
-        .select('*, users(nome)')
+        .select('*, users!estrategista_aliases_user_id_fkey(nome)')
         .order('alias_original')
       if (error) throw error
       return data as Array<EstrategistaAlias & { users: { nome: string } | null }>
@@ -702,11 +752,11 @@ export function useCreateAlias() {
     mutationFn: async ({ alias_original, user_id }: { alias_original: string; user_id: string }) => {
       const normalize = (s: string) =>
         s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, '').trim()
-      const { error } = await supabase.from('estrategista_aliases').insert({
+      const { error } = await supabase.from('estrategista_aliases').insert({ ...({
         alias_original,
         alias_normalizado: normalize(alias_original),
         user_id,
-      })
+      }), tenant_id: await tenantDaSessao() })
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['comissoes', 'aliases'] }),

@@ -2,17 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Bell,
-  MessageSquare,
+  ChevronDown,
   Sun,
   Moon,
   Settings,
   User,
-  UserCog,
-  BookOpen,
   LogOut,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { safeInternalRoute } from '@/lib/safeInternalRoute'
 import { useAuth } from '@/contexts/AuthContext'
 import { useTheme } from '@/hooks/useTheme'
 import {
@@ -22,6 +21,7 @@ import {
   useMarkAllAsRead,
   useRealtimeNotifications,
 } from '@/hooks/useNotifications'
+import { BRAND } from '@/config/brand'
 
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr)
@@ -50,11 +50,14 @@ function getInitials(name?: string | null): string {
 interface SidebarBottomProps {
   collapsed?: boolean
   tenantName?: string
-  /** Esconder a linha de utilitários (notificações/chat/tema). */
+  /** Esconder a linha de utilitários (notificações/tema); no topo, esconde o sino de avisos. */
   hideUtils?: boolean
+  /** 'topo': mesmos avisos, menu do usuário e Sair, montados na barra superior (Cume). */
+  placement?: 'lateral' | 'topo'
 }
 
-export function SidebarBottom({ collapsed = false, tenantName = 'OMNX Desk', hideUtils }: SidebarBottomProps) {
+export function SidebarBottom({ collapsed = false, tenantName = BRAND.appName, hideUtils, placement = 'lateral' }: SidebarBottomProps) {
+  const topo = placement === 'topo'
   const navigate = useNavigate()
   const { user, signOut } = useAuth()
   const { theme, toggleTheme } = useTheme()
@@ -103,10 +106,10 @@ export function SidebarBottom({ collapsed = false, tenantName = 'OMNX Desk', hid
   return (
     <>
       {/* Linha de utilitários */}
-      {!hideUtils && (
-        <div className={cn('px-2 py-1.5 flex items-center gap-1', collapsed && 'flex-col')}>
+      {topo && !hideUtils && <NotificationsButton collapsed={false} topo />}
+      {!hideUtils && !topo && (
+        <div className={cn('flex items-center gap-1 py-1.5', collapsed && 'flex-col')}>
           <NotificationsButton collapsed={collapsed} />
-          <UtilButton icon={MessageSquare} label="Chat rápido" onClick={() => navigate('/chat')} collapsed={collapsed} />
           <UtilButton
             icon={theme === 'dark' ? Sun : Moon}
             label={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
@@ -117,38 +120,48 @@ export function SidebarBottom({ collapsed = false, tenantName = 'OMNX Desk', hid
       )}
 
       {/* Footer com avatar + popover */}
-      <div ref={ref} className="relative p-2">
+      <div ref={ref} className={cn('relative', topo && 'cume-top-userwrap')}>
+        {/* DS `.sb-user`: 44 px, avatar 28, nome 13 px e papel 11,5 px */}
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-haspopup="menu"
           aria-expanded={open}
           className={cn(
-            'w-full flex items-center gap-2 rounded-md p-2 transition-colors cursor-pointer',
-            'hover:bg-sidebar-accent/60 text-sidebar-foreground',
+            topo
+              ? 'cume-top-user focus-ds'
+              : [
+                  'flex h-11 w-full items-center gap-2.5 rounded-md text-left text-sidebar-foreground transition-colors duration-fast ease-std',
+                  'hover:bg-sidebar-accent/70 focus-ds',
+                  collapsed ? 'justify-center px-0' : 'px-2',
+                ],
           )}
           aria-label="Menu do usuário"
         >
-          {userAvatar ? (
-            <img
-              src={userAvatar}
-              alt={userName}
-              className="h-[26px] w-[26px] flex-shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <div className="h-[26px] w-[26px] flex-shrink-0 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-semibold">
-              {userInitials || <User className="h-3 w-3" />}
-            </div>
-          )}
-          {!collapsed && (
+          {topo ? (
             <>
-              <div className="flex-1 min-w-0 text-left">
-                <p className="text-[12.5px] font-semibold truncate leading-tight">{userName}</p>
-                <p className="text-[10.5px] text-sidebar-foreground/55 truncate leading-tight">
+              <span className="cume-top-user-text">
+                <strong>{userName}</strong>
+                <small>{tenantName}</small>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
+            </>
+          ) : userAvatar ? (
+            <img src={userAvatar} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+          ) : (
+            <span className="av" data-h="0" aria-hidden>
+              {userInitials || <User className="h-3.5 w-3.5" />}
+            </span>
+          )}
+          {!topo && !collapsed && (
+            <>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold leading-tight text-foreground">{userName}</span>
+                <span className="block truncate text-[11.5px] leading-tight text-muted-foreground">
                   {userRole} · {tenantName}
-                </p>
-              </div>
-              <Settings className="w-[15px] h-[15px] text-sidebar-foreground/55 flex-shrink-0" />
+                </span>
+              </span>
+              <Settings className="h-[15px] w-[15px] shrink-0 text-fg-4" aria-hidden />
             </>
           )}
         </button>
@@ -157,17 +170,19 @@ export function SidebarBottom({ collapsed = false, tenantName = 'OMNX Desk', hid
           <div
             role="menu"
             className={cn(
-              'absolute z-50 w-60 rounded-md border border-sidebar-border bg-popover text-popover-foreground shadow-[var(--shadow-lg)] animate-fade-in-up',
-              collapsed ? 'left-full bottom-2 ml-2' : 'bottom-full mb-2 left-2 right-2',
+              // DS `.menu` com cabeçalho (`.menu-head`)
+              'absolute z-50 w-[232px] rounded-lg bg-popover p-1.5 text-popover-foreground shadow-[var(--elev-pop),var(--ring-1)] animate-fade-in-up',
+              topo ? 'right-0 top-full mt-2' : collapsed ? 'bottom-0 left-full ml-2' : 'bottom-full left-0 mb-2',
             )}
           >
-            <div className="px-3 py-2 border-b border-sidebar-border">
-              <p className="text-[13px] font-semibold truncate leading-tight">{userName}</p>
-              <p className="text-2xs text-popover-foreground/60 truncate leading-tight font-normal">
-                {userEmail}
-              </p>
+            <div className="mb-1 flex items-center gap-2.5 border-b border-border px-2 pb-2.5 pt-2">
+              <span className="av av-lg" data-h="0" aria-hidden>{userInitials || <User className="h-4 w-4" />}</span>
+              <span className="min-w-0">
+                <span className="block truncate text-[13.5px] font-semibold leading-tight">{userName}</span>
+                <span className="block truncate text-xs leading-tight text-muted-foreground">{userEmail}</span>
+              </span>
             </div>
-            <div className="flex flex-col p-1">
+            <div className="flex flex-col">
               <MenuItem
                 icon={User}
                 label="Meu perfil"
@@ -176,41 +191,23 @@ export function SidebarBottom({ collapsed = false, tenantName = 'OMNX Desk', hid
                   navigate('/configuracoes')
                 }}
               />
-              {isAdmin && (
-                <MenuItem
-                  icon={Settings}
-                  label="Configurações"
-                  onClick={() => {
-                    setOpen(false)
-                    navigate('/configuracoes')
-                  }}
-                />
-              )}
-              {isAdmin && (
-                <MenuItem
-                  icon={UserCog}
-                  label="Gerenciar colaboradores"
-                  onClick={() => {
-                    setOpen(false)
-                    navigate('/colaboradores')
-                  }}
-                />
-              )}
+              {/* "Configurações", "Gerenciar colaboradores" e "FAQ & Tutoriais"
+                  (botão sem ação) saíram: estão em Ajustes e no ponto de Ajuda. */}
               <MenuItem
-                icon={BookOpen}
-                label="FAQ & Tutoriais"
+                icon={Settings}
+                label="Ajustes"
                 onClick={() => {
                   setOpen(false)
-                  /* TODO: rota de FAQ */
+                  navigate('/ajustes')
                 }}
               />
-              <div className="my-1 border-t border-sidebar-border" />
+              <div className="my-1 border-t border-border" />
               <MenuItem
                 icon={theme === 'dark' ? Sun : Moon}
                 label={theme === 'dark' ? 'Tema claro' : 'Tema escuro'}
                 onClick={toggleTheme}
               />
-              <div className="my-1 border-t border-sidebar-border" />
+              <div className="my-1 border-t border-border" />
               <MenuItem
                 icon={LogOut}
                 label="Sair"
@@ -224,11 +221,18 @@ export function SidebarBottom({ collapsed = false, tenantName = 'OMNX Desk', hid
           </div>
         )}
       </div>
+
+      {topo && (
+        <button type="button" onClick={handleSignOut} className="cume-top-link">
+          <LogOut aria-hidden className="h-[17px] w-[17px]" />
+          Sair
+        </button>
+      )}
     </>
   )
 }
 
-function NotificationsButton({ collapsed }: { collapsed: boolean }) {
+export function NotificationsButton({ collapsed, topo = false }: { collapsed: boolean; topo?: boolean }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -257,25 +261,25 @@ function NotificationsButton({ collapsed }: { collapsed: boolean }) {
   async function handleClick(id: string, link: string | null) {
     await markAsRead.mutateAsync(id)
     setOpen(false)
-    if (link) navigate(link)
+    const destination = safeInternalRoute(link)
+    if (destination) navigate(destination)
   }
 
   return (
-    <div ref={ref} className={cn('relative', collapsed ? 'w-full' : 'flex-1')}>
+    <div ref={ref} className={cn('relative', topo ? 'cume-top-bell' : collapsed ? 'w-full' : 'flex-1')}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className={cn(
-          'relative w-full flex items-center justify-center p-1.5 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors',
-        )}
+        className={topo ? 'cume-top-link relative' : 'btn btn-ghost relative w-full px-0 text-fg-4'}
         title="Notificações"
-        aria-label="Notificações"
+        aria-label={unreadCount > 0 ? `Notificações (${unreadCount} não lidas)` : 'Notificações'}
       >
-        <Bell className="w-4 h-4" />
+        <Bell aria-hidden className={topo ? 'h-[17px] w-[17px]' : undefined} />
+        {topo && 'Avisos'}
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground leading-none">
+          <span className={cn('count is-danger absolute h-4 min-w-4 px-1 text-[10px]', topo ? 'right-0 top-0' : 'right-1 top-0.5')} aria-hidden>
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
@@ -284,18 +288,18 @@ function NotificationsButton({ collapsed }: { collapsed: boolean }) {
       {open && (
         <div
           className={cn(
-            'absolute z-50 w-80 rounded-md border border-sidebar-border bg-popover text-popover-foreground shadow-[var(--shadow-lg)] animate-fade-in-up',
-            collapsed ? 'left-full bottom-0 ml-2' : 'bottom-full mb-2 left-0',
+            'absolute z-50 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-[var(--elev-pop),var(--ring-1)] animate-fade-in-up',
+            topo ? 'right-0 top-full mt-2' : collapsed ? 'bottom-0 left-full ml-2' : 'bottom-full left-0 mb-2',
           )}
         >
-          <div className="flex items-center justify-between border-b border-sidebar-border px-3 py-2">
-            <span className="text-[13px] font-semibold">Notificações</span>
+          <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
+            <span className="text-[13.5px] font-semibold">Notificações</span>
             {notifications.some((n) => !n.lida) && (
               <button
                 type="button"
                 onClick={() => markAllAsRead.mutate()}
                 disabled={markAllAsRead.isPending}
-                className="text-[11px] text-primary hover:underline disabled:opacity-50"
+                className="text-xs font-medium text-link hover:underline disabled:opacity-45"
               >
                 Marcar todas como lidas
               </button>
@@ -304,7 +308,7 @@ function NotificationsButton({ collapsed }: { collapsed: boolean }) {
           <ul className="max-h-96 overflow-y-auto">
             {notifications.length === 0 ? (
               <li className="flex items-center justify-center py-10">
-                <span className="text-[13px] text-popover-foreground/60">Nenhuma notificação</span>
+                <span className="text-[13px] text-muted-foreground">Nenhuma notificação</span>
               </li>
             ) : (
               notifications.map((notif) => (
@@ -313,18 +317,18 @@ function NotificationsButton({ collapsed }: { collapsed: boolean }) {
                     type="button"
                     onClick={() => handleClick(notif.id, notif.link)}
                     className={cn(
-                      'w-full text-left px-3 py-2.5 transition-colors hover:bg-muted/40',
-                      'border-b border-sidebar-border last:border-b-0',
+                      'w-full px-3 py-2.5 text-left transition-colors duration-fast hover:bg-accent focus-ds',
+                      'border-b border-stroke-weak last:border-b-0',
                       !notif.lida && 'border-l-2 border-l-primary pl-[10px]',
                     )}
                   >
                     <p className={cn('text-[13px]', !notif.lida && 'font-semibold')}>{notif.titulo}</p>
                     {notif.mensagem && (
-                      <p className="mt-0.5 text-[11px] text-popover-foreground/60 truncate">
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {notif.mensagem}
                       </p>
                     )}
-                    <p className="mt-1 text-2xs text-popover-foreground/55">
+                    <p className="mono mt-1 text-[11px] text-fg-4">
                       {formatRelativeTime(notif.criado_em)}
                     </p>
                   </button>
@@ -332,14 +336,14 @@ function NotificationsButton({ collapsed }: { collapsed: boolean }) {
               ))
             )}
           </ul>
-          <div className="border-t border-sidebar-border px-3 py-2">
+          <div className="border-t border-border px-3 py-2">
             <button
               type="button"
               onClick={() => {
                 setOpen(false)
                 navigate('/notificacoes')
               }}
-              className="w-full text-center text-[11px] text-primary hover:underline"
+              className="w-full text-center text-xs font-medium text-link hover:underline"
             >
               Ver todas
             </button>
@@ -365,14 +369,11 @@ function UtilButton({
     <button
       type="button"
       onClick={onClick}
-      className={cn(
-        'flex items-center justify-center p-1.5 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors',
-        collapsed ? 'w-full' : 'flex-1',
-      )}
+      className={cn('btn btn-ghost px-0 text-fg-4', collapsed ? 'w-full' : 'flex-1')}
       title={label}
       aria-label={label}
     >
-      <Icon className="w-4 h-4" />
+      <Icon aria-hidden />
     </button>
   )
 }
@@ -394,13 +395,12 @@ function MenuItem({
       role="menuitem"
       onClick={onClick}
       className={cn(
-        'flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] transition-colors text-left',
-        destructive
-          ? 'text-destructive hover:bg-destructive/10 focus:bg-destructive/10'
-          : 'text-popover-foreground hover:bg-muted/40',
+        // DS `.mi`: 32 px, raio 6, 13,5 px 500, ícone 15 px
+        'flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-[13.5px] font-medium transition-colors duration-fast hover:bg-accent focus-ds',
+        destructive ? 'text-danger' : 'text-popover-foreground',
       )}
     >
-      <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+      <Icon className={cn('h-[15px] w-[15px] shrink-0', destructive ? 'text-danger' : 'text-muted-foreground')} aria-hidden />
       <span className="flex-1">{label}</span>
     </button>
   )

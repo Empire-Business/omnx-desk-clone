@@ -46,9 +46,21 @@ function SectionHeader({
 
 export function DashboardOverview({ onTabChange }: Props) {
   const navigate = useNavigate()
-  const { data, isLoading } = useDashboardData()
+  const { data, isLoading, isError, isFetching, refetch } = useDashboardData()
   const { data: camiData } = useCamiDeliveries()
   const [confirmChat, setConfirmChat] = useState<{ nome: string; whatsapp: string; mensagem: string } | null>(null)
+
+  if (isError || (!isLoading && !data)) {
+    return (
+      <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-5 space-y-3">
+        <p className="text-sm text-danger">Não foi possível carregar os indicadores. Tente novamente para consultar os dados atualizados.</p>
+        <button type="button" onClick={() => void refetch()} disabled={isFetching}
+          className="rounded-lg border border-border px-3 py-2 text-sm font-medium disabled:opacity-50">
+          {isFetching ? 'Tentando novamente…' : 'Tentar novamente'}
+        </button>
+      </div>
+    )
+  }
 
   if (isLoading || !data) {
     return (
@@ -434,7 +446,7 @@ export function DashboardOverview({ onTabChange }: Props) {
         onClose={() => setConfirmChat(null)}
         onConfirm={(mensagem) => {
           if (!confirmChat) return
-          navigate(`/chat/inbox?novaConversa=true&nome=${encodeURIComponent(confirmChat.nome)}&whatsapp=${encodeURIComponent(confirmChat.whatsapp)}&mensagem=${encodeURIComponent(mensagem)}`)
+          navigate(`/conversas?novaConversa=true&nome=${encodeURIComponent(confirmChat.nome)}&whatsapp=${encodeURIComponent(confirmChat.whatsapp)}&mensagem=${encodeURIComponent(mensagem)}`)
           setConfirmChat(null)
         }}
       />

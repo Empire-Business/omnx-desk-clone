@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { Bug, Inbox, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal } from '@/components/ui/Modal'
 import { usePermissoes } from '@/hooks/usePermissoes'
@@ -28,13 +29,13 @@ const STATUS_LABEL: Record<ReporteStatus, string> = {
 }
 
 const STATUS_CLS: Record<ReporteStatus, string> = {
-  recebido: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  em_triagem: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  precisa_info: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  confirmado: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
-  em_desenvolvimento: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
-  em_validacao: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
-  corrigido: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  recebido: 'bg-st-open text-st-open-fg',
+  em_triagem: 'bg-st-waiting text-st-waiting-fg',
+  precisa_info: 'bg-st-waiting text-st-waiting-fg',
+  confirmado: 'bg-st-progress text-st-progress-fg',
+  em_desenvolvimento: 'bg-st-progress text-st-progress-fg',
+  em_validacao: 'bg-st-progress text-st-progress-fg',
+  corrigido: 'bg-st-done text-st-done-fg',
   nao_reproduzido: 'bg-muted text-muted-foreground',
   duplicado: 'bg-muted text-muted-foreground',
   encerrado: 'bg-muted text-muted-foreground',
@@ -42,13 +43,10 @@ const STATUS_CLS: Record<ReporteStatus, string> = {
 
 const IMPACTO_CLS: Record<string, string> = {
   baixo: 'text-muted-foreground',
-  medio: 'text-blue-600 dark:text-blue-400',
-  alto: 'text-amber-600 dark:text-amber-400',
-  critico: 'text-destructive font-semibold',
+  medio: 'text-st-open-fg',
+  alto: 'text-st-waiting-fg',
+  critico: 'text-danger font-semibold',
 }
-
-const inputCls =
-  'w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30'
 
 export function ReportesPage() {
   const { can, carregando } = usePermissoes()
@@ -68,16 +66,16 @@ function ReportesBoard() {
   }, [reportes, filtroStatus])
 
   return (
-    <div className="space-y-6">
+    <PageContainer>
       <PageHeader
-        title="Reportes de erro"
+        title="Problemas relatados"
         description="Problemas reportados pelos usuários desta conta. Clique para triar."
       />
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm text-muted-foreground">Status:</span>
         <select
-          className="rounded-lg border border-border bg-card px-3 py-1.5 text-sm"
+          className="select w-auto min-w-[180px]"
           value={filtroStatus}
           onChange={(e) => setFiltroStatus(e.target.value as 'todos' | ReporteStatus)}
         >
@@ -89,8 +87,8 @@ function ReportesBoard() {
       </div>
 
       {isLoading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
+        <div role="status" aria-label="Carregando reportes" className="space-y-2">
+          {[0, 1, 2, 3].map((i) => <div key={i} className="sk h-16 rounded-lg" />)}
         </div>
       )}
 
@@ -103,25 +101,25 @@ function ReportesBoard() {
       )}
 
       {!isLoading && lista.length > 0 && (
-        <ul className="divide-y divide-border rounded-xl border border-border bg-card">
+        <ul className="divide-y divide-stroke-subtle overflow-hidden rounded-lg border border-card-border bg-card">
           {lista.map((r) => (
             <li key={r.id}>
               <button
                 type="button"
                 onClick={() => setSelecionado(r)}
-                className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+                className="focus-ds flex min-h-14 w-full items-start gap-3 px-4 py-3 text-left transition-colors duration-fast hover:bg-bg-1"
               >
                 <Bug className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs text-muted-foreground">{r.protocolo}</span>
-                    <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', STATUS_CLS[r.status])}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="t-mono text-muted-foreground">{r.protocolo}</span>
+                    <span className={cn('rounded-full px-2 py-0.5 text-[11.5px] font-medium', STATUS_CLS[r.status])}>
                       {STATUS_LABEL[r.status]}
                     </span>
-                    <span className={cn('text-[11px] uppercase', IMPACTO_CLS[r.impacto])}>{r.impacto}</span>
+                    <span className={cn('text-[11.5px] uppercase', IMPACTO_CLS[r.impacto])}>{r.impacto}</span>
                   </div>
                   <p className="mt-0.5 truncate font-medium text-foreground">{r.titulo}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-[13px] text-muted-foreground">
                     {r.reportado_nome || 'Anônimo'} · {r.rota || '—'} ·{' '}
                     {new Date(r.created_at).toLocaleDateString('pt-BR')}
                   </p>
@@ -135,7 +133,7 @@ function ReportesBoard() {
       {selecionado && (
         <ReporteDetalhe reporte={selecionado} onClose={() => setSelecionado(null)} />
       )}
-    </div>
+    </PageContainer>
   )
 }
 
@@ -201,14 +199,14 @@ function ReporteDetalhe({ reporte, onClose }: { reporte: Reporte; onClose: () =>
             <summary className="cursor-pointer text-sm font-medium">
               Console ({reporte.console_logs.length} entradas, mais recentes por último)
             </summary>
-            <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto font-mono text-[11px]">
+            <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto font-mono text-[12px]">
               {reporte.console_logs.map((l, i) => (
                 <li
                   key={i}
                   className={cn(
                     'flex gap-2 rounded px-1.5 py-0.5',
-                    l.nivel === 'error' && 'bg-destructive/10 text-destructive',
-                    l.nivel === 'warn' && 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+                    l.nivel === 'error' && 'bg-danger-light text-danger',
+                    l.nivel === 'warn' && 'bg-note text-note-fg',
                     (l.nivel === 'log' || l.nivel === 'info') && 'text-muted-foreground',
                   )}
                 >
@@ -227,7 +225,7 @@ function ReporteDetalhe({ reporte, onClose }: { reporte: Reporte; onClose: () =>
             <summary className="cursor-pointer text-sm font-medium">
               Requisições ({reporte.network_logs.length})
             </summary>
-            <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto font-mono text-[11px]">
+            <ul className="mt-2 max-h-64 space-y-1 overflow-y-auto font-mono text-[12px]">
               {reporte.network_logs.map((r, i) => (
                 <li
                   key={i}
@@ -235,7 +233,7 @@ function ReporteDetalhe({ reporte, onClose }: { reporte: Reporte; onClose: () =>
                     'flex gap-2 rounded px-1.5 py-0.5',
                     // Sem status = falhou antes de responder (rede caiu, CORS).
                     (r.status === null || r.status >= 400)
-                      ? 'bg-destructive/10 text-destructive'
+                      ? 'bg-danger-light text-danger'
                       : 'text-muted-foreground',
                   )}
                 >
@@ -254,16 +252,16 @@ function ReporteDetalhe({ reporte, onClose }: { reporte: Reporte; onClose: () =>
           <p className="text-sm font-semibold text-foreground">Triagem</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Status</label>
-              <select className={inputCls} value={status} onChange={(e) => setStatus(e.target.value as ReporteStatus)}>
+              <label className="mb-1 block text-[12.5px] font-semibold text-fg-2">Status</label>
+              <select className="select w-full" value={status} onChange={(e) => setStatus(e.target.value as ReporteStatus)}>
                 {(Object.keys(STATUS_LABEL) as ReporteStatus[]).map((s) => (
                   <option key={s} value={s}>{STATUS_LABEL[s]}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Prioridade</label>
-              <select className={inputCls} value={prioridade} onChange={(e) => setPrioridade(e.target.value as ReportePrioridade)}>
+              <label className="mb-1 block text-[12.5px] font-semibold text-fg-2">Prioridade</label>
+              <select className="select w-full" value={prioridade} onChange={(e) => setPrioridade(e.target.value as ReportePrioridade)}>
                 <option value="baixa">Baixa</option>
                 <option value="media">Média</option>
                 <option value="alta">Alta</option>
@@ -271,31 +269,31 @@ function ReporteDetalhe({ reporte, onClose }: { reporte: Reporte; onClose: () =>
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Nota interna</label>
+            <label className="mb-1 block text-[12.5px] font-semibold text-fg-2">Nota interna</label>
             <textarea
-              className={cn(inputCls, 'min-h-[60px] resize-y')}
+              className={cn('textarea w-full min-h-[72px] resize-y')}
               value={resposta}
               onChange={(e) => setResposta(e.target.value)}
               placeholder="Anotações da equipe (não visível ao usuário)"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            <label className="mb-1 block text-[12.5px] font-semibold text-fg-2">
               Resposta ao usuário
             </label>
             <textarea
-              className={cn(inputCls, 'min-h-[60px] resize-y')}
+              className={cn('textarea w-full min-h-[72px] resize-y')}
               value={respostaUsuario}
               onChange={(e) => setRespostaUsuario(e.target.value)}
               placeholder="Aparece para quem reportou, em Meus reportes"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            <label className="mb-1 block text-[12.5px] font-semibold text-fg-2">
               Link da task (opcional)
             </label>
             <input
-              className={inputCls}
+              className="input w-full"
               value={linkExterno}
               onChange={(e) => setLinkExterno(e.target.value)}
               placeholder="https://… issue ou card onde a correção é acompanhada"
@@ -303,12 +301,12 @@ function ReporteDetalhe({ reporte, onClose }: { reporte: Reporte; onClose: () =>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onClose}
             disabled={atualizar.isPending}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
+            className="btn btn-secondary"
           >
             Fechar
           </button>
@@ -316,7 +314,7 @@ function ReporteDetalhe({ reporte, onClose }: { reporte: Reporte; onClose: () =>
             type="button"
             onClick={salvar}
             disabled={atualizar.isPending}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:brightness-110 disabled:opacity-50"
+            className="btn btn-primary"
           >
             {atualizar.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Salvar triagem
@@ -330,7 +328,7 @@ function ReporteDetalhe({ reporte, onClose }: { reporte: Reporte; onClose: () =>
 function Campo({ label, valor }: { label: string; valor: string }) {
   return (
     <div>
-      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-[12.5px] text-muted-foreground">{label}</span>
       <div className="text-sm font-medium capitalize text-foreground">{valor}</div>
     </div>
   )
@@ -339,7 +337,7 @@ function Campo({ label, valor }: { label: string; valor: string }) {
 function Bloco({ titulo, texto }: { titulo: string; texto: string }) {
   return (
     <div>
-      <p className="text-xs font-medium text-muted-foreground">{titulo}</p>
+      <p className="text-[12.5px] font-semibold text-fg-2">{titulo}</p>
       <p className="mt-0.5 whitespace-pre-wrap text-sm text-foreground">{texto}</p>
     </div>
   )

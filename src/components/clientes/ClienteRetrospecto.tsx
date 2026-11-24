@@ -12,7 +12,7 @@ function formatDateTime(iso: string) {
 function notaColor(nota: number | null | undefined): { bg: string; text: string; ring: string } {
   if (nota == null) return { bg: 'bg-muted', text: 'text-muted-foreground', ring: 'ring-border' }
   if (nota >= 9) return { bg: 'bg-success/15', text: 'text-success', ring: 'ring-success/40' }
-  if (nota >= 7) return { bg: 'bg-accent/15', text: 'text-accent', ring: 'ring-accent/40' }
+  if (nota >= 7) return { bg: 'bg-primary-muted', text: 'text-link', ring: 'ring-primary/40' }
   if (nota >= 5) return { bg: 'bg-warning/15', text: 'text-warning', ring: 'ring-warning/40' }
   return { bg: 'bg-danger/15', text: 'text-danger', ring: 'ring-danger/40' }
 }
@@ -76,6 +76,31 @@ export function NotaBadge({
   )
 }
 
+// O status também muda sozinho quando os contratos do cliente mudam
+// (trigger trg_sync_cliente_ativo_from_contratos); o clique é o ajuste manual.
+export function AtivoBadge({
+  clientId, ativo, canEdit,
+}: { clientId: string; ativo: boolean; canEdit: boolean }) {
+  const update = useUpdateCliente()
+
+  return (
+    <button
+      onClick={() => canEdit && update.mutate({ id: clientId, ativo: !ativo })}
+      disabled={!canEdit || update.isPending}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-2xs font-bold uppercase tracking-wider transition-all disabled:opacity-100',
+        ativo ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground',
+        canEdit ? 'hover:scale-105 cursor-pointer' : 'cursor-default',
+        update.isPending && 'opacity-60',
+      )}
+      title={canEdit ? `Clique para marcar como ${ativo ? 'inativo' : 'ativo'}` : 'Status do cliente'}
+    >
+      <span className={cn('h-1.5 w-1.5 rounded-full', ativo ? 'bg-success animate-pulse' : 'bg-muted-foreground/40')} />
+      {ativo ? 'Ativo' : 'Inativo'}
+    </button>
+  )
+}
+
 interface RetrospectoProps {
   clientId: string
   canWrite: boolean
@@ -109,12 +134,12 @@ export function ClienteRetrospecto({ clientId, canWrite }: RetrospectoProps) {
     <div className="group rounded-2xl border border-border bg-card p-4 space-y-2 transition-all hover:border-accent/30 hover:shadow-md">
       <div className="flex items-center justify-between pb-3 border-b border-border/60">
         <h3 className="flex items-center gap-2 text-sm font-bold text-foreground">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/10 text-accent">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-muted text-link">
             <StickyNote className="h-3.5 w-3.5" />
           </span>
           Retrospecto
           {notes.length > 0 && (
-            <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-bold text-accent tabular-nums">
+            <span className="rounded-full bg-primary-muted px-2 py-0.5 text-[11px] font-bold text-link tabular-nums">
               {notes.length}
             </span>
           )}

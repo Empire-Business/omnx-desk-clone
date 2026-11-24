@@ -4,8 +4,10 @@
 > hoje. É o pré-requisito da **Fase 2** (unificação de permissões) do roadmap de
 > modularização. Aqui está a fotografia do legado; a decisão do modelo unificado
 > é a entrega E2.2.
-> Atualizado em: 06/08/2026 às 12h00 BRT — inclui a matriz vigente de
-> `permissoes_app` (§5) e o recurso `atendimento`.
+> Atualizado em: 19/11/2026 às 17h30 BRT — §4: superadmin só por `users.perfil` (D4 do ensaio real).
+> Versão anterior: 27/10/2026 às 09h26 BRT — §5.1: Íris, Vínculos e WhatsApp da
+> equipe (admin/gerente com `automacoes-wa · admin`). Inclui a matriz vigente de
+> `permissoes_app` (§5), o recurso `atendimento` e o recurso `automacoes-wa` (§5.1).
 
 ---
 
@@ -87,7 +89,11 @@ de RLS consultam via `has_role()` / `is_admin()`.
 ## 4. `is_master_admin()` — o super-admin do multi-tenant
 
 Função `SECURITY DEFINER`: retorna true se o usuário logado é `admin` **do tenant
-marcado como `is_master`**. É o porteiro do provisionamento de empresas (tela
+marcado como `is_master`**. Desde 19/11/2026 (migração `20261119180100`) "admin" aqui é
+só `users.perfil = 'admin'`, a mesma régua de `is_admin()`: `user_roles.role` não dá mais
+superadministração. Antes, quem era rebaixado pela tela de Colaboradores (que muda só
+`users.perfil`) continuava superadmin pelo papel antigo. No app instalado, exige ainda a
+sessão confirmada pelo segundo fator (`aal2`). É o porteiro do provisionamento de empresas (tela
 `/empresas` + edge function `provision-tenant`). Só existe **um** tenant mestre
 (índice único `uq_tenants_unico_mestre`).
 
@@ -115,6 +121,7 @@ Desde `20260804160000`, a escada vale **nos dois lados**: no front
 | `colaboradores` | admin | ver | — | — | — | — | — | — |
 | `cobranca` | admin | ver | — | — | — | admin | editar | — |
 | `portal` | admin | — | — | — | — | — | — | ver |
+| **`automacoes-wa`** | admin (curinga) | — | — | — | — | — | — | — |
 
 **Como ler o traço (—):** sem acesso nenhum ao recurso. O `admin` cobre tudo pelo
 curinga `*` — é o fail-safe que impede um seed errado trancar o dono do tenant.
@@ -133,6 +140,65 @@ curinga `*` — é o fail-safe que impede um seed errado trancar o dono do tenan
 > Note que esconder o menu **não** é proteção — é conveniência. A trava real do
 > Atendimento está na RLS: um perfil sem permissão não lê as demandas nem
 > chamando a API direto com a anon key.
+
+### 5.1 Recurso `automacoes-wa` (App Automações WhatsApp, 26/10/2026)
+
+A migration `20261026120000` **não semeia** linha nova em `permissoes_app`: o
+curinga `('*','admin')` do perfil `admin` já cobre o recurso. Nenhum outro perfil
+nasce com acesso — quem precisar, o admin libera em `/admin` (o recurso aparece
+na lista como "Automações WhatsApp").
+
+O que cada ação libera **de verdade**:
+
+| Ação | Libera | Onde é checado |
+|---|---|---|
+| `ver` | Ler o histórico de envios (`wa_auto_envios`) pela API | RLS `wa_auto_envios_select` |
+| `editar` | Tudo de `ver` + **agendar**: marcar reunião e enviar o link no grupo | `wa-auto-agendar` chama `has_permissao('automacoes-wa','editar')` com o JWT da pessoa |
+| `admin` | Tudo de `editar` + abrir a tela `/automacoes-wa` e ler/gravar configuração, gestores e regras | `AppSidebar`, `AutomacoesWaConfigPage` (`can(...,'admin')`) e RLS `wa_auto_config_admin`, `wa_auto_gestores_admin`, `wa_auto_regras_anomalia_admin` |
+
+Travas que **não** seguem a matriz (ficam presas a `users.perfil = 'admin'`):
+
+| Ação | Por quê |
+|---|---|
+| Salvar token UAZAPI / chave Zernio (RPC `save_omnx_integracao_secret`) | Mesma guarda da ponte Empire; segredo de integração é só do dono da conta |
+| Envio de teste (`wa-auto-testar-envio`) e prévia (`wa-auto-backtest`) | As funções conferem `perfil = 'admin'` direto |
+
+> Consequência prática: um `gerente` que receba `automacoes-wa · admin` em
+> `/admin` abre a tela e muda horários/gestores, mas **não** salva token nem usa o
+> teste/prévia (recebe "sem permissão"). Hoje só `ver` não tem tela própria —
+> o histórico só é visível dentro da página, que exige `admin`.
+
+Camadas independentes, todas em AND: app ligado (`app_modules`), permissão,
+`tenant_isolation` RESTRICTIVE nas 4 tabelas `wa_auto_*`. Ninguém logado escreve
+em `wa_auto_envios` (só `SELECT` concedido); só as edge functions gravam.
+
+#### Íris, Vínculos e WhatsApp da equipe (27/10/2026)
+
+Algumas partes da tela exigem **duas** coisas ao mesmo tempo: ser **admin ou
+gerente** (perfil) **e** ter `automacoes-wa · admin`. É a função
+`vinculos_pode_gerir()` = `pode_ver_restrito()` AND `has_permissao('automacoes-wa','admin')`.
+Um gerente só vê essas partes se o admin der a ele a permissão do app em `/admin`;
+um estrategista com a permissão do app **não** vê (não é admin/gerente).
+
+| O quê | Quem | Onde é checado |
+|---|---|---|
+| Aba **Assistente** (ligar a Íris, nome, grupos, membros, "Proteger conexão", simular, aprendizados) | `automacoes-wa · admin` | Página + RLS das tabelas `wa_agente_*` (escrita por coluna) + `wa-agente-admin` (`has_permissao` com o JWT) |
+| Seção **WhatsApp pessoal da equipe** (`equipe_identidades`) | Admin/gerente **com** `automacoes-wa · admin` | RLS (`pode_ver_restrito` + `has_permissao`); a tela só lê os 4 últimos dígitos (sem GRANT de telefone completo nem LID); só cria/apaga origem `cadastro` |
+| Aba **Vínculos** (`cliente_canais`) | Admin/gerente **com** `automacoes-wa · admin` | Aba escondida para outros perfis + RLS de leitura com `vinculos_pode_gerir()`; front sem escrita direta: lista, busca e decide pelas RPCs `vinculos_listar`/`vinculos_buscar_clientes`/`vinculos_decidir`, que conferem de novo |
+| Botão "Recalcular sugestões" e prévia da análise por cliente | Admin/gerente com `automacoes-wa · admin` | `wa-vinculos-sugerir` / `wa-relacionamento-analisar` conferem `vinculos_pode_gerir` com o JWT da pessoa (só a empresa dela) |
+| Ler `cliente_relacionamento` (satisfação/risco por cliente) | Quem pode ver o cliente (`user_can_access_client`: admin/gerente/atendimento todos; estrategista só a carteira) ou admin/gerente | RLS; escrita só pelo servidor |
+| "Ver transcrição" no Chat (`chat_midia_texto`) | Quem vê a mensagem | RLS espelha a de `chat_messages` (inclusive grupo restrito) |
+| Vincular contato a cliente pelo Chat | Continua como antes, mas só vira decisão do canal se a pessoa enxerga todos os contatos do canal; senão vira só "sugerido". Perfil `cliente` nunca | `private.vinculo_do_chat` |
+
+**Íris no WhatsApp (fora da tela):** fala só com quem está no grupo interno
+liberado. No grupo com **"Todos no grupo veem tudo"** (`acesso_total`, ligado no
+"Report Entregas"), **qualquer participante** pergunta sobre qualquer cliente da
+empresa e — risco aceito pelo dono em 27/10/2026 — pode ensinar preferências e
+usar `ajustar_relatorio` sem cadastro. Fora desse modo: membro cadastrado vê só a
+própria carteira; `ajustar_relatorio` exige `automacoes-wa · editar`; valores de
+contrato/comissão e conteúdo de conversa seguem as permissões do sistema
+(`contratos`, `comissoes`, `chat`). `match_contact_to_client` deixou de ser
+chamável por usuário logado (só o servidor).
 
 ---
 
@@ -219,3 +285,26 @@ não dá acesso a tudo". A migração deve ser **aditiva** (o legado acima conti
 funcionando até cada módulo migrar), com testes por perfil em branch/preview.
 Candidatos a aposentar depois de migrar: o texto livre `users.perfil` como gate de
 UI, em favor de `user_roles` + uma tabela de permissões por app.
+## Adendo — SSO do Empire OS (12/09/2026 às 15h53 BRT)
+
+`provision-tenant` possui um ator técnico separado dos papéis humanos: o Empire OS.
+Ele só cria/reconcilia um tenant e seu primeiro `admin` quando apresenta a
+`X-Platform-Key` server-side correta. Nenhum papel do Desk recebe essa chave e nenhum
+usuário pode enviar `tenant_id` para obter sessão em outro tenant. O owner entra pelo
+provedor OIDC `custom:empire-os`, com o mesmo e-mail e senha validados no Empire OS;
+a senha não é copiada para o Desk e o acesso permanece preso ao tenant reconciliado.
+
+| Ação | Empire OS autenticado por chave | owner/admin do tenant | demais membros | anônimo |
+|---|---|---|---|---|
+| Criar/reconciliar tenant por `external_ref` | sim | não por esta rota | não | não |
+| Autorizar SSO OIDC do owner para o tenant reconciliado | sim | sim, pela própria conta | não | não |
+| Ler a chave de plataforma | não | não | não | não |
+
+### Ativação de membro vinda do Empire OS
+
+| Ação | Empire OS com chave | owner/admin | membro | anônimo |
+|---|---|---|---|---|
+| Criar tenant e primeiro admin | sim | não por esta rota | não | não |
+| Incluir identidade em tenant já reconciliado | sim, por `external_ref` | não por esta rota | recebe `atendimento` | não |
+| Incluir antes do owner criar o tenant | não (`owner_not_activated`) | não | não | não |
+| Escolher `tenant_id` ou papel no navegador | não | não | não | não |

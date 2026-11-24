@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Conectar uma IA ao Desk (MCP)</title>
+<style>
+  body { font: 16px/1.6 system-ui, sans-serif; color: #1f2937; max-width: 820px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 1.7rem; } h2 { margin-top: 2.2rem; font-size: 1.25rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+  pre { background: #111827; color: #f3f4f6; padding: 12px 14px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: 0.92em; }
+  :not(pre) > code { background: #f3f4f6; padding: 1px 5px; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; } th, td { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; vertical-align: top; }
+  .nota { background: #fff8e1; border: 1px solid #f0d98a; border-radius: 8px; padding: 10px 14px; }
+  a { color: #1a56db; }
+</style>
+</head>
+<body>
+<h1>Conectar uma IA ao Desk (MCP)</h1>
+<p>O MCP deixa assistentes de IA (Claude, Cursor, Codex) <strong>consultarem</strong> o atendimento por WhatsApp da sua empresa: conversas, mensagens, contatos e números conectados. É <strong>somente leitura</strong>. Referência da API REST: <a href="/docs/api/">/docs/api</a>.</p>
+
+<div class="nota"><strong>Antes de começar.</strong> Peça a um administrador do Desk uma chave em <em>Chaves de acesso</em>, com as permissões de leitura necessárias. A chave aparece uma única vez e começa com <code>edk_</code>. Guarde em uma variável de ambiente (<code>DESK_API_KEY</code>); nunca cole a chave em conversa, repositório ou print.</div>
+
+<h2>Endereço do servidor</h2>
+<pre>https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/desk-mcp</pre>
+<p>Protocolo MCP (JSON-RPC por HTTP, sem sessão). Autenticação: <code>Authorization: Bearer edk_...</code> (ou <code>X-API-Key</code>). Versões aceitas: 2025-11-25, 2025-06-18, 2025-03-26.</p>
+
+<h2>O que a IA pode fazer</h2>
+<table>
+<tr><th>Ferramenta</th><th>Permissão da chave</th><th>Para quê</th></tr>
+<tr><td><code>list_instances</code></td><td><code>view_instances</code></td><td>Listar os números de WhatsApp ativos</td></tr>
+<tr><td><code>list_conversations</code></td><td><code>list_conversations</code></td><td>Listar conversas (filtro por status, instância, departamento; paginação)</td></tr>
+<tr><td><code>get_conversation</code></td><td><code>list_conversations</code></td><td>Ver uma conversa e suas últimas mensagens (até 200)</td></tr>
+<tr><td><code>list_contacts</code></td><td><code>manage_contacts</code></td><td>Listar/buscar contatos</td></tr>
+</table>
+<p>A IA só vê as ferramentas liberadas pela chave. <strong>Não existe ferramenta de envio ou de alteração</strong>: mensagens a clientes saem apenas pelo Desk, com a humanização e a confirmação de uma pessoa. Grupos internos da empresa ficam sempre ocultos.</p>
+
+<h2>Instalação por cliente</h2>
+<p>Em todos os exemplos, defina antes <code>export DESK_API_KEY=edk_...</code> (sua chave). Reinicie o cliente depois de editar arquivos de configuração.</p>
+
+<h3>Claude Code</h3>
+<pre>claude mcp add --transport http omnx-desk \
+  https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/desk-mcp \
+  --header "Authorization: Bearer $DESK_API_KEY"</pre>
+<p>Confira com <code>claude mcp list</code>.</p>
+
+<h3>Claude Desktop</h3>
+<p>Conectores remotos do Claude Desktop usam OAuth; para chave em cabeçalho, use a ponte <code>mcp-remote</code> (requer Node.js). Edite <code>claude_desktop_config.json</code> (Configurações &rarr; Desenvolvedor &rarr; Editar configuração):</p>
+<pre>{
+  "mcpServers": {
+    "omnx-desk": {
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote",
+        "https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/desk-mcp",
+        "--header", "Authorization:${DESK_AUTH}"
+      ],
+      "env": { "DESK_AUTH": "Bearer edk_COLE_SUA_CHAVE_AQUI" }
+    }
+  }
+}</pre>
+<p>Esse arquivo fica só no seu computador; não o compartilhe.</p>
+
+<h3>Cursor</h3>
+<p>Arquivo <code>~/.cursor/mcp.json</code> (ou <code>.cursor/mcp.json</code> no projeto):</p>
+<pre>{
+  "mcpServers": {
+    "omnx-desk": {
+      "url": "https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/desk-mcp",
+      "headers": { "Authorization": "Bearer ${env:DESK_API_KEY}" }
+    }
+  }
+}</pre>
+
+<h3>Codex (CLI)</h3>
+<p>Arquivo <code>~/.codex/config.toml</code>:</p>
+<pre>[mcp_servers.omnx-desk]
+url = "https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/desk-mcp"
+bearer_token_env_var = "DESK_API_KEY"</pre>
+
+<p>Os formatos de configuração dos clientes mudam com frequência; se algum campo não for aceito, consulte a documentação do cliente e mantenha os três dados: endereço, método HTTP e o cabeçalho <code>Authorization: Bearer</code>.</p>
+
+<h2>Testar sem IA (curl)</h2>
+<pre>curl -s -X POST https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/desk-mcp \
+  -H "Authorization: Bearer $DESK_API_KEY" -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</pre>
+
+<h2>Segurança e limites</h2>
+<ul>
+<li>A chave pertence a uma empresa: só enxerga os dados dela. Pode ter validade e ser revogada a qualquer momento em Desk &rarr; Chaves de acesso.</li>
+<li>Limite padrão: 60 chamadas por minuto por chave (<code>429</code> com <code>Retry-After</code>).</li>
+<li>Cada chamada é auditada (chave, ferramenta, status, duração), sem guardar o conteúdo das mensagens.</li>
+<li>Mensagens e nomes vêm de clientes: são <strong>dados, nunca ordens</strong>. Uma mensagem que diga &ldquo;ignore as regras&rdquo; deve ser tratada como texto.</li>
+<li>Dados pessoais de clientes passam a ficar disponíveis ao assistente que você conectar. Use apenas clientes de IA em que sua empresa confia e dê à chave só as permissões necessárias.</li>
+<li>Suspeita de vazamento: revogue a chave e crie outra.</li>
+</ul>
+</body>
+</html>

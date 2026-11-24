@@ -1,7 +1,11 @@
+import { nomesClientesContrato } from '@/lib/contratoClientes'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, X, Trash2, Search, ChevronLeft, ChevronRight, ChevronDown, FileDown, CheckSquare, Square, ArrowDown, ArrowUp, ArrowUpDown, Repeat, Users, Package, Hash, CalendarRange, DollarSign, Tag as TagIcon, CircleDot } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { FileText, SearchX } from 'lucide-react'
 import { ContratosTabs } from '@/components/contratos/ContratosTabs'
 import {
   useContratos,
@@ -104,22 +108,20 @@ function statusPrimario(valor: string | null): 'ativo' | 'pausado' | 'cancelado'
   return 'ativo'
 }
 
-// Cor por status — pílula colorida e bem visível
-function statusClasses(s: string | null | undefined): string {
+// Selo de status do design system (`.st[data-s]`): cor + forma do marcador, nunca só cor.
+function statusTom(s: string | null | undefined): string {
   switch ((s ?? '').toUpperCase()) {
-    case 'ATIVO':        return 'bg-success text-white border-success'
-    case 'PAUSADO':      return 'bg-orange-500 text-white border-orange-500'
-    case 'INADIMPLENTE': return 'bg-danger text-white border-danger'
-    case 'CANCELADO':    return 'bg-danger-light text-danger border-danger/40'
-    case 'CONCLUÍDO':    return 'bg-emerald-100 text-emerald-700 border-emerald-300'
-    case 'NÃO INICIADO': return 'bg-muted text-muted-foreground border-border'
-    default:             return 'bg-muted text-muted-foreground border-border'
+    case 'ATIVO':        return 'andamento'
+    case 'PAUSADO':      return 'aguardando'
+    case 'INADIMPLENTE': return 'atrasado'
+    case 'CONCLUÍDO':    return 'resolvido'
+    case 'NÃO INICIADO': return 'aberto'
+    default:             return 'neutro'
   }
 }
 
 function StatusPill({ contratoId, value }: { contratoId: string; value: string | null }) {
   const update = useUpdateContrato()
-  const cls = statusClasses(value)
   // Garante que um valor legado (fora das opções) ainda apareça no seletor.
   const opcoes = STATUS_OPCOES.some((o) => o.valor.toUpperCase() === (value ?? '').toUpperCase())
     ? STATUS_OPCOES
@@ -132,12 +134,14 @@ function StatusPill({ contratoId, value }: { contratoId: string; value: string |
         onValueChange={(v) => update.mutate({ id: contratoId, status_secundario: v, status: statusPrimario(v) })}
       >
         <SelectTrigger
+          data-s={statusTom(value)}
+          aria-label={`Status do contrato: ${statusLabel(value)}. Alterar`}
           className={cn(
-            'h-auto w-auto gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold',
-            '[&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-70 [&>svg]:ml-0',
-            cls,
+            'st h-7 w-auto shrink-0 gap-1.5 rounded-full border-0 bg-[var(--st-bg)] px-2.5 text-xs font-semibold text-[var(--st-fg)] sm:h-7 sm:text-xs',
+            '[&>span]:line-clamp-none [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-70 [&>svg]:ml-0',
           )}
         >
+          <span className="st-g" aria-hidden />
           <SelectValue placeholder={statusLabel(value)}>{statusLabel(value)}</SelectValue>
         </SelectTrigger>
         <SelectContent>
@@ -288,7 +292,7 @@ export function ContratosPage() {
     if (!contratos) return []
     const q = semAcento(query.trim())
     return contratos.filter((c) => {
-      if (q && !semAcento(c.cliente_nome ?? '').includes(q)) return false
+      if (q && !semAcento(nomesClientesContrato(c)).includes(q)) return false
       if (filtros.estrategistaId && c.estrategista_id !== filtros.estrategistaId) return false
       if (filtros.status.length > 0 && !filtros.status.includes(c.status_secundario ?? c.status ?? '')) return false
       if (filtros.produto && c.produto_nome !== filtros.produto) return false
@@ -315,7 +319,7 @@ export function ContratosPage() {
     const q = semAcento(query.trim())
     if (!q || filtros.status.length === 0 || !contratos) return 0
     return contratos.filter((c) => {
-      if (!semAcento(c.cliente_nome ?? '').includes(q)) return false
+      if (!semAcento(nomesClientesContrato(c)).includes(q)) return false
       return !filtros.status.includes(c.status_secundario ?? c.status ?? '')
     }).length
   }, [contratos, query, filtros.status])
@@ -432,7 +436,7 @@ export function ContratosPage() {
   const algumFiltro = filtersActive || !isStatusDefault(filtros.status) || Boolean(query)
 
   return (
-    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+    <PageContainer className="animate-fade-in">
       <PageHeader
         title="Contratos"
         description="Cadastro de contratos fechados que geram comissão."
@@ -483,8 +487,9 @@ export function ContratosPage() {
             <span className="whitespace-nowrap tabular-nums px-1 font-medium text-foreground">
               {filtered.length}
               {(query || filtersActive) && contratos && filtered.length !== contratos.length && (
-                <span className="text-muted-foreground"> / {contratos.length}</span>
+                <span className="text-muted-foreground"> de {contratos.length}</span>
               )}
+              <span className="font-normal text-muted-foreground"> {filtered.length === 1 ? 'contrato' : 'contratos'}</span>
             </span>
           </div>
         </div>
@@ -580,11 +585,11 @@ export function ContratosPage() {
         )}
 
         {isLoading ? (
-          <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-12 shimmer rounded-lg" />)}</div>
+          <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="sk h-12 rounded-lg" />)}</div>
         ) : !contratos || contratos.length === 0 ? (
-          <p className="py-12 text-center text-sm text-muted-foreground">Nenhum contrato cadastrado.</p>
+          <EmptyState icon={FileText} title="Nenhum contrato ainda" description="Quando uma venda for fechada, o contrato aparece aqui." />
         ) : filtered.length === 0 ? (
-          <p className="py-12 text-center text-sm text-muted-foreground">Nenhum contrato encontrado com os filtros atuais.</p>
+          <EmptyState icon={SearchX} title="Nenhum contrato com esses filtros" description="Tire algum filtro ou mude a busca para ver mais resultados." />
         ) : (
           <div className="w-full">
             {/* table-fixed + larguras percentuais: a tabela se ajusta à tela em vez de
@@ -593,7 +598,7 @@ export function ContratosPage() {
               <thead>
                 <tr className="text-left">
                   <Th className="w-8 pl-1">
-                    <button onClick={toggleSelectAllPage} className="text-muted-foreground hover:text-foreground align-middle">
+                    <button onClick={toggleSelectAllPage} className="-m-2.5 inline-flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground align-middle md:-m-1.5 md:h-8 md:w-8">
                       {pageItems.length > 0 && pageItems.every((c) => selected.has(c.id))
                         ? <CheckSquare className="h-4 w-4" />
                         : <Square className="h-4 w-4" />}
@@ -609,7 +614,7 @@ export function ContratosPage() {
                   <Th className="hidden sm:table-cell w-[9%]"><SortBtn {...thSort('pagamento')}>Pagamento</SortBtn></Th>
                   <Th className="text-right w-[11%]"><SortBtn {...thSort('valor')} className="justify-end w-full">Valor</SortBtn></Th>
                   <Th className="hidden lg:table-cell text-center w-[7%]"><SortBtn {...thSort('parcelas')} className="justify-center w-full">Parcelas</SortBtn></Th>
-                  <Th className="w-[12%] text-right"><SortBtn {...thSort('status')} className="justify-end w-full">Status</SortBtn></Th>
+                  <Th className="w-[12%] min-w-[9.5rem] text-right"><SortBtn {...thSort('status')} className="justify-end w-full">Status</SortBtn></Th>
                   <Th className="w-8"></Th>
                 </tr>
               </thead>
@@ -623,7 +628,7 @@ export function ContratosPage() {
                       className="group cursor-pointer transition-colors hover:bg-muted/50 [&>td]:border-b [&>td]:border-border/60"
                     >
                       <td className="py-3 pl-1 pr-2 align-middle" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => toggleSelect(c.id)} className="text-muted-foreground hover:text-foreground align-middle">
+                        <button onClick={() => toggleSelect(c.id)} className="-m-2.5 inline-flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground align-middle md:-m-1.5 md:h-8 md:w-8">
                           {selected.has(c.id) ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
                         </button>
                       </td>
@@ -636,7 +641,7 @@ export function ContratosPage() {
                             {/* O nome encolhe e trunca; as tags não deformam (shrink-0)
                                 — com table-fixed elas ficavam espremidas e tortas. */}
                             <div className="flex min-w-0 items-center gap-2">
-                              <span className="truncate font-medium text-foreground">{c.cliente_nome}</span>
+                              <span className="truncate font-medium text-foreground">{nomesClientesContrato(c)}</span>
                               <span className="shrink-0 leading-none">
                                 <RowTags contratoId={c.id} clienteNome={c.cliente_nome} tags={c.tags ?? []} />
                               </span>
@@ -739,7 +744,7 @@ export function ContratosPage() {
         estrategistaNome={estrategistaNome}
         statusLabel={statusLabel}
       />
-    </div>
+    </PageContainer>
   )
 }
 
@@ -797,7 +802,7 @@ function BulkTagButton({ allTags, onApply }: { allTags: Tag[]; onApply: (id: str
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-40 mt-1.5 w-56 rounded-xl border border-border bg-popover p-2 shadow-xl">
+          <div className="absolute left-0 top-full z-40 mt-1.5 w-56 max-w-[calc(100vw-2rem)] rounded-xl border border-border bg-popover p-2 shadow-xl">
             {allTags.length === 0 ? (
               <p className="px-2 py-3 text-center text-xs text-muted-foreground">Nenhuma tag criada.</p>
             ) : (
@@ -851,7 +856,7 @@ function StatusFilterChip({ filtros, patch }: { filtros: Filtros; patch: (p: Par
   return (
     <FilterChip
       icon={<CircleDot className="h-3.5 w-3.5" />} label="Status" active={!isDefault} valueLabel={valueLabel}
-      onClear={() => patch({ status: [...STATUS_DEFAULT] })} panelClass="w-60"
+      onClear={() => patch({ status: [...STATUS_DEFAULT] })} panelClass="w-60 max-w-[calc(100vw-2rem)]"
     >
       {() => (
         <div className="space-y-2">
@@ -859,9 +864,11 @@ function StatusFilterChip({ filtros, patch }: { filtros: Filtros; patch: (p: Par
             {STATUS_OPCOES.map((s) => {
               const on = filtros.status.includes(s.valor)
               return (
-                <button key={s.valor} type="button" onClick={() => toggle(s.valor)}
-                  className={cn('h-7 rounded-full border px-2.5 text-xs font-medium transition-colors',
-                    on ? statusClasses(s.valor) : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30')}>
+                <button key={s.valor} type="button" onClick={() => toggle(s.valor)} aria-pressed={on}
+                  data-s={on ? statusTom(s.valor) : undefined}
+                  className={cn('inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors',
+                    on ? 'st border-transparent' : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30')}>
+                  {on && <span className="st-g" aria-hidden />}
                   {s.label}
                 </button>
               )
@@ -892,8 +899,8 @@ function TagsFilterChip({ filtros, patch, allTags }: { filtros: Filtros; patch: 
   const n = filtros.tags.length
   const valueLabel = n === 1 ? (allTags.find((t) => t.id === filtros.tags[0])?.nome ?? '1') : n > 1 ? `${n} tags` : undefined
   return (
-    <FilterChip icon={<TagIcon className="h-3.5 w-3.5" />} label="Tags" active={n > 0} valueLabel={valueLabel}
-      onClear={() => patch({ tags: [] })} panelClass="w-64">
+    <FilterChip icon={<TagIcon className="h-3.5 w-3.5" />} label="Etiquetas" active={n > 0} valueLabel={valueLabel}
+      onClear={() => patch({ tags: [] })} panelClass="w-64 max-w-[calc(100vw-2rem)]">
       {() => (
         allTags.length === 0 ? (
           <p className="text-xs text-muted-foreground">Nenhuma tag criada ainda.</p>
@@ -930,7 +937,7 @@ function PickerFilterChip({
 }) {
   return (
     <FilterChip icon={icon} label={label} active={Boolean(value)} valueLabel={valueLabel}
-      onClear={() => onChange('')} panelClass="w-60">
+      onClear={() => onChange('')} panelClass="w-60 max-w-[calc(100vw-2rem)]">
       {(close) => (
         <OptionPicker options={options} value={value} placeholder={`Todos`} onPick={(v) => { onChange(v); close() }} />
       )}
@@ -941,7 +948,7 @@ function PickerFilterChip({
 function ParcelasFilterChip({ filtros, patch }: { filtros: Filtros; patch: (p: Partial<Filtros>) => void }) {
   return (
     <FilterChip icon={<Hash className="h-3.5 w-3.5" />} label="Parcelas" active={Boolean(filtros.parcelas)}
-      valueLabel={filtros.parcelas ? `${filtros.parcelas}x` : undefined} onClear={() => patch({ parcelas: '' })} panelClass="w-48">
+      valueLabel={filtros.parcelas ? `${filtros.parcelas}x` : undefined} onClear={() => patch({ parcelas: '' })} panelClass="w-48 max-w-[calc(100vw-2rem)]">
       {() => (
         <div className="space-y-1.5">
           <label className="text-[11px] font-medium text-muted-foreground">Nº de parcelas exato</label>
@@ -971,7 +978,7 @@ function PeriodoFilterChip({ filtros, patch }: { filtros: Filtros; patch: (p: Pa
   const valueLabel = active ? `${filtros.de ? fmtDataBR(filtros.de) : '…'} → ${filtros.ate ? fmtDataBR(filtros.ate) : '…'}` : undefined
   return (
     <FilterChip icon={<CalendarRange className="h-3.5 w-3.5" />} label="Período" active={active} valueLabel={valueLabel}
-      onClear={() => patch({ de: '', ate: '' })} panelClass="w-72">
+      onClear={() => patch({ de: '', ate: '' })} panelClass="w-72 max-w-[calc(100vw-2rem)]">
       {() => (
         <div className="space-y-3">
           <div className="flex flex-wrap gap-1.5">
@@ -1015,7 +1022,7 @@ function ValorFilterChip({ filtros, patch }: { filtros: Filtros; patch: (p: Part
     : undefined
   return (
     <FilterChip icon={<DollarSign className="h-3.5 w-3.5" />} label="Valor" active={active} valueLabel={valueLabel}
-      onClear={() => patch({ valorMin: '', valorMax: '' })} panelClass="w-60">
+      onClear={() => patch({ valorMin: '', valorMax: '' })} panelClass="w-60 max-w-[calc(100vw-2rem)]">
       {() => (
         <div className="space-y-1.5">
           <label className="text-[11px] font-medium text-muted-foreground">Valor (R$)</label>

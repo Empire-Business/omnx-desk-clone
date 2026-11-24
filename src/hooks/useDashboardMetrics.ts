@@ -134,9 +134,12 @@ export function useDashboardData() {
     queryKey: ['dashboard-data'] as const,
     queryFn: async () => {
       // 1. Pega usuário atual + perfil
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError) throw authError
       if (!user) throw new Error('Não autenticado')
-      const { data: profile } = await supabase.from('users').select('id, nome, perfil').eq('id', user.id).single()
+      const { data: profile, error: profileError } = await supabase.from('users').select('id, nome, perfil').eq('id', user.id).single()
+      if (profileError) throw profileError
+      if (!profile) throw new Error('Não foi possível consultar seu perfil.')
       // Mesma pergunta das outras telas: vê a carteira inteira ou só a sua?
       // Vem da matriz (has_permissao), com o gate antigo como fallback.
       const isAdmin = await podeNoBanco(
@@ -148,11 +151,12 @@ export function useDashboardData() {
       // 2. Pega clientes (filtra por assignment se não for admin)
       let clientsQuery = supabase.from('clients').select('id, nome, instagram, ativo')
       if (!isAdmin) {
-        const { data: assignments } = await supabase
+        const { data: assignments, error: assignmentsError } = await supabase
           .from('client_assignments')
           .select('client_id')
           .eq('user_id', user.id)
           .eq('ativo', true)
+        if (assignmentsError) throw assignmentsError
         const ids = (assignments ?? []).map(a => a.client_id)
         if (ids.length === 0) {
           return {
@@ -165,7 +169,8 @@ export function useDashboardData() {
         }
         clientsQuery = clientsQuery.in('id', ids)
       }
-      const { data: clients } = await clientsQuery
+      const { data: clients, error: clientsError } = await clientsQuery
+      if (clientsError) throw clientsError
       const clientsList = (clients ?? []) as Array<{ id: string; nome: string; instagram: string | null; ativo: boolean }>
       const ativos = clientsList.filter(c => c.ativo)
 
@@ -184,12 +189,13 @@ export function useDashboardData() {
       const weekBaselineByClient = new Map<string, number>()
       const weekStart = startOfWeek().getTime()
       if (ativoIds.length > 0) {
-        const { data: snaps } = await supabase
+        const { data: snaps, error: snapsError } = await supabase
           .from('social_snapshots')
           .select('client_id, followers, last_post_at, username, fetched_at')
           .eq('platform', 'instagram')
           .in('client_id', ativoIds)
           .order('fetched_at', { ascending: false })
+        if (snapsError) throw snapsError
         for (const s of (snaps ?? []) as SnapshotRow[]) {
           if (!lastSnapshots.has(s.client_id)) lastSnapshots.set(s.client_id, s)
         }
@@ -234,10 +240,11 @@ export function useDashboardData() {
       // Busca WhatsApp dos críticos via chat_contacts
       if (criticos.length > 0) {
         const criticosIds = criticos.map(c => c.id)
-        const { data: contacts } = await supabase
+        const { data: contacts, error: contactsError } = await supabase
           .from('chat_contacts')
           .select('client_id, numero_whatsapp')
           .in('client_id', criticosIds)
+        if (contactsError) throw contactsError
         const whatsappByClient = new Map<string, string>()
         for (const contact of (contacts ?? []) as Array<{ client_id: string; numero_whatsapp: string }>) {
           if (!whatsappByClient.has(contact.client_id)) {
@@ -262,12 +269,13 @@ export function useDashboardData() {
       if (isAdmin) {
         const ativosIds = ativos.map(c => c.id)
         if (ativosIds.length > 0) {
-          const { data: allCliAssign } = await supabase
+          const { data: allCliAssign, error: allCliAssignError } = await supabase
             .from('client_assignments')
             .select('client_id, users!inner(nome)')
             .eq('tipo', 'estrategista')
             .eq('ativo', true)
             .in('client_id', ativosIds)
+          if (allCliAssignError) throw allCliAssignError
           type Row = { client_id: string; users: { nome: string } | null }
           for (const r of (allCliAssign ?? []) as unknown as Row[]) {
             if (!r.users) continue
@@ -292,9 +300,10 @@ export function useDashboardData() {
       }>()
       if (isAdmin) {
         // NPS: nps_responses → nps_surveys.client_id
-        const { data: npsData } = await supabase
+        const { data: npsData, error: npsError } = await supabase
           .from('nps_responses')
           .select('nota, nps_surveys!inner(client_id)')
+        if (npsError) throw npsError
         type NpsRow = { nota: number; nps_surveys: { client_id: string } | null }
         for (const r of (npsData ?? []) as unknown as NpsRow[]) {
           if (!r.nps_surveys?.client_id) continue
@@ -305,10 +314,11 @@ export function useDashboardData() {
 
         // Sentimental: weekly_reports por estrategista (últimas 4 semanas)
         const fourWeeksAgo = new Date(Date.now() - 28 * 86400000).toISOString().slice(0, 10)
-        const { data: sentData } = await supabase
+        const { data: sentData, error: sentimentError } = await supabase
           .from('chat_weekly_reports')
           .select('estrategista_id, sentimento_geral, ia_score, risco_abandono, qualidade_consultoria_estrategista, clareza_posicionamento, nivel_execucao')
           .gte('semana_inicio', fourWeeksAgo)
+        if (sentimentError) throw sentimentError
         type SentRow = {
           estrategista_id: string | null
           sentimento_geral: string | null
@@ -362,11 +372,12 @@ export function useDashboardData() {
         }
       }
       if (isAdmin) {
-        const { data: allAssign } = await supabase
+        const { data: allAssign, error: allAssignError } = await supabase
           .from('client_assignments')
           .select('user_id, client_id, tipo, ativo, users!inner(id, nome, perfil)')
           .eq('tipo', 'estrategista')
           .eq('ativo', true)
+        if (allAssignError) throw allAssignError
         type AssignRow = { user_id: string; client_id: string; users: { id: string; nome: string; perfil: string } | null }
         const byUser = new Map<string, { user_id: string; nome: string; clients: string[] }>()
         for (const a of (allAssign ?? []) as unknown as AssignRow[]) {
@@ -380,13 +391,14 @@ export function useDashboardData() {
         const historicalSnaps = new Map<string, Array<{ last_post_at: string | null; fetched_at: string }>>()
         const allClientIds = Array.from(byUser.values()).flatMap(u => u.clients)
         if (allClientIds.length > 0) {
-          const { data: hSnaps } = await supabase
+          const { data: hSnaps, error: historyError } = await supabase
             .from('social_snapshots')
             .select('client_id, last_post_at, fetched_at')
             .eq('platform', 'instagram')
             .in('client_id', allClientIds)
             .gte('fetched_at', new Date(historySinceMs).toISOString())
             .order('fetched_at', { ascending: false })
+          if (historyError) throw historyError
           for (const r of (hSnaps ?? []) as Array<{ client_id: string; last_post_at: string | null; fetched_at: string }>) {
             const arr = historicalSnaps.get(r.client_id) ?? []
             arr.push(r)
@@ -545,7 +557,8 @@ export function useDashboardData() {
           .limit(200)
         // Estrategista: mostra entregas onde ele é responsável OU cliente está sob ele (já filtrado no client_id)
         if (!isAdmin) q = q.or(`responsavel_id.eq.${user.id}`)
-        const { data: deliv } = await q
+        const { data: deliv, error: deliveriesError } = await q
+        if (deliveriesError) throw deliveriesError
         const list = (deliv ?? []) as Array<{ id: string; titulo: string; status: string; prazo: string | null; responsavel_id: string | null; client_id: string }>
 
         const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -555,7 +568,8 @@ export function useDashboardData() {
         const respIds = Array.from(new Set(list.map(d => d.responsavel_id).filter(Boolean) as string[]))
         const respMap = new Map<string, string>()
         if (respIds.length > 0) {
-          const { data: respUsers } = await supabase.from('users').select('id, nome').in('id', respIds)
+          const { data: respUsers, error: usersError } = await supabase.from('users').select('id, nome').in('id', respIds)
+          if (usersError) throw usersError
           for (const u of (respUsers ?? []) as Array<{ id: string; nome: string }>) respMap.set(u.id, u.nome)
         }
         const clientNameMap = new Map(clientsList.map(c => [c.id, c.nome.replace(/\s*\[MERGED\]\s*/gi, '')]))
@@ -566,13 +580,9 @@ export function useDashboardData() {
           if (isPending) deliveryStats.pendentes++
           if (d.status === 'aguardando_aprovacao') deliveryStats.aguardandoAprovacao++
           if (d.status === 'aprovado') deliveryStats.aprovadas++
-          let diasParaPrazo: number | null = null
-          let atrasada = false
           if (d.prazo) {
             const prazoMs = new Date(d.prazo).getTime()
-            diasParaPrazo = Math.floor((prazoMs - todayMs) / 86400000)
             if (isPending && prazoMs < todayMs) {
-              atrasada = true
               deliveryStats.atrasadas++
             }
           }
@@ -614,11 +624,12 @@ export function useDashboardData() {
       }
 
       // 8. Sentimento: relatórios da última semana
-      const { data: weeklyAll } = await supabase
+      const { data: weeklyAll, error: weeklyError } = await supabase
         .from('chat_weekly_reports')
         .select('id, semana_inicio, sentimento_geral, estrategista_nome, client_nome, resumo, alertas, como_lidar, proximos_passos, estrategista_id')
         .order('semana_inicio', { ascending: false })
         .limit(200)
+      if (weeklyError) throw weeklyError
 
       let sentiment: SentimentSummary | null = null
       let sentimentReports: Array<{ id: string; client_nome: string; estrategista_nome: string; resumo: string; sentimento_geral: string; alertas: string[]; como_lidar: string[]; proximos_passos: string[] }> = []

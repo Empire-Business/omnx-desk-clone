@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -64,12 +65,12 @@ export function usePushNotifications() {
       if (!sub.endpoint || !sub.keys) throw new Error('Invalid subscription')
 
       // Save to Supabase
-      const { error } = await supabase.from('push_subscriptions').upsert({
+      const { error } = await supabase.from('push_subscriptions').upsert({ ...({
         user_id: user.id,
         endpoint: sub.endpoint,
         p256dh: sub.keys.p256dh!,
         auth: sub.keys.auth!,
-      }, {
+      }), tenant_id: await tenantDaSessao() }, {
         onConflict: 'user_id,endpoint',
       })
 

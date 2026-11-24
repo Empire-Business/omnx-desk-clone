@@ -161,8 +161,8 @@ function TagsBoard() {
   return (
     <div className="animate-fade-in space-y-4 sm:space-y-5">
       <PageHeader
-        title="Tags"
-        description="Cada coluna é uma tag. Arraste um contrato para dentro de uma coluna para aplicar a tag."
+        title="Etiquetas de contrato"
+        description="Cada coluna é uma etiqueta. Arraste um contrato para uma coluna para aplicar a etiqueta."
       />
       <ContratosTabs />
 
@@ -170,7 +170,7 @@ function TagsBoard() {
       <div className="flex flex-wrap items-center gap-3">
         {/* Criar nova tag */}
         <form onSubmit={criarTag} className="flex items-center gap-2">
-          <div className="flex w-52 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring">
+          <div className="flex w-full sm:w-52 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring">
             <TagIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
               value={novo}
@@ -197,7 +197,7 @@ function TagsBoard() {
             <strong className="tabular-nums text-foreground">{totalFiltrado}</strong> contrato{totalFiltrado === 1 ? '' : 's'}
           </span>
           {/* Busca */}
-          <div className="flex w-60 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring">
+          <div className="flex w-full sm:w-60 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring">
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
               value={busca}
@@ -218,7 +218,7 @@ function TagsBoard() {
 
       {carregando ? (
         <div className="flex gap-3 overflow-x-auto">
-          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-[70vh] w-72 shrink-0 shimmer rounded-xl" />)}
+          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-[70dvh] w-72 shrink-0 shimmer rounded-xl" />)}
         </div>
       ) : (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -279,7 +279,7 @@ function StatusFiltro({ value, onChange }: { value: string[]; onChange: (v: stri
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
         {label}
         {value.length > 0 && (
-          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold text-primary-foreground">
             {value.length}
           </span>
         )}
@@ -357,7 +357,7 @@ function SemTagColuna({ itens, tags }: { itens: Contrato[]; tags: Tag[] }) {
   }
 
   return (
-    <div className="sticky left-0 z-20 flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[6px_0_16px_-8px_rgba(0,0,0,0.25)]">
+    <div className="md:sticky md:left-0 z-20 flex w-[85vw] max-w-72 shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-[6px_0_16px_-8px_rgba(0,0,0,0.25)]">
       <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-muted/40 px-3 py-2.5">
         <div className="flex items-center gap-2">
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-muted text-muted-foreground">
@@ -428,7 +428,7 @@ function SemTagColuna({ itens, tags }: { itens: Contrato[]; tags: Tag[] }) {
         </div>
       )}
 
-      <div className="kanban-scroll flex-1 space-y-1 overflow-y-auto p-2" style={{ maxHeight: '70vh' }}>
+      <div className="kanban-scroll flex-1 space-y-1 overflow-y-auto p-2" style={{ maxHeight: '70dvh' }}>
         {itens.length === 0 ? (
           <p className="px-2 py-8 text-center text-xs text-muted-foreground/70">Todos os contratos já têm tag. 🎉</p>
         ) : (
@@ -476,7 +476,7 @@ function TagColuna({ tag, itens }: { tag: Tag; itens: Contrato[] }) {
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-72 shrink-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-muted/20 transition-all',
+        'flex w-[85vw] max-w-72 shrink-0 flex-col overflow-hidden rounded-xl border border-border/60 bg-muted/20 transition-all',
         isOver && 'border-primary/40 bg-primary/5 ring-2 ring-primary/20',
       )}
     >
@@ -499,7 +499,7 @@ function TagColuna({ tag, itens }: { tag: Tag; itens: Contrato[] }) {
           {fmtBRL(total)}
         </div>
       )}
-      <div className="kanban-scroll flex-1 space-y-1.5 overflow-y-auto p-2" style={{ maxHeight: '70vh', minHeight: 96 }}>
+      <div className="kanban-scroll flex-1 space-y-1.5 overflow-y-auto p-2" style={{ maxHeight: '70dvh', minHeight: 96 }}>
         {itens.length === 0 ? (
           <div className={cn(
             'flex h-24 items-center justify-center rounded-lg border-2 border-dashed text-center text-xs transition-colors',

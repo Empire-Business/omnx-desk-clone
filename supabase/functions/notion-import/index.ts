@@ -16,6 +16,7 @@
 // Secrets: NOTION_API_KEY
 // Acesso: somente admin/gerente (validado por JWT)
 
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const NOTION_VERSION = '2022-06-28'
@@ -454,7 +455,7 @@ function addMonth(iso: string, months: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: corsHeaders })
 

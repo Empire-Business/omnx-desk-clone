@@ -1,11 +1,13 @@
 import { useState, useMemo, useRef } from 'react'
 import {
   Users, Search, Tag, Plus, Edit, MessageSquare, Phone, X,
-  Upload, Download, Trash2, CheckSquare, Square, MinusSquare, Building, Link,
+  Upload, Download, Trash2, CheckSquare, Square, MinusSquare, Building,
 } from 'lucide-react'
 import { cn, formatPhone } from '@/lib/utils'
 import { useMyInstanceIds } from '@/hooks/useUsers'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { TabelaResponsiva } from '@/components/ui/TabelaResponsiva'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal } from '@/components/ui/Modal'
 import {
@@ -29,9 +31,11 @@ type ContactWithExtras = ChatContact & {
   clients?: { id: string; nome: string } | null
 }
 
+/** Campo no padrão do DS (borda fina, foco azul com halo), sem altura fixa para servir a textarea. */
 const INPUT_CLASS = cn(
-  'w-full rounded-lg border border-border bg-input px-3 py-2 text-sm text-foreground',
-  'placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40',
+  'w-full rounded-md border border-input bg-card px-3 py-2 text-base sm:text-sm text-foreground max-sm:min-h-11',
+  'placeholder:text-fg-placeholder transition-[border-color,box-shadow] duration-fast hover:border-stroke-strong',
+  'focus:outline-none focus:border-ring focus:shadow-[0_0_0_3px_var(--primary-glow)]',
 )
 
 // ─── Create / Edit Contact Form ──────────────────────────────────────────────
@@ -127,14 +131,14 @@ function ContactForm({
 
       {showInstanceField && (
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Instância</label>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">Número de WhatsApp</label>
           <select
             required
             value={form.instance_id}
             onChange={(e) => set('instance_id', e.target.value)}
             className={INPUT_CLASS}
           >
-            <option value="">Selecione uma instância</option>
+            <option value="">Selecione um número</option>
             {instances.map((inst) => (
               <option key={inst.id} value={inst.id}>
                 {inst.nome}
@@ -156,7 +160,7 @@ function ContactForm({
       </div>
 
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">Tags</label>
+        <label className="mb-1.5 block text-sm font-medium text-foreground">Etiquetas</label>
         <div className="flex gap-2">
           <input
             value={tagInput}
@@ -300,7 +304,7 @@ function ContactDetailModal({ contact, onClose, onSaved }: DetailModalProps) {
 
       {/* Tags */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">Tags</label>
+        <label className="mb-1.5 block text-sm font-medium text-foreground">Etiquetas</label>
         {editing ? (
           <>
             <div className="flex gap-2">
@@ -409,7 +413,7 @@ function ContactDetailModal({ contact, onClose, onSaved }: DetailModalProps) {
           <button
             onClick={() => {
               onClose()
-              navigate(`/chat?cliente=${encodeURIComponent(contact.nome || contact.numero_whatsapp)}`)
+              navigate(`/conversas?cliente=${encodeURIComponent(contact.nome || contact.numero_whatsapp)}`)
             }}
             className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium gradient-primary text-primary-foreground transition-opacity hover:opacity-90"
           >
@@ -523,14 +527,14 @@ function ImportCsvModal({ open, onClose }: ImportModalProps) {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-foreground">Instância</label>
+          <label className="mb-1.5 block text-sm font-medium text-foreground">Número de WhatsApp</label>
           <select
             required
             value={instanceId}
             onChange={(e) => setInstanceId(e.target.value)}
             className={INPUT_CLASS}
           >
-            <option value="">Selecione uma instância</option>
+            <option value="">Selecione um número</option>
             {instances.map((inst) => (
               <option key={inst.id} value={inst.id}>{inst.nome}</option>
             ))}
@@ -556,7 +560,7 @@ function ImportCsvModal({ open, onClose }: ImportModalProps) {
         </div>
 
         {preview.length > 0 && (
-          <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
+          <div className="max-h-[min(12rem,35dvh)] overflow-auto rounded-lg border border-border">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
@@ -657,21 +661,22 @@ function BulkActionsBar({
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary-muted px-4 py-2.5 animate-fade-in">
-      <span className="text-sm font-medium text-primary">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg bg-primary-light px-3 py-2 shadow-[inset_0_0_0_1px_var(--primary-muted)] animate-band-in" role="region" aria-label="Ações para os contatos selecionados">
+      <span className="text-sm font-semibold text-link" aria-live="polite">
         {selectedCount} selecionado{selectedCount > 1 ? 's' : ''}
       </span>
 
-      <div className="h-4 w-px bg-border" />
+      <div className="hidden h-4 w-px bg-stroke-default sm:block" aria-hidden />
 
       {tagAction ? (
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <select
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
-            className="rounded-md border border-border bg-input px-2 py-1 text-xs"
+            aria-label="Etiqueta existente"
+            className="select !h-8 !w-auto max-w-full !text-[12.5px] max-sm:!h-10 max-sm:!text-base"
           >
-            <option value="">Selecione ou digite...</option>
+            <option value="">Escolha ou digite…</option>
             {allTags.map(t => (
               <option key={t} value={t}>{t}</option>
             ))}
@@ -680,25 +685,29 @@ function BulkActionsBar({
             value={tagInput}
             onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleTagSubmit()}
-            placeholder="Nova tag..."
-            className="rounded-md border border-border bg-input px-2 py-1 text-xs w-28"
+            placeholder="Nova etiqueta…"
+            aria-label="Nova etiqueta"
+            className="input !h-8 !w-36 !text-[12.5px] max-sm:!h-10 max-sm:!text-base"
           />
           <button
+            type="button"
             onClick={handleTagSubmit}
             disabled={!tagInput.trim()}
-            className="rounded-md px-2 py-1 text-xs font-medium gradient-primary text-primary-foreground disabled:opacity-50"
+            className="btn btn-primary btn-sm"
           >
             {tagAction === 'add' ? 'Adicionar' : 'Remover'}
           </button>
           <button
+            type="button"
             onClick={() => setTagAction(null)}
-            className="text-xs text-muted-foreground hover:text-foreground"
+            className="btn btn-ghost btn-icon btn-sm"
+            aria-label="Cancelar"
           >
-            <X className="h-3.5 w-3.5" />
+            <X aria-hidden />
           </button>
         </div>
       ) : showClientLink ? (
-        <div className="flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <select
             defaultValue=""
             onChange={(e) => {
@@ -706,7 +715,8 @@ function BulkActionsBar({
               setShowClientLink(false)
             }}
             disabled={linking}
-            className="rounded-md border border-border bg-input px-2 py-1 text-xs"
+            aria-label="Cliente para vincular"
+            className="select !h-8 min-w-0 flex-1 !text-[12.5px] sm:!w-56 max-sm:!h-10 max-sm:!text-base"
           >
             <option value="">Sem cliente (desvincular)</option>
             {clientsList.map(c => (
@@ -714,42 +724,36 @@ function BulkActionsBar({
             ))}
           </select>
           <button
+            type="button"
             onClick={() => setShowClientLink(false)}
-            className="text-xs text-muted-foreground hover:text-foreground"
+            className="btn btn-ghost btn-icon btn-sm"
+            aria-label="Cancelar"
           >
-            <X className="h-3.5 w-3.5" />
+            <X aria-hidden />
           </button>
         </div>
       ) : (
         <>
-          <button
-            onClick={() => setShowClientLink(true)}
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
-          >
-            <Building className="h-3.5 w-3.5" />
+          <button type="button" onClick={() => setShowClientLink(true)} className="btn btn-ghost btn-sm">
+            <Building aria-hidden />
             Vincular cliente
           </button>
-          <button
-            onClick={() => setTagAction('add')}
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
-          >
-            <Tag className="h-3.5 w-3.5" />
-            Adicionar tag
+          <button type="button" onClick={() => setTagAction('add')} className="btn btn-ghost btn-sm">
+            <Tag aria-hidden />
+            Adicionar etiqueta
+          </button>
+          <button type="button" onClick={() => setTagAction('remove')} className="btn btn-ghost btn-sm">
+            <Tag aria-hidden />
+            Remover etiqueta
           </button>
           <button
-            onClick={() => setTagAction('remove')}
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
-          >
-            <Tag className="h-3.5 w-3.5" />
-            Remover tag
-          </button>
-          <button
+            type="button"
             onClick={onBulkDelete}
             disabled={deleting}
-            className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
+            className="btn btn-ghost btn-sm !text-danger hover:!bg-danger-light"
           >
-            <Trash2 className="h-3.5 w-3.5" />
-            {deleting ? 'Excluindo...' : 'Excluir'}
+            <Trash2 aria-hidden />
+            {deleting ? 'Excluindo…' : 'Excluir'}
           </button>
         </>
       )}
@@ -757,8 +761,9 @@ function BulkActionsBar({
       <div className="flex-1" />
 
       <button
+        type="button"
         onClick={onClearSelection}
-        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        className="btn btn-ghost btn-sm"
       >
         Limpar seleção
       </button>
@@ -898,56 +903,66 @@ export default function ChatContatosPage() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6 p-3 sm:p-4 lg:p-6 animate-fade-in">
+    <PageContainer respiro largura="larga">
       <PageHeader
         title="Contatos"
-        description={`${filteredContacts.length} contatos${clientFilter === 'sem_cliente' ? ' sem cliente' : ''}`}
+        count={filteredContacts.length}
+        description={clientFilter === 'sem_cliente' ? 'Contatos do WhatsApp sem cliente vinculado.' : 'Todas as pessoas e grupos que falaram com a empresa pelo WhatsApp.'}
         action={
-          <div className="flex items-center gap-2">
+          <>
             <button
-              onClick={() => setImportOpen(true)}
-              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className="btn btn-primary"
             >
-              <Upload className="h-4 w-4" />
-              <span className="hidden sm:inline">Importar CSV</span>
+              <Plus aria-hidden />
+              Novo contato
             </button>
             <button
+              type="button"
+              onClick={() => setImportOpen(true)}
+              className="btn btn-secondary"
+              title="Importar contatos de uma planilha (CSV)"
+            >
+              <Upload aria-hidden />
+              Importar
+            </button>
+            <button
+              type="button"
               onClick={() => exportContactsCSV(filteredContacts)}
               disabled={filteredContacts.length === 0}
-              className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              className="btn btn-secondary"
+              title="Baixar os contatos numa planilha (CSV)"
             >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Exportar</span>
+              <Download aria-hidden />
+              Exportar
             </button>
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium gradient-primary text-primary-foreground transition-opacity hover:opacity-90"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Novo contato</span>
-            </button>
-          </div>
+          </>
         }
       />
 
+      <div className="grid gap-4">
       {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+        <div className="relative min-w-0">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <input
+            type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por nome ou número..."
-            className={cn(INPUT_CLASS, 'pl-9')}
+            placeholder="Buscar por nome ou número…"
+            aria-label="Buscar contatos"
+            className="input !pl-9"
           />
         </div>
-        <div className="w-full sm:w-56">
+        <div className="min-w-0 sm:w-52">
           <select
             value={tagFilter}
             onChange={(e) => setTagFilter(e.target.value)}
-            className={INPUT_CLASS}
+            aria-label="Filtrar por etiqueta"
+            className="select"
           >
-            <option value="">Todas as tags</option>
+            <option value="">Todas as etiquetas</option>
             {allTags.map((tag) => (
               <option key={tag} value={tag}>
                 {tag}
@@ -956,11 +971,12 @@ export default function ChatContatosPage() {
           </select>
         </div>
         {canManageContacts && (
-          <div className="w-full sm:w-56">
+          <div className="min-w-0 sm:w-52">
             <select
               value={clientFilter}
               onChange={(e) => setClientFilter(e.target.value as 'todos' | 'sem_cliente')}
-              className={INPUT_CLASS}
+              aria-label="Filtrar por cliente vinculado"
+              className="select"
             >
               <option value="todos">Todos os contatos</option>
               <option value="sem_cliente">Sem cliente vinculado</option>
@@ -987,8 +1003,14 @@ export default function ChatContatosPage() {
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="grid gap-2" aria-busy="true" aria-label="Carregando contatos">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 rounded-lg bg-card ring-hairline px-4 py-3">
+              <div className="sk h-8 w-8 rounded-full" />
+              <div className="sk h-3.5 w-40 max-w-[40%]" />
+              <div className="sk ml-auto h-3 w-28 max-w-[30%]" />
+            </div>
+          ))}
         </div>
       ) : filteredContacts.length === 0 ? (
         <EmptyState
@@ -1001,175 +1023,161 @@ export default function ChatContatosPage() {
           }
           action={
             !search && !tagFilter ? (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setImportOpen(true)}
-                  className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
-                >
-                  <Upload className="h-4 w-4" />
-                  Importar CSV
-                </button>
-                <button
-                  onClick={() => setCreateOpen(true)}
-                  className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium gradient-primary text-primary-foreground"
-                >
-                  <Plus className="h-4 w-4" />
-                  Novo contato
-                </button>
-              </div>
+              <button type="button" onClick={() => setCreateOpen(true)} className="btn btn-primary">
+                <Plus aria-hidden />
+                Novo contato
+              </button>
+            ) : undefined
+          }
+          secondaryAction={
+            !search && !tagFilter ? (
+              <button type="button" onClick={() => setImportOpen(true)} className="btn btn-secondary">
+                <Upload aria-hidden />
+                Importar planilha
+              </button>
             ) : undefined
           }
         />
       ) : (
-        <div className="glass-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="w-10 px-3 py-3">
-                    <button
-                      onClick={toggleSelectAll}
-                      className="flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {selectionState === 'all' ? (
-                        <CheckSquare className="h-4 w-4 text-primary" />
-                      ) : selectionState === 'some' ? (
-                        <MinusSquare className="h-4 w-4 text-primary" />
-                      ) : (
-                        <Square className="h-4 w-4" />
-                      )}
-                    </button>
-                  </th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Nome</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Número</th>
-                  <th className="hidden md:table-cell px-4 py-3 text-left font-medium text-muted-foreground">Cliente</th>
-                  <th className="hidden lg:table-cell px-4 py-3 text-left font-medium text-muted-foreground">Tags</th>
-                  <th className="hidden lg:table-cell px-4 py-3 text-left font-medium text-muted-foreground">Criado em</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredContacts.map((contact) => (
-                  <tr
-                    key={contact.id}
-                    className={cn(
-                      'transition-colors hover:bg-muted/50',
-                      selectedIds.has(contact.id) && 'bg-primary-muted/30',
-                    )}
-                  >
-                    <td className="w-10 px-3 py-3">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleSelect(contact.id)
-                        }}
-                        className="flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        {selectedIds.has(contact.id) ? (
-                          <CheckSquare className="h-4 w-4 text-primary" />
-                        ) : (
-                          <Square className="h-4 w-4" />
-                        )}
-                      </button>
-                    </td>
-                    <td
-                      className="px-4 py-3 cursor-pointer"
-                      onClick={() => setDetailTarget(contact)}
-                    >
-                      <div className="flex items-center gap-3">
-                        {contact.foto_url ? (
-                          <img
-                            src={contact.foto_url}
-                            alt={contact.nome ?? ''}
-                            className="h-8 w-8 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                        )}
-                        <span className="font-medium text-foreground">
-                          {contact.nome || 'Sem nome'}
-                        </span>
-                      </div>
-                    </td>
-                    <td
-                      className="px-4 py-3 font-mono text-xs text-muted-foreground cursor-pointer"
-                      onClick={() => setDetailTarget(contact)}
-                    >
-                      {formatPhone(contact.numero_whatsapp)}
-                    </td>
-                    <td className="hidden md:table-cell px-4 py-3">
-                      {contact.clients ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
-                          <Building className="h-3 w-3 text-primary" />
-                          {contact.clients.nome}
-                          {canManageContacts && (
-                            <button
-                              onClick={() => updateMutation.mutate({ id: contact.id, client_id: null })}
-                              className="ml-1 text-muted-foreground hover:text-danger transition-colors"
-                              title="Desvincular cliente"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          )}
-                        </span>
-                      ) : canManageContacts && !contact.numero_whatsapp.startsWith('120363') ? (
-                        <select
-                          defaultValue=""
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              updateMutation.mutate({ id: contact.id, client_id: e.target.value })
-                              e.target.value = ''
-                            }
-                          }}
-                          className="rounded-md border border-dashed border-border bg-transparent px-2 py-1 text-xs text-muted-foreground hover:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
-                        >
-                          <option value="">Vincular cliente...</option>
-                          {clientsList.map((cl) => (
-                            <option key={cl.id} value={cl.id}>{cl.nome}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">
-                          {contact.numero_whatsapp.startsWith('120363') ? 'Grupo' : '—'}
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      className="hidden lg:table-cell px-4 py-3 cursor-pointer"
-                      onClick={() => setDetailTarget(contact)}
-                    >
-                      {contact.tags && contact.tags.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {contact.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
-                            >
-                              <Tag className="h-3 w-3" />
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td
-                      className="hidden lg:table-cell px-4 py-3 text-xs text-muted-foreground cursor-pointer"
-                      onClick={() => setDetailTarget(contact)}
-                    >
-                      {contact.criado_em
-                        ? new Date(contact.criado_em).toLocaleDateString('pt-BR')
-                        : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <div className="grid gap-2">
+          {/* Selecionar todos (fica fora da tabela para funcionar também nos cartões do celular) */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              aria-pressed={selectionState === 'all'}
+              className="btn btn-ghost btn-sm"
+            >
+              {selectionState === 'all' ? (
+                <CheckSquare className="text-link" aria-hidden />
+              ) : selectionState === 'some' ? (
+                <MinusSquare className="text-link" aria-hidden />
+              ) : (
+                <Square aria-hidden />
+              )}
+              {selectionState === 'all' ? 'Desmarcar todos' : 'Selecionar todos'}
+            </button>
           </div>
+          <TabelaResponsiva
+            rotulo="Contatos do WhatsApp"
+            linhas={filteredContacts}
+            chave={(c) => c.id}
+            linhaAtiva={(c) => selectedIds.has(c.id)}
+            colunas={[
+              {
+                id: 'nome',
+                titulo: 'Nome',
+                principal: true,
+                celula: (contact) => (
+                  <div className="flex min-w-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleSelect(contact.id) }}
+                      aria-pressed={selectedIds.has(contact.id)}
+                      aria-label={selectedIds.has(contact.id) ? `Desmarcar ${contact.nome || 'contato'}` : `Marcar ${contact.nome || 'contato'}`}
+                      className="btn btn-ghost btn-icon btn-sm shrink-0"
+                    >
+                      {selectedIds.has(contact.id)
+                        ? <CheckSquare className="text-link" aria-hidden />
+                        : <Square aria-hidden />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDetailTarget(contact)}
+                      className="flex min-w-0 items-center gap-2.5 rounded-md text-left focus-ds"
+                    >
+                      {contact.foto_url ? (
+                        <img src={contact.foto_url} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                      ) : (
+                        <span className="av none !h-8 !w-8 shrink-0" aria-hidden><Users className="h-4 w-4" /></span>
+                      )}
+                      <span className="truncate font-[650] text-foreground hover:underline underline-offset-2">
+                        {contact.nome || 'Sem nome'}
+                      </span>
+                    </button>
+                  </div>
+                ),
+              },
+              {
+                id: 'numero',
+                titulo: 'Número',
+                celula: (contact) => <span className="mono text-[12.5px] text-fg-2">{formatPhone(contact.numero_whatsapp)}</span>,
+              },
+              {
+                id: 'cliente',
+                titulo: 'Cliente',
+                celula: (contact) => contact.clients ? (
+                  <span className="inline-flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-foreground">
+                    <Building className="h-3.5 w-3.5 shrink-0 text-link" aria-hidden />
+                    <span className="truncate">{contact.clients.nome}</span>
+                    {canManageContacts && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); updateMutation.mutate({ id: contact.id, client_id: null }) }}
+                        className="btn btn-ghost btn-icon btn-sm -my-1 shrink-0 hover:!text-danger"
+                        title="Desvincular cliente"
+                        aria-label={`Desvincular ${contact.clients.nome}`}
+                      >
+                        <X aria-hidden />
+                      </button>
+                    )}
+                  </span>
+                ) : canManageContacts && !contact.numero_whatsapp.startsWith('120363') ? (
+                  <select
+                    defaultValue=""
+                    aria-label="Vincular cliente"
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        updateMutation.mutate({ id: contact.id, client_id: e.target.value })
+                        e.target.value = ''
+                      }
+                    }}
+                    className="select !h-8 !w-auto max-w-[220px] border-dashed !text-[12.5px] text-muted-foreground max-sm:!h-10 max-sm:!text-base"
+                  >
+                    <option value="">Vincular cliente…</option>
+                    {clientsList.map((cl) => (
+                      <option key={cl.id} value={cl.id}>{cl.nome}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-[12.5px] text-muted-foreground">
+                    {contact.numero_whatsapp.startsWith('120363') ? 'Grupo' : '—'}
+                  </span>
+                ),
+              },
+              {
+                id: 'tags',
+                titulo: 'Etiquetas',
+                celula: (contact) => contact.tags && contact.tags.length > 0 ? (
+                  <div className="flex flex-wrap gap-1">
+                    {contact.tags.map((tag) => (
+                      <span key={tag} className="tag tag-info">
+                        <Tag aria-hidden />
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-[12.5px] text-muted-foreground">—</span>
+                ),
+              },
+              {
+                id: 'criado',
+                titulo: 'Criado em',
+                numerica: true,
+                esconderNoCartao: true,
+                celula: (contact) => (
+                  <span className="text-[12.5px] text-muted-foreground">
+                    {contact.criado_em ? new Date(contact.criado_em).toLocaleDateString('pt-BR') : '—'}
+                  </span>
+                ),
+              },
+            ]}
+          />
         </div>
       )}
+      </div>
 
       {/* Create Modal */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Novo contato" size="md">
@@ -1198,6 +1206,6 @@ export default function ChatContatosPage() {
           />
         )}
       </Modal>
-    </div>
+    </PageContainer>
   )
 }

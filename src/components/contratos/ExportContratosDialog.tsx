@@ -69,7 +69,7 @@ const COLUNAS: ColunaDef[] = [
   { key: 'nicho',        label: 'Nicho',            valor: (c) => c.nicho ?? '' },
   { key: 'clicksign',    label: 'Link Clicksign',   valor: (c) => c.link_clicksign ?? '' },
   { key: 'notion',       label: 'Notion #',         valor: (c) => c.notion_numero ?? '' },
-  { key: 'tags',         label: 'Tags',             valor: (c) => (c.tags ?? []).map((t) => t.nome).join('; ') },
+  { key: 'tags',         label: 'Etiquetas',           valor: (c) => (c.tags ?? []).map((t) => t.nome).join('; ') },
   { key: 'aviso',        label: 'Aviso',            valor: (c) => normalizaTelefoneBR(c.whatsapp).aviso },
 ]
 

@@ -118,7 +118,7 @@ export function NewMeetingDialog({ open, onClose, onCreated }: NewMeetingDialogP
 
         {/* Schedule fields */}
         {mode === 'schedule' && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1.5">
                 Data e hora
@@ -156,7 +156,7 @@ export function NewMeetingDialog({ open, onClose, onCreated }: NewMeetingDialogP
             <Users className="h-3.5 w-3.5" />
             Convidado (opcional)
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
               type="text"
               value={guestName}

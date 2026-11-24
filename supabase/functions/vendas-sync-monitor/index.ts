@@ -8,6 +8,7 @@
 //  2. Pendência esquecida  — venda 'concluida' sem ghl_oportunidade_id há > N dias.
 //  3. Divergência de contagem — nº de oportunidades sincronizadas (Desk) ≠ nº de
 //     vendas com origem 'empiredesk' no GHL (lido pela janela crm-sync-stats).
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
@@ -40,7 +41,7 @@ function esc(s: unknown): string {
     .replace(/>/g, '&gt;')
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS })
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 

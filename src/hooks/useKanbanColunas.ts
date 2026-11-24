@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import type { Contrato } from '@/hooks/useComissoes'
 
 /**
  * Colunas configuráveis do kanban de Contratos (Fase 1).
@@ -91,10 +92,12 @@ export function useReorderColunas() {
 }
 
 /** Deriva o status primário (constraint do banco) a partir da chave da coluna. */
-export function statusPrimarioDaChave(chave: string): 'ativo' | 'cancelado' | 'concluido' {
-  const k = (chave ?? '').toUpperCase()
+export function statusPrimarioDaChave(chave: string): Contrato['status'] {
+  const k = (chave ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ').toUpperCase()
   if (k.includes('CANCEL')) return 'cancelado'
   if (k.includes('CONCLU')) return 'concluido'
+  if (k === 'PAUSADO') return 'pausado'
+  if (k === 'NAO INICIADO') return 'rascunho'
   return 'ativo'
 }
 

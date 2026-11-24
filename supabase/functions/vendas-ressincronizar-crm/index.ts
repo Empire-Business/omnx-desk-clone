@@ -7,6 +7,7 @@
 //
 // Não recebe oportunidade: usa o ghl_oportunidade_id que já está gravado na venda —
 // reenvio nunca escolhe um card diferente do que foi vinculado por uma pessoa.
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { sincronizarVendaComCrm } from '../_shared/sincronizar-venda.ts'
 
@@ -26,7 +27,7 @@ function json(body: unknown, status = 200) {
   })
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
 

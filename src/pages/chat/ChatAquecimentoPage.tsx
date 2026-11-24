@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Flame, CheckCircle2, XCircle, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useInstances } from '@/hooks/useChat'
 import {
@@ -85,7 +86,7 @@ function GroupCard({ group }: { group: WarmupGroup }) {
   const maxMin = Math.round(form.intervalo_max_seg / 60)
 
   return (
-    <div className="glass-card p-5 space-y-5">
+    <div className="rounded-xl bg-card ring-hairline p-4 sm:p-5 space-y-5 animate-row-in">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-base font-semibold text-foreground flex items-center gap-2">
@@ -114,17 +115,17 @@ function GroupCard({ group }: { group: WarmupGroup }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 text-center">
-        <div className="rounded-lg border border-input bg-background/50 p-3">
-          <p className="text-2xl font-semibold text-foreground">{countToday}</p>
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center">
+        <div className="rounded-lg bg-bg-1 ring-hairline p-2.5 sm:p-3">
+          <p className="mono text-xl sm:text-2xl font-semibold text-foreground">{countToday}</p>
           <p className="text-xs text-muted-foreground">Hoje</p>
         </div>
-        <div className="rounded-lg border border-input bg-background/50 p-3">
-          <p className="text-2xl font-semibold text-foreground">{group.instance_ids.length}</p>
+        <div className="rounded-lg bg-bg-1 ring-hairline p-2.5 sm:p-3">
+          <p className="mono text-xl sm:text-2xl font-semibold text-foreground">{group.instance_ids.length}</p>
           <p className="text-xs text-muted-foreground">Chips</p>
         </div>
-        <div className="rounded-lg border border-input bg-background/50 p-3">
-          <p className="text-2xl font-semibold text-foreground">{group.frases.length}</p>
+        <div className="rounded-lg bg-bg-1 ring-hairline p-2.5 sm:p-3">
+          <p className="mono text-xl sm:text-2xl font-semibold text-foreground">{group.frases.length}</p>
           <p className="text-xs text-muted-foreground">Frases</p>
         </div>
       </div>
@@ -135,7 +136,7 @@ function GroupCard({ group }: { group: WarmupGroup }) {
       </div>
 
       <div className="space-y-3 pt-2 border-t border-border">
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-input bg-background/50 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3 rounded-lg bg-bg-1 ring-hairline px-3 py-2.5">
           <div className="min-w-0">
             <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -173,7 +174,7 @@ function GroupCard({ group }: { group: WarmupGroup }) {
               value={form.tema}
               onChange={(e) => setForm((f) => ({ ...f, tema: e.target.value }))}
               placeholder="Ex: futebol brasileiro, principalmente Vasco da Gama"
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input bg-card px-3 py-2 text-base sm:text-sm max-sm:min-h-11 focus:outline-none focus:border-ring focus:shadow-[0_0_0_3px_var(--primary-glow)]"
             />
           </div>
         )}
@@ -221,14 +222,14 @@ function GroupCard({ group }: { group: WarmupGroup }) {
                     }))
                   }
                   placeholder="Ex: vascaíno apaixonado, usa emojis, gosta de discutir táticas"
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-input bg-card px-3 py-2 text-base sm:text-sm max-sm:min-h-11 focus:outline-none focus:border-ring focus:shadow-[0_0_0_3px_var(--primary-glow)]"
                 />
               </div>
             ))}
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-foreground">
               Intervalo mín (min): {minMin}
@@ -261,14 +262,14 @@ function GroupCard({ group }: { group: WarmupGroup }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-foreground">Início</label>
             <input
               type="time"
               value={form.horario_inicio}
               onChange={(e) => setForm((f) => ({ ...f, horario_inicio: e.target.value }))}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input bg-card px-3 py-2 text-base sm:text-sm max-sm:min-h-11 focus:outline-none focus:border-ring focus:shadow-[0_0_0_3px_var(--primary-glow)]"
             />
           </div>
           <div>
@@ -277,7 +278,7 @@ function GroupCard({ group }: { group: WarmupGroup }) {
               type="time"
               value={form.horario_fim}
               onChange={(e) => setForm((f) => ({ ...f, horario_fim: e.target.value }))}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border border-input bg-card px-3 py-2 text-base sm:text-sm max-sm:min-h-11 focus:outline-none focus:border-ring focus:shadow-[0_0_0_3px_var(--primary-glow)]"
             />
           </div>
         </div>
@@ -290,7 +291,7 @@ function GroupCard({ group }: { group: WarmupGroup }) {
             value={form.frases}
             onChange={(e) => setForm((f) => ({ ...f, frases: e.target.value }))}
             rows={8}
-            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono"
+            className="w-full rounded-md border border-input bg-card px-3 py-2 text-base sm:text-sm max-sm:min-h-11 focus:outline-none focus:border-ring focus:shadow-[0_0_0_3px_var(--primary-glow)] font-mono"
           />
         </div>
 
@@ -324,7 +325,7 @@ function GroupCard({ group }: { group: WarmupGroup }) {
                     {log.instance_id} · {formatDateTime(log.enviado_em)}
                   </p>
                   {!log.sucesso && log.uazapi_response && (
-                    <pre className="mt-1 whitespace-pre-wrap break-all rounded bg-danger-light/50 p-1.5 font-mono text-[10px] text-danger">
+                    <pre className="mt-1 whitespace-pre-wrap break-all rounded bg-danger-light/50 p-1.5 font-mono text-[11px] text-danger">
                       {JSON.stringify(log.uazapi_response, null, 2).substring(0, 300)}
                     </pre>
                   )}
@@ -342,21 +343,27 @@ export default function ChatAquecimentoPage() {
   const { data: groups = [], isLoading } = useWarmupGroups()
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6 p-3 sm:p-4 lg:p-6 animate-fade-in">
+    <PageContainer respiro largura="larga">
       <PageHeader
-        title="Aquecimento de chips"
-        description="Instâncias conversam entre si num grupo para esquentar números novos e reduzir risco de bloqueio."
+        title="Aquecimento de número"
+        count={groups.length || undefined}
+        description="Números da empresa conversam entre si num grupo para esquentar números novos e reduzir o risco de bloqueio."
       />
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="grid gap-4 lg:grid-cols-2" aria-busy="true" aria-label="Carregando grupos">
+          {[0, 1].map((i) => (
+            <div key={i} className="grid gap-4 rounded-xl bg-card ring-hairline p-5">
+              <div className="sk h-4 w-40" />
+              <div className="grid grid-cols-3 gap-2"><div className="sk h-16 rounded-lg" /><div className="sk h-16 rounded-lg" /><div className="sk h-16 rounded-lg" /></div>
+            </div>
+          ))}
         </div>
       ) : groups.length === 0 ? (
         <EmptyState
           icon={Flame}
           title="Nenhum grupo de aquecimento"
-          description="Cadastre via migration ou peça pra IA criar."
+          description="Ainda não há grupo de aquecimento. Peça para a equipe técnica criar um."
         />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -365,6 +372,6 @@ export default function ChatAquecimentoPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageContainer>
   )
 }

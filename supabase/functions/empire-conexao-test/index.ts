@@ -1,3 +1,5 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
+import { sessaoDeskLiberada } from '../_shared/desk-session.ts'
 // "Testar conexão" da integração omnx-desk → Empire (CRM).
 // Admin autenticado dispara; o servidor resolve o secret do tenant (cofre) e faz um ping
 // no crm-buscar-lead do Empire. Nunca expõe o secret ao browser.
@@ -31,7 +33,7 @@ async function autorizarAdmin(authHeader: string | null): Promise<{ ok: boolean;
     auth: { persistSession: false },
   })
   const { data: { user } } = await userClient.auth.getUser()
-  if (!user) return { ok: false, tenantId: null }
+  if (!user || !await sessaoDeskLiberada(userClient)) return { ok: false, tenantId: null }
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
   const { data } = await admin.from('users').select('perfil').eq('id', user.id).single()
   if (data?.perfil !== 'admin') return { ok: false, tenantId: null }
@@ -39,7 +41,7 @@ async function autorizarAdmin(authHeader: string | null): Promise<{ ok: boolean;
   return { ok: true, tenantId: (tenantId as string | null) ?? null }
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
 

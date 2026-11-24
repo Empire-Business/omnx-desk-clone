@@ -1,6 +1,14 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { tokenUazapi, urlUazapi } from '../_shared/uazapi-credenciais.ts'
+import { autorizarAgendador } from '../_shared/agendador-auth.ts'
 
-const UAZAPI_URL = 'https://empirebusiness.uazapi.com'
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
+}
+const JSON_HEADERS = { ...corsHeaders, 'Content-Type': 'application/json' }
+
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => vars[key] ?? `{${key}}`)
@@ -65,21 +73,37 @@ async function generateIaVariation(
   }
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405, headers: JSON_HEADERS })
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
 
+  // Só o agendador do banco (x-cron-secret) ou uma pessoa com permissão de
+  // cobrança, e nesse caso só para um devedor da empresa dela.
+  const autorizacao = await autorizarAgendador(req, supabase, {
+    criarUsuario: (jwt) => createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false },
+    }),
+    recurso: 'cobranca',
+    acao: 'editar',
+  })
+  if (!autorizacao) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: JSON_HEADERS })
+
   const openrouterKey = Deno.env.get('OPENROUTER_API_KEY') ?? ''
 
   // Support manual trigger for a specific devedor
   let manualDevedorId: string | null = null
-  if (req.method === 'POST') {
-    try {
-      const body = await req.json()
-      manualDevedorId = body.devedor_id ?? null
-    } catch { /* ignore */ }
+  try {
+    const body = await req.json()
+    manualDevedorId = typeof body?.devedor_id === 'string' && body.devedor_id ? body.devedor_id : null
+  } catch { /* ignore */ }
+  if (autorizacao.tipo === 'usuario' && !manualDevedorId) {
+    return new Response(JSON.stringify({ error: 'devedor_id é obrigatório' }), { status: 400, headers: JSON_HEADERS })
   }
 
   const now = new Date().toISOString()
@@ -96,6 +120,9 @@ Deno.serve(async (req) => {
       .select('*, cobranca_reguas(id, nome, cobranca_regua_passos(*))')
       .eq('status', 'ativa')
 
+    if (autorizacao.tipo === 'usuario') {
+      devedorQuery = devedorQuery.eq('tenant_id', autorizacao.tenantId)
+    }
     if (manualDevedorId) {
       devedorQuery = devedorQuery.eq('id', manualDevedorId)
     } else {
@@ -107,7 +134,7 @@ Deno.serve(async (req) => {
     if (devedoresError) {
       return new Response(JSON.stringify({ error: devedoresError.message }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: JSON_HEADERS,
       })
     }
 
@@ -138,8 +165,12 @@ Deno.serve(async (req) => {
         continue
       }
 
-      // Get instance token
-      const token = Deno.env.get(`UAZAPI_TOKEN_${instance.instance_id}`)
+      // Token e endereço só pelo _shared/uazapi-credenciais.ts: cofre do número
+      // (Chat ou Cobrança > Números, migrações 20261109120000 e 20261109121000) →
+      // cofre da empresa (número principal da aba Conexão) → segredo legado
+      // UAZAPI_TOKEN_<instance_id> (produção sem token no cofre: igual a antes).
+      const token = await tokenUazapi(supabase, instance.instance_id, instance.tenant_id)
+      const UAZAPI_URL = await urlUazapi(supabase, instance.tenant_id)
       if (!token) {
         console.error(`Token not found for instance ${instance.instance_id}`)
         failed++
@@ -268,13 +299,13 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ processed, sent, failed, skipped_schedule: skippedSchedule }),
-      { headers: { 'Content-Type': 'application/json' } }
+      { headers: JSON_HEADERS }
     )
   } catch (err) {
     console.error('Cobrança scheduler error:', err)
     return new Response(
       JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500, headers: JSON_HEADERS }
     )
   }
 })

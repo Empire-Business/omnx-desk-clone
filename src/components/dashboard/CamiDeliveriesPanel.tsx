@@ -6,8 +6,6 @@ import { cn } from '@/lib/utils'
 
 interface Props { onSeeAll?: () => void; isAdmin: boolean }
 
-const eyebrow = 'text-[10.5px] font-mono uppercase tracking-[0.08em] text-muted-foreground font-medium'
-
 export function CamiDeliveriesPanel({ onSeeAll, isAdmin }: Props) {
   const ready = isCamiIntegrationReady()
   const { data, isLoading } = useCamiDeliveries()

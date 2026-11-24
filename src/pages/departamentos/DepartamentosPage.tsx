@@ -3,8 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Building2,
   Plus,
-  Users,
-  MessageSquare,
   Clock,
   ChevronRight,
   Circle,
@@ -12,6 +10,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { useDepartments } from '@/hooks/useChat'
 import { useDeptAgentAssignmentsByUser } from '@/hooks/useChat'
 import { useAuth } from '@/contexts/AuthContext'
@@ -42,15 +42,15 @@ export default function DepartamentosPage() {
     : departments.filter(d => myAssignments.some(a => a.department_id === d.id))
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6">
+    <PageContainer>
       <PageHeader
         title="Departamentos"
         description={isAdmin ? 'Gerencie todos os departamentos da empresa.' : 'Seus departamentos gerenciados.'}
         action={
           isAdmin ? (
             <Link
-              to="/chat/departamentos"
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium gradient-primary text-primary-foreground shadow-sm"
+              to="/conversas/filas"
+              className="btn btn-primary"
             >
               <Plus className="h-4 w-4" />
               <span className="hidden sm:inline">Gerenciar departamentos</span>
@@ -63,19 +63,16 @@ export default function DepartamentosPage() {
       {isLoading ? (
         <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map(i => (
-            <div key={i} className="h-40 rounded-xl border border-border bg-card animate-pulse" />
+            <div key={i} className="sk h-40 rounded-lg" />
           ))}
         </div>
       ) : visibleDepts.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-20 text-muted-foreground">
-          <Building2 className="h-12 w-12 opacity-30" />
-          <p className="text-sm">Nenhum departamento disponível.</p>
-          {isAdmin && (
-            <Link to="/chat/departamentos" className="text-xs text-primary hover:underline">
-              Criar departamento
-            </Link>
-          )}
-        </div>
+        <EmptyState
+          icon={Building2}
+          title="Nenhum departamento disponível"
+          description="Quando houver departamentos para você, eles aparecem aqui."
+          action={isAdmin ? <Link to="/conversas/filas" className="btn btn-primary">Criar departamento</Link> : undefined}
+        />
       ) : (
         <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visibleDepts.map((dept) => {
@@ -88,14 +85,14 @@ export default function DepartamentosPage() {
                 key={dept.id}
                 to={`/departamentos/${dept.id}`}
                 className={cn(
-                  'group relative flex flex-col rounded-xl border bg-card p-5 transition-all duration-200',
-                  'hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5',
+                  'group relative flex flex-col rounded-lg border bg-card p-5 transition-all duration-200',
+                  'hover:shadow-pop hover:border-stroke-strong',
                   isMyDept ? 'border-primary/20' : 'border-border',
                 )}
               >
                 {/* Status dot */}
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-muted">
                     <Building2 className="h-5 w-5 text-primary" />
                   </div>
                   <div className="flex items-center gap-2">
@@ -144,6 +141,6 @@ export default function DepartamentosPage() {
           })}
         </div>
       )}
-    </div>
+    </PageContainer>
   )
 }

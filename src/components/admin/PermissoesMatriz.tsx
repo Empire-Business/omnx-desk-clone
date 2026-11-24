@@ -11,11 +11,11 @@ import {
 
 /** Rótulo amigável de cada perfil (o valor cru vem de `users.perfil`). */
 const PERFIL_LABEL: Record<string, string> = {
-  gerente: 'Gerente',
+  gerente: 'Gestor',
   estrategista: 'Estrategista',
   atendimento: 'Atendimento',
   admin_cobranca: 'Gestor de cobrança',
-  agente_chat: 'Agente de chat',
+  agente_chat: 'Atendente de conversas',
   agente_cobranca: 'Agente de cobrança',
   cliente: 'Cliente (portal)',
 }

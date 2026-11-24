@@ -1,7 +1,8 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query'
 import { instalarObservabilidade, registrarEvento } from '@/lib/observabilidade'
+import { mensagemErro } from '@/lib/mensagemErro'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useInboxUnreadConversationCount } from '@/hooks/useChat'
@@ -9,7 +10,12 @@ import { useTenantBranding } from '@/hooks/useTenantBranding'
 import { BRAND } from '@/config/brand'
 import { resolvePageTitle } from '@/lib/page-title'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { TravaDeLicenca } from '@/components/licenca/AvisoLicenca'
 import { RequireApp } from '@/components/auth/RequireApp'
+import { ExigeAcesso } from '@/components/auth/ExigeAcesso'
+import { RedirecionamentoAntigo } from '@/components/navegacao/RedirecionamentoAntigo'
+import { CAMINHOS_ANTIGOS } from '@/config/rotasAntigas'
+import { TRAVAS_DE_PAGINA } from '@/config/navegacao'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ChatLayout } from '@/components/layout/ChatLayout'
 import { CobrancaLayout } from '@/components/layout/CobrancaLayout'
@@ -32,7 +38,12 @@ import { AdminPage } from '@/pages/AdminPage'
 import { AppsPage } from '@/pages/AppsPage'
 import { ReportesPage } from '@/pages/ReportesPage'
 import { MeusReportesPage } from '@/pages/MeusReportesPage'
+import { SegurancaPage } from '@/pages/SegurancaPage'
 import RelatoriosPage from '@/pages/RelatoriosPage'
+import AulasEquipePage from '@/pages/aulas/AulasEquipePage'
+import AulaTrilhaPage from '@/pages/aulas/AulaTrilhaPage'
+import PesquisasNpsPage from '@/pages/pesquisas/PesquisasNpsPage'
+import PesquisaNpsPage from '@/pages/pesquisas/PesquisaNpsPage'
 import { ApiWebhooksPage } from '@/pages/ApiWebhooksPage'
 import { AuditoriaPage } from '@/pages/AuditoriaPage'
 import { SaudePage } from '@/pages/SaudePage'
@@ -41,14 +52,14 @@ import DepartamentoDetailPage from '@/pages/departamentos/DepartamentoDetailPage
 import MinhaEquipePage from '@/pages/departamentos/MinhaEquipePage'
 import { ColaboradoresPage } from '@/pages/colaboradores/ColaboradoresPage'
 import { EmpresasPage } from '@/pages/empresas/EmpresasPage'
+import { AjustesPage } from '@/pages/AjustesPage'
+import { NaoEncontradaPage } from '@/pages/NaoEncontradaPage'
+import { GruposClientesPage } from '@/pages/clientes/GruposClientesPage'
 
 import ChatInboxPage from '@/pages/chat/ChatInboxPage'
-import ChatInstanciasPage from '@/pages/chat/ChatInstanciasPage'
 import ChatDepartamentosPage from '@/pages/chat/ChatDepartamentosPage'
 import ChatKanbanPage from '@/pages/chat/ChatKanbanPage'
 import ChatContatosPage from '@/pages/chat/ChatContatosPage'
-import ChatAcessosPage from '@/pages/chat/ChatAcessosPage'
-import ChatRelatorioSemanalPage from '@/pages/chat/ChatRelatorioSemanalPage'
 import ChatAnotacoesPage from '@/pages/chat/ChatAnotacoesPage'
 import ChatConfigPage from '@/pages/chat/ChatConfigPage'
 import { CobrancaDashboardPage } from '@/pages/cobranca/CobrancaDashboardPage'
@@ -64,7 +75,9 @@ import { ContratosKanbanPage } from '@/pages/contratos/ContratosKanbanPage'
 import { HomePage } from '@/pages/HomePage'
 import { DemandasPage } from '@/pages/atendimento/DemandasPage'
 import { DemandasKanbanPage } from '@/pages/atendimento/DemandasKanbanPage'
+import { PrazosPage } from '@/pages/atendimento/PrazosPage'
 import { DemandaDetailPage } from '@/pages/atendimento/DemandaDetailPage'
+import { AutomacoesWaConfigPage } from '@/pages/automacoes-wa/AutomacoesWaConfigPage'
 import { AtendimentoConfigPage } from '@/pages/atendimento/AtendimentoConfigPage'
 import { AtendimentoSentimentoPage } from '@/pages/atendimento/AtendimentoSentimentoPage'
 import { ContratosDashboardPage } from '@/pages/contratos/ContratosDashboardPage'
@@ -94,7 +107,7 @@ const queryClient = new QueryClient({
     onError: (erro, query) => {
       registrarEvento({
         evento: 'query_falhou',
-        mensagem: erro instanceof Error ? erro.message : String(erro),
+        mensagem: mensagemErro(erro),
         detalhe: { chave: String(query.queryKey?.[0] ?? '') },
       })
     },
@@ -103,7 +116,7 @@ const queryClient = new QueryClient({
     onError: (erro, _vars, _ctx, mutation) => {
       registrarEvento({
         evento: 'mutacao_falhou',
-        mensagem: erro instanceof Error ? erro.message : String(erro),
+        mensagem: mensagemErro(erro),
         detalhe: { chave: String(mutation.options.mutationKey?.[0] ?? '') },
       })
     },
@@ -125,7 +138,7 @@ function TitleUpdater() {
   useEffect(() => {
     const prefix = totalUnread > 10 ? '(10+) ' : totalUnread > 0 ? `(${totalUnread}) ` : ''
     const route = resolvePageTitle(pathname)
-    // Aba no formato "<rota> | OMNX Desk" (nome fixo da marca, não do tenant).
+    // Aba no formato "<rota> | <nome do app>" (BRAND.appName, não o nome do tenant).
     document.title = `${prefix}${route ? `${route} | ` : ''}${BRAND.appName}`
   }, [totalUnread, pathname])
 
@@ -139,12 +152,24 @@ function App() {
         <AuthProvider>
           <TooltipProvider delayDuration={200}>
           <TitleUpdater />
+          {/* Licença HTAI: em modo off (sem configuração) não muda nada. */}
+          <TravaDeLicenca>
           <Routes>
             {/* Public */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/trocar-senha" element={<ResetPasswordPage obrigatoria />} />
             <Route path="/meet/:roomId" element={<MeetRoom />} />
             <Route path="/vendas/nova" element={<NovaVendaPublicaPage />} />
+
+            {/* Endereços antigos → novos (PERMANENTE; ver config/rotasAntigas.ts).
+                Ficam fora do login de propósito: traduzem primeiro, e a rota
+                nova é que pede login e confere o app/permissão. Preservam
+                ?busca e #âncora (links já enviados no WhatsApp, push do
+                celular, notificações gravadas no banco). */}
+            {CAMINHOS_ANTIGOS.map((caminho) => (
+              <Route key={caminho} path={caminho} element={<RedirecionamentoAntigo />} />
+            ))}
 
             {/* Main app — AppLayout */}
             <Route element={<ProtectedRoute />}>
@@ -161,20 +186,27 @@ function App() {
                 <Route path="/dashboard-legado" element={<DashboardPage />} />
                 <Route path="/clientes" element={<ClientesListPage />} />
                 <Route path="/clientes/:id" element={<ClienteDetailPage />} />
+                {/* Hub de ajustes (cartões filtrados por permissão). */}
+                <Route path="/ajustes" element={<AjustesPage />} />
                 <Route path="/produtos" element={<ProdutosPage />} />
                 <Route path="/produtos/:id" element={<ProdutoDetailPage />} />
                 <Route path="/notificacoes" element={<NotificacoesPage />} />
-                <Route path="/usuarios" element={<Navigate to="/colaboradores" replace />} />
-                <Route path="/relatorios" element={<RelatoriosPage />} />
+                {/* Trava na própria rota (R8): antes só havia a RLS. */}
+                <Route path="/relatorios" element={<ExigeAcesso regra={TRAVAS_DE_PAGINA.relatorios}><RelatoriosPage /></ExigeAcesso>} />
+                <Route path="/relatorios/pesquisas" element={<ExigeAcesso regra={TRAVAS_DE_PAGINA.pesquisas}><PesquisasNpsPage /></ExigeAcesso>} />
+                <Route path="/relatorios/pesquisas/:id" element={<ExigeAcesso regra={TRAVAS_DE_PAGINA.pesquisas}><PesquisaNpsPage /></ExigeAcesso>} />
+                <Route path="/aulas" element={<ExigeAcesso regra={TRAVAS_DE_PAGINA.aulas}><AulasEquipePage /></ExigeAcesso>} />
+                <Route path="/aulas/:id" element={<ExigeAcesso regra={TRAVAS_DE_PAGINA.aulas}><AulaTrilhaPage /></ExigeAcesso>} />
                 <Route path="/configuracoes" element={<ConfiguracoesPage />} />
-                <Route path="/admin" element={<AdminPage />} />
+                <Route path="/admin" element={<ExigeAcesso regra={TRAVAS_DE_PAGINA.admin}><AdminPage /></ExigeAcesso>} />
                 <Route path="/empresas" element={<EmpresasPage />} />
                 <Route path="/apps" element={<AppsPage />} />
                 <Route path="/reportes" element={<ReportesPage />} />
                 {/* Acompanhamento do próprio reporte — qualquer usuário logado */}
                 <Route path="/meus-reportes" element={<MeusReportesPage />} />
-                <Route path="/api-webhooks" element={<ApiWebhooksPage />} />
-                <Route path="/auditoria" element={<AuditoriaPage />} />
+                <Route path="/seguranca" element={<SegurancaPage />} />
+                <Route path="/api-webhooks" element={<ExigeAcesso regra={TRAVAS_DE_PAGINA.apiWebhooks}><ApiWebhooksPage /></ExigeAcesso>} />
+                <Route path="/auditoria" element={<ExigeAcesso regra={TRAVAS_DE_PAGINA.auditoria}><AuditoriaPage /></ExigeAcesso>} />
                 <Route path="/saude" element={<SaudePage />} />
                 <Route path="/departamentos" element={<DepartamentosPage />} />
                 <Route path="/departamentos/:id" element={<DepartamentoDetailPage />} />
@@ -184,15 +216,22 @@ function App() {
                     Chega-se digitando /disparo. Não estar no menu esconde, mas não protege:
                     a trava real é o gate de admin dentro da própria página. */}
                 <Route path="/disparo" element={<DisparoPage />} />
+                {/* Tickets (antes /atendimento/*). Mesmo app e mesmas páginas;
+                    só o endereço mudou. O painel continua em "/". */}
                 <Route element={<RequireApp slug="atendimento" />}>
-                  {/* O painel mora em "/" — aqui só mantém vivo quem chegar
-                      por /atendimento (link antigo, favorito, e-mail). */}
-                  <Route path="/atendimento" element={<Navigate to="/" replace />} />
-                  <Route path="/atendimento/demandas" element={<DemandasPage />} />
-                  <Route path="/atendimento/demandas/:id" element={<DemandaDetailPage />} />
-                  <Route path="/atendimento/kanban" element={<DemandasKanbanPage />} />
-                  <Route path="/atendimento/sentimento" element={<AtendimentoSentimentoPage />} />
-                  <Route path="/atendimento/config" element={<AtendimentoConfigPage />} />
+                  <Route path="/tickets" element={<DemandasPage />} />
+                  <Route path="/tickets/quadro" element={<DemandasKanbanPage />} />
+                  <Route path="/tickets/prazos" element={<PrazosPage />} />
+                  <Route path="/tickets/analise" element={<AtendimentoSentimentoPage />} />
+                  <Route path="/tickets/configurar" element={<AtendimentoConfigPage />} />
+                  <Route path="/tickets/:id" element={<DemandaDetailPage />} />
+                </Route>
+                {/* Íris (antes /automacoes-wa/*) e Grupos e clientes (antes a aba
+                    Vínculos): mesmo app, mesma trava de admin na página. */}
+                <Route element={<RequireApp slug="automacoes-wa" />}>
+                  <Route path="/ia" element={<AutomacoesWaConfigPage />} />
+                  <Route path="/ia/:aba" element={<AutomacoesWaConfigPage />} />
+                  <Route path="/clientes/grupos" element={<GruposClientesPage />} />
                 </Route>
                 <Route element={<RequireApp slug="contratos" />}>
                   <Route path="/contratos" element={<ContratosDashboardPage />} />
@@ -200,27 +239,26 @@ function App() {
                   <Route path="/contratos/kanban" element={<ContratosKanbanPage />} />
                   <Route path="/contratos/onboarding" element={<VendasPendentesPage />} />
                   <Route path="/contratos/produtos" element={<ProdutosCatalogoPage />} />
-                  {/* Modelos foram absorvidos por Produtos — mantém links antigos vivos */}
-                  <Route path="/contratos/modelos" element={<Navigate to="/contratos/produtos" replace />} />
                   <Route path="/contratos/tags" element={<TagsAdminPage />} />
                   <Route path="/contratos/recebiveis" element={<FluxoFuturoPage />} />
                   <Route path="/contratos/:id" element={<ContratoDetailPage />} />
                 </Route>
+                {/* Qualquer outro endereço: página amigável com atalhos (R5). */}
+                <Route path="*" element={<NaoEncontradaPage />} />
               </Route>
             </Route>
 
-            {/* EmpireChat — ChatLayout */}
+            {/* Conversas (antes /chat) — ChatLayout, altura total.
+                Som e tempo real de mensagens ficam restritos a este grupo (R6). */}
             <Route element={<ProtectedRoute />}>
-              <Route path="/chat" element={<RequireApp slug="chat"><ChatLayout /></RequireApp>}>
+              <Route path="/conversas" element={<RequireApp slug="chat"><ChatLayout /></RequireApp>}>
                 <Route index element={<ChatInboxPage />} />
-                <Route path="instancias" element={<ChatInstanciasPage />} />
-                <Route path="departamentos" element={<ChatDepartamentosPage />} />
-                <Route path="kanban" element={<ChatKanbanPage />} />
+                <Route path="quadro" element={<ChatKanbanPage />} />
                 <Route path="contatos" element={<ChatContatosPage />} />
-                <Route path="acessos" element={<ChatAcessosPage />} />
-                <Route path="relatorio-semanal" element={<ChatRelatorioSemanalPage />} />
                 <Route path="anotacoes" element={<ChatAnotacoesPage />} />
-                <Route path="config" element={<ChatConfigPage />} />
+                {/* Configuração do WhatsApp (abas na URL: ?aba=instancias|acessos|aquecimento) */}
+                <Route path="configurar" element={<ChatConfigPage />} />
+                <Route path="filas" element={<ChatDepartamentosPage />} />
                 <Route path="reunioes" element={<ReunioesPage />} />
               </Route>
             </Route>
@@ -251,6 +289,7 @@ function App() {
               </Route>
             </Route>
           </Routes>
+          </TravaDeLicenca>
           </TooltipProvider>
         </AuthProvider>
       </BrowserRouter>

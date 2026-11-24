@@ -4,30 +4,27 @@ import { supabase } from '@/lib/supabase'
 import { SUPABASE_URL } from '@/integrations/supabase/client'
 import { useMyInstanceIds } from '@/hooks/useUsers'
 import { useAuth } from '@/contexts/AuthContext'
+import { tenantDaSessao } from '@/lib/authTenant'
+import type { Database } from '@/integrations/supabase/types'
+import { obterTokenChat, lerRespostaEnvio } from '@/lib/chatTransport'
+import { lerReacoes, type MessageReaction } from '@/lib/chatReactions'
+import type { AuthUser } from '@/types/auth'
+export type { MessageReaction } from '@/lib/chatReactions'
 
-// ─── Auth helper: returns current access token (no refresh to avoid race conditions) ─
+const getFreshToken = (expectedActorId?: string) => obterTokenChat(supabase.auth, expectedActorId)
 
-async function getFreshToken(): Promise<string> {
-  const { data } = await supabase.auth.getSession()
-  if (data?.session?.access_token) {
-    // Check if token is still valid (with 60s buffer)
-    const expiresAt = data.session.expires_at ?? 0
-    if (expiresAt * 1000 > Date.now() + 60_000) {
-      return data.session.access_token
-    }
-    // Token expired or about to expire — try refresh
-    const { data: refreshed, error } = await supabase.auth.refreshSession()
-    if (error) console.warn('Token refresh failed:', error.message)
-    if (refreshed?.session?.access_token) return refreshed.session.access_token
-    // Fallback: return expired token anyway (verify_jwt:false functions still validate internally)
-    return data.session.access_token
+async function confirmarAutorChat(actor: AuthUser | null): Promise<string> {
+  if (!actor) throw new Error('Entre novamente antes de enviar.')
+  const tenant = await tenantDaSessao()
+  const { data: { session }, error } = await supabase.auth.getSession()
+  if (error || session?.user.id !== actor.id || tenant !== actor.tenant_id) {
+    throw new Error('Sua sessão mudou. Atualize a conversa antes de enviar.')
   }
+  return actor.tenant_id
+}
 
-  // No cached session at all
-  const { data: refreshed } = await supabase.auth.refreshSession()
-  if (refreshed?.session?.access_token) return refreshed.session.access_token
-
-  throw new Error('Sessão expirada. Faça login novamente.')
+async function autorChatContinuaAtual(actor: AuthUser | null): Promise<boolean> {
+  try { await confirmarAutorChat(actor); return true } catch { return false }
 }
 
 // ─── Local domain types ───────────────────────────────────────────────────────
@@ -48,6 +45,7 @@ export interface WaInstance {
 export interface ChatDepartment {
   id: string
   nome: string
+  gerente_id: string | null
   instance_id: string | null
   distribuicao: string
   sla_primeira_resposta_minutos: number
@@ -79,6 +77,7 @@ export interface ChatContact {
 }
 
 export interface ChatConversation {
+  tenant_id?: string
   id: string
   instance_id: string
   contact_id: string
@@ -102,12 +101,6 @@ export interface ChatConversation {
   ultima_msg_cliente_em: string | null
 }
 
-export interface MessageReaction {
-  emoji: string
-  from: string
-  from_me: boolean
-}
-
 export interface ChatMessage {
   id: string
   conversation_id: string
@@ -123,6 +116,10 @@ export interface ChatMessage {
   status_envio?: string | null
   reactions?: MessageReaction[]
   fonte_envio?: string | null
+  /** Quem escreveu (migration 20261027120000): cliente | equipe | ia | sistema | desconhecido. */
+  autor_tipo?: string | null
+  /** Nome de exibição do remetente no WhatsApp (grupos; inclusive mídia, que não tem prefixo "[Nome]"). */
+  autor_nome?: string | null
   reply_to_id?: string | null
   replied_message?: {
     id: string
@@ -146,17 +143,16 @@ export interface QuickReply {
 
 export interface ChatCsat {
   id: string
-  conversation_id: string
-  contact_id: string
+  conversation_id: string | null
   nota: number | null
   comentario: string | null
-  enviado_em: string
+  criado_em: string | null
   respondido_em: string | null
 }
 
 export interface ConversationWithContact extends ChatConversation {
   chat_contacts: ChatContact
-  chat_departments: ChatDepartment | null
+  chat_departments: Pick<ChatDepartment, 'id' | 'nome'> | null
   whatsapp_instances: Pick<WaInstance, 'id' | 'nome' | 'numero_whatsapp' | 'instance_id' | 'categoria' | 'cor' | 'ocultar_grupos'> | null
   users: { id: string; nome: string } | null
 }
@@ -338,11 +334,11 @@ export function useConversation(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('chat_conversations')
-        .select('*, chat_contacts(*), chat_departments(id,nome), whatsapp_instances(id,nome,numero_whatsapp,instance_id,categoria,cor), users!chat_conversations_agente_id_fkey(id,nome), chat_messages(*, agente:users!chat_messages_agente_id_fkey(id, nome, perfil))')
+        .select('*, chat_contacts(*), chat_departments(id,nome), whatsapp_instances(id,nome,numero_whatsapp,instance_id,categoria,cor,ocultar_grupos), users!chat_conversations_agente_id_fkey(id,nome), chat_messages(*, agente:users!chat_messages_agente_id_fkey(id, nome, perfil))')
         .eq('id', id)
         .single()
       if (error) throw error
-      return data as ConversationWithContact & { chat_messages: ChatMessage[] }
+      return { ...data, chat_messages: data.chat_messages.map(message => ({ ...message, reactions: lerReacoes(message.reactions) })) } as ConversationWithContact & { chat_messages: ChatMessage[] }
     },
     enabled: Boolean(id),
   })
@@ -350,20 +346,34 @@ export function useConversation(id: string) {
 
 // ─── Messages ─────────────────────────────────────────────────────────────────
 
-export function useMessages(conversationId: string) {
+export function useMessages(conversationId: string, authorizedConversationIds?: readonly string[]) {
+  const ids = [...new Set([conversationId, ...(authorizedConversationIds ?? [])])].filter(Boolean).sort()
   return useQuery({
-    queryKey: chatKeys.messages(conversationId),
+    queryKey: ids.length > 1 ? [...chatKeys.messages(conversationId), 'origens', ids] : chatKeys.messages(conversationId),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('chat_messages')
-        .select('*, agente:users!chat_messages_agente_id_fkey(id, nome, perfil)')
-        .eq('conversation_id', conversationId)
-        .order('criado_em', { ascending: true })
-      if (error) throw error
-
-      // Hydrate replied_message from the same result set (self-reference)
-      const messagesById = new Map((data as ChatMessage[]).map(m => [m.id, m]))
-      for (const msg of data as ChatMessage[]) {
+      const messages: ChatMessage[] = []
+      // Paginação evita truncar o histórico agregado no limite REST. RLS continua
+      // autorizando cada mensagem; a tela passa somente conversas já visíveis.
+      const pageSize = 500
+      for (let offset = 0; ; offset += pageSize) {
+        let query = supabase.from('chat_messages')
+          .select('*, agente:users!chat_messages_agente_id_fkey(id, nome, perfil)')
+        query = ids.length === 1 ? query.eq('conversation_id', conversationId) : query.in('conversation_id', ids)
+        const { data, error } = await query.order('criado_em', { ascending: true })
+          .order('id', { ascending: true }).range(offset, offset + pageSize - 1)
+        if (error) throw error
+        for (const message of data) {
+          if (!message.conversation_id || !message.criado_em) throw new Error('Uma mensagem está sem origem ou data. Não foi possível completar o histórico.')
+          messages.push({ ...message, conversation_id: message.conversation_id, criado_em: message.criado_em,
+            tipo: message.tipo ?? 'texto', enviado_por_agente: message.enviado_por_agente ?? false,
+            enviado_por_ia: message.enviado_por_ia ?? false, lida: message.lida ?? false,
+            reactions: lerReacoes(message.reactions) })
+        }
+        if (data.length < pageSize) break
+      }
+      // Preserva IDs, datas e conversation_id de origem, inclusive nas respostas.
+      const messagesById = new Map(messages.map(m => [m.id, m]))
+      for (const msg of messages) {
         if (msg.reply_to_id) {
           const parent = messagesById.get(msg.reply_to_id)
           if (parent) {
@@ -379,7 +389,7 @@ export function useMessages(conversationId: string) {
         }
       }
 
-      return data as ChatMessage[]
+      return messages
     },
     enabled: Boolean(conversationId),
   })
@@ -398,7 +408,7 @@ export function useAssignConversation() {
         .eq('id', id)
         .single()
 
-      const updatePayload: Record<string, unknown> = {
+      const updatePayload: Database['public']['Tables']['chat_conversations']['Update'] = {
         agente_id,
         status: 'em_atendimento',
         atualizado_em: new Date().toISOString(),
@@ -492,7 +502,9 @@ export function useSendMessage() {
       reply_to_id?: string
     }) => {
       const supabaseUrl = SUPABASE_URL
-      const token = await getFreshToken()
+      await confirmarAutorChat(user)
+      const token = await getFreshToken(user?.id)
+      await confirmarAutorChat(user)
 
       const response = await fetch(`${supabaseUrl}/functions/v1/uazapi-send-message`, {
         method: 'POST',
@@ -503,26 +515,18 @@ export function useSendMessage() {
         body: JSON.stringify({ conversation_id, conteudo, tipo, media_url, reply_to_id }),
       })
 
-      if (!response.ok) {
-        const errorBody = await response.text()
-        throw new Error(`Falha ao enviar mensagem: ${errorBody}`)
-      }
-
-      return response.json()
+      return lerRespostaEnvio(response)
     },
     onMutate: async (variables) => {
       // Cancelar refetch em andamento
       await queryClient.cancelQueries({
         queryKey: chatKeys.messages(variables.conversation_id),
       })
-
-      // Snapshot dos dados anteriores
-      const previousMessages = queryClient.getQueryData<ChatMessage[]>(
-        chatKeys.messages(variables.conversation_id)
-      )
+      // O cancelamento é assíncrono; a identidade pode ter mudado nesse intervalo.
+      await confirmarAutorChat(user)
 
       // Criar mensagem otimista
-      const tempId = `temp-${Date.now()}`
+      const tempId = `temp-${crypto.randomUUID()}`
       const optimisticMessage: ChatMessage = {
         id: tempId,
         conversation_id: variables.conversation_id,
@@ -544,22 +548,23 @@ export function useSendMessage() {
         (old?: ChatMessage[]) => (old ? [...old, optimisticMessage] : [optimisticMessage])
       )
 
-      return { previousMessages }
+      return { tempId }
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: async (_data, variables) => {
+      if (!await autorChatContinuaAtual(user)) return
       // Refetch para garantir dados atualizados com ID real
       queryClient.invalidateQueries({
         queryKey: chatKeys.messages(variables.conversation_id),
       })
     },
-    onError: (_error, variables, context) => {
-      // Restaurar dados anteriores em caso de erro
-      if (context?.previousMessages) {
-        queryClient.setQueryData(
-          chatKeys.messages(variables.conversation_id),
-          context.previousMessages
-        )
-      }
+    onError: async (_error, variables, context) => {
+      if (!context || !await autorChatContinuaAtual(user)) return
+      const key = chatKeys.messages(variables.conversation_id)
+      const current = queryClient.getQueryData<ChatMessage[]>(key)
+      // Nunca restaura um snapshot da conta anterior nem recria cache já removido.
+      if (!current?.some(message => message.id === context.tempId)) return
+      queryClient.setQueryData(key, (messages?: ChatMessage[]) =>
+        messages?.filter(message => message.id !== context.tempId))
     },
   })
 }
@@ -598,6 +603,7 @@ export function useAddInternalNote() {
       const { data, error } = await supabase
         .from('chat_messages')
         .insert({
+          tenant_id: await tenantDaSessao(),
           conversation_id,
           tipo: 'nota_interna',
           conteudo,
@@ -622,7 +628,7 @@ export function useAddInternalNote() {
 export function useUpdateNoteContent() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, conteudo, conversation_id }: { id: string; conteudo: string; conversation_id: string }) => {
+    mutationFn: async ({ id, conteudo }: { id: string; conteudo: string; conversation_id: string }) => {
       const { error } = await supabase
         .from('chat_messages')
         .update({ conteudo })
@@ -707,7 +713,7 @@ export function useToggleArquivada() {
       const { error } = await supabase
         .from('chat_conversation_user_prefs')
         .upsert(
-          { user_id: user.id, conversation_id: id, arquivada: !arquivada },
+          { user_id: user.id, conversation_id: id, arquivada: !arquivada, tenant_id: await tenantDaSessao() },
           { onConflict: 'user_id,conversation_id' },
         )
       if (error) throw error
@@ -728,7 +734,7 @@ export function useToggleFixado() {
       const { error } = await supabase
         .from('chat_conversation_user_prefs')
         .upsert(
-          { user_id: user.id, conversation_id: id, fixado: !fixado },
+          { user_id: user.id, conversation_id: id, fixado: !fixado, tenant_id: await tenantDaSessao() },
           { onConflict: 'user_id,conversation_id' },
         )
       if (error) throw error
@@ -760,7 +766,7 @@ export function useChangeInstance() {
       const { data: newContact, error: contactErr } = await supabase
         .from('chat_contacts')
         .upsert(
-          { instance_id: new_instance_id, numero_whatsapp: contact.numero_whatsapp, nome: contact.nome },
+          { instance_id: new_instance_id, numero_whatsapp: contact.numero_whatsapp, nome: contact.nome, tenant_id: await tenantDaSessao() },
           { onConflict: 'instance_id,numero_whatsapp' },
         )
         .select()
@@ -819,7 +825,7 @@ export function useGroupMembers(contactId: string | undefined) {
         .order('is_admin', { ascending: false })
         .order('nome', { ascending: true, nullsFirst: false })
       if (error) throw error
-      const members = (data ?? []) as GroupMember[]
+      const members: GroupMember[] = (data ?? []).map(member => ({ ...member, is_admin: member.is_admin === true, is_super_admin: member.is_super_admin === true }))
 
       // Enrich members without names from chat_contacts
       const withoutName = members.filter((m) => !m.nome)
@@ -894,7 +900,8 @@ export function useFetchProfilePicBatch() {
 
 // ─── Realtime ─────────────────────────────────────────────────────────────────
 
-export function useRealtimeMessages(conversationId: string) {
+export function useRealtimeMessages(conversationId: string, authorizedConversationIds?: readonly string[]) {
+  const originsKey = [...new Set(authorizedConversationIds ?? [])].filter(id => id !== conversationId).sort().join(',')
   const queryClient = useQueryClient()
 
   useEffect(() => {
@@ -930,10 +937,16 @@ export function useRealtimeMessages(conversationId: string) {
       )
       .subscribe()
 
+    const originChannels = originsKey ? originsKey.split(',').map(id => supabase
+      .channel(`chat_messages:${conversationId}:origem:${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages', filter: `conversation_id=eq.${id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversationId) })
+      }).subscribe()) : []
     return () => {
       supabase.removeChannel(channel)
+      for (const origin of originChannels) supabase.removeChannel(origin)
     }
-  }, [conversationId, queryClient])
+  }, [conversationId, originsKey, queryClient])
 }
 
 // ─── Transfer Conversation ───────────────────────────────────────────────────
@@ -950,7 +963,7 @@ export function useTransferConversation() {
       agente_id?: string | null
       department_id?: string | null
     }) => {
-      const update: Record<string, unknown> = {
+      const update: Database['public']['Tables']['chat_conversations']['Update'] = {
         atualizado_em: new Date().toISOString(),
       }
       if (agente_id !== undefined) update.agente_id = agente_id
@@ -1006,6 +1019,7 @@ function waNumberVariants(numero: string): string[] {
 
 export function useStartConversation() {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: async ({
       instance_id,
@@ -1020,6 +1034,7 @@ export function useStartConversation() {
       conteudo: string
       agente_id?: string
     }) => {
+      const tenant_id = await confirmarAutorChat(user)
       // Sanitize: keep only digits (DDI já tratado no chamador)
       const normalizedNumber = numero_whatsapp.replace(/\D/g, '')
 
@@ -1039,7 +1054,7 @@ export function useStartConversation() {
         const { data: created, error: contactErr } = await supabase
           .from('chat_contacts')
           .upsert(
-            { instance_id, numero_whatsapp: normalizedNumber, nome: nome ?? null },
+            { instance_id, numero_whatsapp: normalizedNumber, nome: nome ?? null, tenant_id },
             { onConflict: 'instance_id,numero_whatsapp' },
           )
           .select()
@@ -1063,7 +1078,7 @@ export function useStartConversation() {
       if (existingConvs && existingConvs.length > 0) {
         // Reuse existing active conversation
         const existing = existingConvs[0]
-        const updatePayload: Record<string, unknown> = { atualizado_em: new Date().toISOString() }
+        const updatePayload: Database['public']['Tables']['chat_conversations']['Update'] = { atualizado_em: new Date().toISOString() }
         if (existing.status !== 'em_atendimento') updatePayload.status = 'em_atendimento'
         if (agente_id && !existing.agente_id) updatePayload.agente_id = agente_id
         if (Object.keys(updatePayload).length > 1) {
@@ -1080,7 +1095,7 @@ export function useStartConversation() {
         }
       } else {
         // No active conversation — create new one
-        const insertPayload: Record<string, unknown> = { instance_id, contact_id: contact.id, status: 'em_atendimento' }
+        const insertPayload: Database['public']['Tables']['chat_conversations']['Insert'] = { instance_id, contact_id: contact.id, status: 'em_atendimento', tenant_id }
         if (agente_id) insertPayload.agente_id = agente_id
         const { data: newConv, error: convErr } = await supabase
           .from('chat_conversations')
@@ -1093,7 +1108,8 @@ export function useStartConversation() {
 
       // 3. Send message via edge function
       const supabaseUrl = SUPABASE_URL
-      const token = await getFreshToken()
+      const token = await getFreshToken(user?.id)
+      await confirmarAutorChat(user)
 
       const sendRes = await fetch(`${supabaseUrl}/functions/v1/uazapi-send-message`, {
         method: 'POST',
@@ -1107,14 +1123,11 @@ export function useStartConversation() {
           tipo: 'texto',
         }),
       })
-      if (!sendRes.ok) {
-        const errBody = await sendRes.json().catch(() => ({}))
-        throw new Error(errBody?.error ?? `Falha ao enviar mensagem (${sendRes.status})`)
-      }
-
-      return conversation
+      const envio = await lerRespostaEnvio(sendRes)
+      return { ...conversation, warning: envio.warning }
     },
-    onSuccess: (conversation) => {
+    onSuccess: async (conversation) => {
+      if (!await autorChatContinuaAtual(user)) return
       queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] })
       queryClient.invalidateQueries({ queryKey: chatKeys.messages(conversation.id) })
     },
@@ -1133,7 +1146,7 @@ export function useUpdateConversationStatus() {
       id: string
       status: ChatConversation['status']
     }) => {
-      const update: Record<string, unknown> = {
+      const update: Database['public']['Tables']['chat_conversations']['Update'] = {
         status,
         atualizado_em: new Date().toISOString(),
       }
@@ -1168,7 +1181,7 @@ export function useCreateInstance() {
     }) => {
       const { data, error } = await supabase
         .from('whatsapp_instances')
-        .insert(input)
+        .insert({ ...input, tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -1271,15 +1284,17 @@ export function useUpdateContact() {
       // Sync junction table when client_id changes
       if ('client_id' in input) {
         if (input.client_id) {
-          await supabase
+          const { error: linkError } = await supabase
             .from('chat_contact_clients')
-            .upsert({ contact_id: id, client_id: input.client_id }, { onConflict: 'contact_id,client_id' })
+            .upsert({ contact_id: id, client_id: input.client_id, tenant_id: await tenantDaSessao() }, { onConflict: 'contact_id,client_id' })
+          if (linkError) throw linkError
         } else {
           // Removed client link — delete all junction entries for this contact
-          await supabase
+          const { error: linkError } = await supabase
             .from('chat_contact_clients')
             .delete()
             .eq('contact_id', id)
+          if (linkError) throw linkError
         }
       }
 
@@ -1304,7 +1319,7 @@ export function useCreateContact() {
     }) => {
       const { data, error } = await supabase
         .from('chat_contacts')
-        .insert(input)
+        .insert({ ...input, tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -1360,7 +1375,9 @@ export function useBulkUpdateContactTags() {
           : current.filter(t => !tags.includes(t))
         return supabase.from('chat_contacts').update({ tags: newTags }).eq('id', c.id)
       })
-      await Promise.all(updates)
+      const results = await Promise.all(updates)
+      const failed = results.find(result => result.error)
+      if (failed?.error) throw failed.error
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chat', 'contacts'] })
@@ -1391,10 +1408,10 @@ export function useBulkUpdateContactClient() {
 export function useCreateDepartment() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (input: Omit<ChatDepartment, 'id'>) => {
+    mutationFn: async (input: Omit<ChatDepartment, 'id' | 'modulo_acesso' | 'gerente_id'> & { modulo_acesso?: string | null; gerente_id?: string | null }) => {
       const { data, error } = await supabase
         .from('chat_departments')
-        .insert(input)
+        .insert({ ...input, tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -1446,7 +1463,7 @@ export function useDeptInstanceAssignments(departmentId?: string) {
     queryFn: async () => {
       let query = supabase
         .from('department_instance_assignments')
-        .select('*, whatsapp_instances(id, nome, numero_whatsapp, instance_id, categoria, cor)')
+        .select('*, whatsapp_instances(id, nome, numero_whatsapp, instance_id, categoria, cor, ocultar_grupos)')
         .order('criado_em', { ascending: false })
       if (departmentId) {
         query = query.eq('department_id', departmentId)
@@ -1464,7 +1481,7 @@ export function useAddDeptInstance() {
     mutationFn: async (input: { department_id: string; instance_id: string }) => {
       const { data, error } = await supabase
         .from('department_instance_assignments')
-        .insert(input)
+        .insert({ ...input, tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -1529,7 +1546,7 @@ export function useDeptAgentAssignmentsByUser(userId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('chat_department_agents')
-        .select('*, chat_departments(id, nome)')
+        .select('*, users(id, nome, perfil), chat_departments(id, nome)')
         .eq('user_id', userId)
         .order('criado_em', { ascending: false })
       if (error) throw error
@@ -1545,7 +1562,7 @@ export function useAddDeptAgent() {
     mutationFn: async (input: { department_id: string; user_id: string; is_gerente?: boolean }) => {
       const { data, error } = await supabase
         .from('chat_department_agents')
-        .upsert({ is_gerente: false, ...input }, { onConflict: 'department_id,user_id', ignoreDuplicates: true })
+        .upsert({ is_gerente: false, ...input, tenant_id: await tenantDaSessao() }, { onConflict: 'department_id,user_id', ignoreDuplicates: true })
         .select()
         .single()
       if (error) throw error
@@ -1589,7 +1606,7 @@ export function useDeptTeamMessages(deptId: string) {
     queryKey: ['chat', 'dept-team-messages', deptId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('dept_team_messages' as never)
+        .from('dept_team_messages')
         .select('*, users(id, nome)')
         .eq('department_id', deptId)
         .order('criado_em', { ascending: true })
@@ -1606,8 +1623,8 @@ export function useSendDeptTeamMessage() {
   return useMutation({
     mutationFn: async ({ department_id, user_id, conteudo }: { department_id: string; user_id: string; conteudo: string }) => {
       const { data, error } = await supabase
-        .from('dept_team_messages' as never)
-        .insert({ department_id, user_id, conteudo })
+        .from('dept_team_messages')
+        .insert({ department_id, user_id, conteudo, tenant_id: await tenantDaSessao() })
         .select('*, users(id, nome)')
         .single()
       if (error) throw error
@@ -1665,7 +1682,7 @@ export function useSummarizeForQueue() {
   return useMutation({
     mutationFn: async (conversationId: string) => {
       const token = await getFreshToken()
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/ia-summarize`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/ia-summarize-conversation`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1922,7 +1939,7 @@ export function useIaSuggestReply() {
   return useMutation({
     mutationFn: async (conversationId: string) => {
       const token = await getFreshToken()
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/ia-suggest`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/ia-suggest-reply`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1942,7 +1959,7 @@ export function useIaSummarizeConversation() {
   return useMutation({
     mutationFn: async (conversationId: string) => {
       const token = await getFreshToken()
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/ia-summarize`, {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/ia-summarize-conversation`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1964,11 +1981,11 @@ export function useCsatResults() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('chat_csat')
-        .select('*, chat_contacts(nome, numero_whatsapp)')
-        .order('enviado_em', { ascending: false })
+        .select('*, chat_conversations(chat_contacts(nome, numero_whatsapp))')
+        .order('criado_em', { ascending: false })
         .limit(200)
       if (error) throw error
-      return data as (ChatCsat & { chat_contacts: { nome: string | null; numero_whatsapp: string } })[]
+      return data.map(row => ({ ...row, chat_contacts: row.chat_conversations?.chat_contacts ?? null }))
     },
   })
 }
@@ -2030,21 +2047,22 @@ export function useCsatByConversation(conversationId: string) {
 
 export function useSendCsat() {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   return useMutation({
     mutationFn: async ({
       conversation_id,
-      contact_id,
     }: {
       conversation_id: string
       contact_id: string
     }) => {
+      const tenant_id = await confirmarAutorChat(user)
+      const token = await getFreshToken(user?.id)
       // 1. Insert CSAT record
       const { data, error } = await supabase
         .from('chat_csat')
         .insert({
           conversation_id,
-          contact_id,
-          enviado_em: new Date().toISOString(),
+          tenant_id,
         })
         .select()
         .single()
@@ -2052,12 +2070,12 @@ export function useSendCsat() {
 
       // 2. Send CSAT message via edge function
       const supabaseUrl = SUPABASE_URL
-      const token = await getFreshToken()
 
       const csatMessage =
         'Olá! Como você avalia nosso atendimento? Responda com uma nota de 1 a 5 (1=Péssimo, 5=Excelente)'
 
-      await fetch(`${supabaseUrl}/functions/v1/uazapi-send-message`, {
+      await confirmarAutorChat(user)
+      const sent = await fetch(`${supabaseUrl}/functions/v1/uazapi-send-message`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -2068,11 +2086,26 @@ export function useSendCsat() {
           conteudo: csatMessage,
           tipo: 'texto',
         }),
+      }).catch(() => {
+        throw new Error('Não foi possível confirmar o envio da avaliação. Confira o histórico antes de reenviar.')
       })
 
-      return data as ChatCsat
+      try {
+        const receipt = await lerRespostaEnvio(sent)
+        return { ...data, warning: receipt.warning }
+      } catch (error) {
+        // Só a recusa confirmada libera a reserva criada nesta tentativa.
+        // Timeout/erro de rede pode ter sido aceito: mantém reserva e não reenvia.
+        if ([400, 401, 403, 404, 422, 429, 502].includes(sent.status) && await autorChatContinuaAtual(user)) {
+          const { error: cleanupError } = await supabase.from('chat_csat').delete().eq('id', data.id)
+          if (cleanupError) throw new Error('Envio recusado. Não foi possível liberar a avaliação; atualize a conversa antes de tentar novamente.')
+        }
+        throw error
+      }
     },
-    onSuccess: () => {
+    retry: false,
+    onSettled: async () => {
+      if (!await autorChatContinuaAtual(user)) return
       queryClient.invalidateQueries({ queryKey: chatKeys.csat() })
     },
   })
@@ -2101,7 +2134,7 @@ async function callUazapiAction(action: string, instance_id: string, params: Rec
 export function useReactToMessage() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ instance_id, number, message_id, emoji, conversation_id }: {
+    mutationFn: async ({ instance_id, number, message_id, emoji }: {
       instance_id: string; number: string; message_id: string; emoji: string; conversation_id: string
     }) => {
       // Send reaction to WhatsApp via UAZAPI
@@ -2114,7 +2147,7 @@ export function useReactToMessage() {
         .eq('message_id_wpp', message_id)
         .single()
 
-      const existing: MessageReaction[] = (msg?.reactions as MessageReaction[]) ?? []
+      const existing = lerReacoes(msg?.reactions)
 
       let updated: MessageReaction[]
       if (!emoji) {
@@ -2126,10 +2159,11 @@ export function useReactToMessage() {
         updated.push({ emoji, from: number, from_me: true })
       }
 
-      await supabase
+      const { error: reactionError } = await supabase
         .from('chat_messages')
-        .update({ reactions: updated })
+        .update({ reactions: updated.map(reaction => ({ ...reaction })) })
         .eq('message_id_wpp', message_id)
+      if (reactionError) throw reactionError
 
       return result
     },
@@ -2143,7 +2177,7 @@ export function useReactToMessage() {
 export function useEditMessage() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ instance_id, message_id, text, conversation_id }: {
+    mutationFn: async ({ instance_id, message_id, text }: {
       instance_id: string; message_id: string; text: string; conversation_id: string
     }) => {
       const result = await callUazapiAction('edit_message', instance_id, { message_id, text })
@@ -2164,7 +2198,7 @@ export function useEditMessage() {
 export function useDeleteMessageWpp() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ instance_id, message_id, conversation_id }: {
+    mutationFn: async ({ instance_id, message_id }: {
       instance_id: string; message_id: string; conversation_id: string
     }) => {
       const result = await callUazapiAction('delete_message', instance_id, { message_id })
@@ -2194,7 +2228,7 @@ export function useMarkRead() {
 export function useSendMenu() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ instance_id, conversation_id, number, type, text, choices, footerText, listButton, selectableCount, imageButton }: {
+    mutationFn: async ({ instance_id, number, type, text, choices, footerText, listButton, selectableCount, imageButton }: {
       instance_id: string; conversation_id: string; number: string
       type: 'button' | 'list' | 'poll' | 'carousel'
       text: string; choices: string[]
@@ -2217,7 +2251,7 @@ export function useSendMenu() {
 export function useSendContact() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ instance_id, conversation_id, number, fullName, phoneNumber, organization, email, url }: {
+    mutationFn: async ({ instance_id, number, fullName, phoneNumber, organization, email, url }: {
       instance_id: string; conversation_id: string; number: string
       fullName: string; phoneNumber: string
       organization?: string; email?: string; url?: string
@@ -2238,7 +2272,7 @@ export function useSendContact() {
 export function useSendLocation() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ instance_id, conversation_id, number, latitude, longitude, name, address }: {
+    mutationFn: async ({ instance_id, number, latitude, longitude, name, address }: {
       instance_id: string; conversation_id: string; number: string
       latitude: number; longitude: number
       name?: string; address?: string
@@ -2404,7 +2438,7 @@ export function useUnreadCounts(instanceIds?: string[] | null) {
       // If instanceIds is an empty array, user has no instance access → no unreads
       if (Array.isArray(instanceIds) && instanceIds.length === 0) return {} as UnreadCountMap
 
-      const params: Record<string, unknown> = { p_user_id: user.id }
+      const params: Database['public']['Functions']['get_unread_counts_for_user']['Args'] = { p_user_id: user.id }
       // null = admin/estrategista (no filter), array = specific instances
       if (Array.isArray(instanceIds) && instanceIds.length > 0) {
         params.p_instance_ids = instanceIds
@@ -2446,7 +2480,7 @@ export function useMarkMessagesAsRead() {
       const { error } = await supabase
         .from('chat_message_reads')
         .upsert(
-          { conversation_id: conversationId, user_id: user.id, last_read_at: new Date().toISOString() },
+          { conversation_id: conversationId, user_id: user.id, last_read_at: new Date().toISOString(), tenant_id: await tenantDaSessao() },
           { onConflict: 'conversation_id,user_id' },
         )
       if (error) throw error
@@ -2511,6 +2545,7 @@ export function useInboxUnreadConversationCount() {
             .from('client_assignments')
             .select('client_id')
             .eq('user_id', user.id)
+            .eq('ativo', true)
           setMyClientIds(assignments?.map(a => a.client_id) ?? [])
         }
       }
@@ -2703,7 +2738,7 @@ export function useCreateClientAlert() {
     }) => {
       const { data, error } = await supabase
         .from('client_alerts')
-        .insert(input)
+        .insert({ ...input, tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error

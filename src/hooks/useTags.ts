@@ -1,3 +1,5 @@
+import type { TablesUpdate } from '@/integrations/supabase/types'
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
@@ -86,7 +88,7 @@ export function useCriarTag() {
 
       const { data, error } = await supabase
         .from('tags')
-        .insert({ nome: nomeLimpo, cor: cor ?? corParaTag(nomeLimpo) })
+        .insert({ ...({ nome: nomeLimpo, cor: cor ?? corParaTag(nomeLimpo) }), tenant_id: await tenantDaSessao() })
         .select('id, nome, cor')
         .single()
       if (error) throw error
@@ -103,7 +105,7 @@ export function useAplicarTag() {
     mutationFn: async ({ contratoId, tagId }: { contratoId: string; tagId: string }) => {
       const { error } = await supabase
         .from('contrato_tags')
-        .upsert({ contrato_id: contratoId, tag_id: tagId }, { onConflict: 'contrato_id,tag_id' })
+        .upsert({ ...({ contrato_id: contratoId, tag_id: tagId }), tenant_id: await tenantDaSessao() }, { onConflict: 'contrato_id,tag_id' })
       if (error) throw error
     },
     onSuccess: (_d, { contratoId }) => {
@@ -119,7 +121,8 @@ export function useAplicarTagEmMassa() {
   return useMutation({
     mutationFn: async ({ contratoIds, tagId }: { contratoIds: string[]; tagId: string }) => {
       if (contratoIds.length === 0) return
-      const rows = contratoIds.map((contrato_id) => ({ contrato_id, tag_id: tagId }))
+      const tenant_id = await tenantDaSessao()
+      const rows = contratoIds.map((contrato_id) => ({ contrato_id, tag_id: tagId, tenant_id }))
       const { error } = await supabase
         .from('contrato_tags')
         .upsert(rows, { onConflict: 'contrato_id,tag_id' })
@@ -178,7 +181,7 @@ export function useAtualizarTag() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({ id, nome, cor, descricao }: { id: string; nome?: string; cor?: string; descricao?: string | null }) => {
-      const patch: Record<string, string | null> = {}
+      const patch: TablesUpdate<'tags'> = {}
       if (nome !== undefined) patch.nome = nome.trim()
       if (cor !== undefined) patch.cor = cor
       if (descricao !== undefined) patch.descricao = descricao?.trim() || null

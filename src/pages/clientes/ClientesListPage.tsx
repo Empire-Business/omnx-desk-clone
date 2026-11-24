@@ -5,13 +5,13 @@ import {
   Sparkles, ChevronRight, LayoutGrid, List as ListIcon, ShieldCheck, Star,
   Filter, X,
 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
 import { usePermissoes } from '@/hooks/usePermissoes'
 import { useClientes, useAllContracts, useCatalogProducts } from '@/hooks/useClientes'
 import { useClientAvatars } from '@/hooks/useInstagramStats'
 import { useAssignments } from '@/hooks/useUsers'
 import { ClienteForm } from '@/components/clientes/ClienteForm'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal } from '@/components/ui/Modal'
 import { cn } from '@/lib/utils'
@@ -58,30 +58,40 @@ function formatPhone(raw: string | null | undefined) {
 
 type TeamMember = { id: string; nome: string; tipo: 'estrategista' | 'atendimento' }
 
-function StatCard({
-  icon: Icon, label, value, color = 'primary',
-}: {
-  icon: React.ElementType
-  label: string
-  value: number | string
-  color?: 'primary' | 'success' | 'warning' | 'accent'
-}) {
-  const colorMap = {
-    primary: { bg: 'bg-primary/10', text: 'text-primary', border: 'border-primary/20' },
-    success: { bg: 'bg-success/10', text: 'text-success', border: 'border-success/20' },
-    warning: { bg: 'bg-warning/10', text: 'text-warning', border: 'border-warning/20' },
-    accent: { bg: 'bg-accent/10', text: 'text-accent', border: 'border-accent/20' },
-  }[color]
+function tomAvatar(chave: string): string {
+  return 'c' + ([...chave].reduce((soma, ch) => (soma * 31 + ch.charCodeAt(0)) >>> 0, 7) % 8 + 1)
+}
 
+/**
+ * Foto do Instagram quando existe; sem foto, com erro ou com imagem vazia,
+ * as iniciais na cor do cliente ficam por baixo — nunca um círculo vazio.
+ */
+function AvatarCliente({ nome, chave, foto, tamanho }: {
+  nome: string
+  chave: string
+  foto?: string | null
+  tamanho?: 'xs' | 'lg'
+}) {
+  const [falhou, setFalhou] = useState(false)
   return (
-    <div className={cn('glass-card border p-4 flex items-center gap-3', colorMap.border)}>
-      <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', colorMap.bg)}>
-        <Icon className={cn('h-5 w-5', colorMap.text)} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-2xs uppercase tracking-wider text-muted-foreground font-semibold">{label}</p>
-        <p className="text-xl font-extrabold text-foreground tabular-nums leading-tight">{value}</p>
-      </div>
+    <span className="cl-av-stack">
+      <span className={cn('cl-av', tamanho, tomAvatar(chave))} aria-hidden="true">{getInitials(nome) || '·'}</span>
+      {foto && !falhou && (
+        <img src={foto} alt="" className={cn('cl-av', tamanho)} onError={() => setFalhou(true)} />
+      )}
+    </span>
+  )
+}
+
+/** Cabeçalho de colunas do painel de lista — mesmas colunas das linhas. */
+function CabecalhoLista() {
+  return (
+    <div className="cl-grid cll-grid cl-thead" aria-hidden="true">
+      <span>Cliente</span>
+      <span>Contato</span>
+      <span className="cll-ramo">Empresa / ramo</span>
+      <span className="cll-equipe">Equipe</span>
+      <span />
     </div>
   )
 }
@@ -97,8 +107,8 @@ function TeamAvatars({ team }: { team: TeamMember[] }) {
           <div
             key={m.id}
             className={cn(
-              'flex h-6 w-6 items-center justify-center rounded-full border-2 border-card text-[10px] font-bold',
-              m.tipo === 'estrategista' ? 'bg-accent/20 text-accent' : 'bg-success/20 text-success',
+              'flex h-6 w-6 items-center justify-center rounded-full border-2 border-card text-[11px] font-bold',
+              m.tipo === 'estrategista' ? 'bg-primary-muted text-link' : 'bg-success/20 text-success',
             )}
             title={`${m.nome} (${m.tipo})`}
           >
@@ -106,7 +116,7 @@ function TeamAvatars({ team }: { team: TeamMember[] }) {
           </div>
         ))}
         {extra > 0 && (
-          <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-muted text-[10px] font-bold text-muted-foreground">
+          <div className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-muted text-[11px] font-bold text-muted-foreground">
             +{extra}
           </div>
         )}
@@ -124,114 +134,83 @@ function ClienteRichCard({
   onClick: () => void
 }) {
   const nome = cleanName(client.nome)
-  const initials = getInitials(nome)
   const ig = normalizeIg(client.instagram)
   const phone = formatPhone(client.whatsapp ?? client.telefone)
-  const [imgFailed, setImgFailed] = useState(false)
-  const showImage = !!avatarUrl && !imgFailed
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
-        'group relative w-full h-full text-left rounded-xl border border-border bg-card p-5',
-        'flex flex-col transition-all duration-200',
-        'hover:border-primary/40 hover:shadow-lg hover:-translate-y-0.5',
+        'cl-card group w-full text-left flex flex-col gap-3',
+        'transition-colors hover:border-primary/40',
         !client.ativo && 'opacity-70',
       )}
     >
-      {/* Decorative gradient */}
-      <div className="pointer-events-none absolute -top-10 -right-10 h-24 w-24 rounded-full bg-primary/5 blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-
       <div className="flex items-start gap-3">
-        <div className="relative shrink-0">
-          {showImage ? (
-            <img
-              src={avatarUrl!}
-              alt={nome}
-              loading="lazy"
-              onError={() => setImgFailed(true)}
-              className="h-14 w-14 rounded-full object-cover border-2 border-border group-hover:border-primary/40 transition-colors"
-            />
-          ) : (
-            <div className={cn(
-              'flex h-14 w-14 items-center justify-center rounded-full text-base font-extrabold border-2 transition-colors',
-              client.ativo
-                ? 'bg-gradient-to-br from-primary/15 to-accent/15 text-primary border-border group-hover:border-primary/40'
-                : 'bg-muted text-muted-foreground border-border',
-            )}>
-              {initials || '?'}
-            </div>
-          )}
-          {client.nota != null && (
-            <span
-              className={cn(
-                'absolute -bottom-1 -right-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold border-2 border-card',
-                client.nota >= 9 ? 'bg-success text-white' :
-                client.nota >= 7 ? 'bg-accent text-white' :
-                client.nota >= 5 ? 'bg-warning text-white' : 'bg-danger text-white',
-              )}
-              title={`Nota: ${client.nota}/10`}
-            >
-              <Star className="h-2.5 w-2.5 fill-current" />
-              {client.nota}
-            </span>
-          )}
-        </div>
-
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="font-bold text-sm text-foreground leading-tight line-clamp-2">{nome}</h3>
-            <span
-              className={cn(
-                'mt-1 h-2 w-2 shrink-0 rounded-full ring-2 ring-card',
-                client.ativo ? 'bg-success' : 'bg-muted-foreground/40',
-              )}
-              title={client.ativo ? 'Ativo' : 'Inativo'}
-            />
-          </div>
-
-          {(client.empresa || client.segmento) && (
-            <div className="text-xs text-muted-foreground flex items-center gap-1.5 min-w-0">
-              {client.empresa && (
-                <span className="inline-flex items-center gap-1 min-w-0">
-                  <Building2 className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{client.empresa}</span>
-                </span>
-              )}
-              {client.empresa && client.segmento && <span className="text-muted-foreground/40">·</span>}
-              {client.segmento && <span className="truncate flex-1 min-w-0">{client.segmento}</span>}
-            </div>
-          )}
+        <AvatarCliente nome={nome} chave={client.id} foto={avatarUrl} tamanho="lg" />
+        <div className="min-w-0 flex-1">
+          <p className="cl-name truncate" title={nome}>{nome}</p>
+          <p className="cl-quiet flex items-center gap-1.5 min-w-0">
+            <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', client.ativo ? 'bg-success' : 'bg-muted-foreground/40')} />
+            <span className="truncate">{client.ativo ? 'Ativo' : 'Inativo'}</span>
+            {client.nota != null && (
+              <span
+                className={cn(
+                  'ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0 text-2xs font-bold',
+                  client.nota >= 9 ? 'bg-success text-white' :
+                  client.nota >= 7 ? 'bg-primary text-primary-foreground' :
+                  client.nota >= 5 ? 'bg-warning text-white' : 'bg-danger text-white',
+                )}
+                title={`Nota: ${client.nota}/10`}
+              >
+                <Star className="h-2.5 w-2.5 fill-current" />
+                {client.nota}
+              </span>
+            )}
+          </p>
         </div>
       </div>
 
-      {/* Contact pills */}
+      {(client.empresa || client.segmento) && (
+        <div className="cl-quiet flex items-center gap-1.5 min-w-0">
+          {client.empresa && (
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <Building2 className="h-3 w-3 shrink-0" />
+              <span className="truncate">{client.empresa}</span>
+            </span>
+          )}
+          {client.empresa && client.segmento && <span className="opacity-40">·</span>}
+          {client.segmento && <span className="truncate flex-1 min-w-0">{client.segmento}</span>}
+        </div>
+      )}
+
       {(phone || ig) && (
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 min-h-[26px]">
+        <div className="flex flex-wrap items-center gap-1.5">
           {phone && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-2xs font-medium text-foreground">
-              <MessageSquare className="h-3 w-3 text-success" />
-              <span className="font-mono">{phone}</span>
+            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
+              <MessageSquare className="h-3 w-3 text-success" /> <span className="font-mono">{phone}</span>
             </span>
           )}
           {ig && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-2xs font-medium text-foreground">
+            <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-2xs text-muted-foreground">
               <Instagram className="h-3 w-3 text-pink-500" />
-              <span>@{ig}</span>
+              <span className="truncate">@{ig}</span>
             </span>
           )}
         </div>
       )}
 
-      {/* Footer: team + action — sempre no fundo */}
-      <div className="mt-auto pt-3 border-t border-border/60 flex items-center justify-between">
-        {team.length > 0 ? (
-          <TeamAvatars team={team} />
-        ) : (
-          <span className="text-2xs text-muted-foreground italic">Sem equipe vinculada</span>
-        )}
-        <span className="inline-flex items-center gap-0.5 text-2xs font-semibold text-muted-foreground group-hover:text-primary transition-colors">
+      {/* Rodapé em uma linha: o time encolhe com reticências, a ação nunca quebra */}
+      <div className="mt-auto pt-3 border-t border-border flex items-center justify-between gap-3">
+        <span className="min-w-0 flex-1 truncate">
+          {team.length > 0 ? (
+            <TeamAvatars team={team} />
+          ) : (
+            <span className="text-2xs text-muted-foreground italic">Sem equipe vinculada</span>
+          )}
+        </span>
+        <span className="shrink-0 whitespace-nowrap inline-flex items-center gap-0.5 text-2xs font-semibold text-muted-foreground group-hover:text-primary transition-colors">
           Ver detalhes
           <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
         </span>
@@ -249,60 +228,54 @@ function ClienteRow({
   onClick: () => void
 }) {
   const nome = cleanName(client.nome)
-  const initials = getInitials(nome)
   const ig = normalizeIg(client.instagram)
   const phone = formatPhone(client.whatsapp ?? client.telefone)
-  const [imgFailed, setImgFailed] = useState(false)
-  const showImage = !!avatarUrl && !imgFailed
 
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={cn(
-        'group w-full text-left rounded-lg border border-border bg-card px-4 py-3',
-        'flex items-center gap-4 transition-all hover:border-primary/40 hover:bg-muted/30',
-        !client.ativo && 'opacity-70',
-      )}
+      className={cn('cl-grid cll-grid cl-row group w-full text-left', !client.ativo && 'opacity-70')}
     >
-      {showImage ? (
-        <img src={avatarUrl!} alt={nome} loading="lazy" onError={() => setImgFailed(true)}
-          className="h-10 w-10 shrink-0 rounded-full object-cover border border-border" />
-      ) : (
-        <div className={cn(
-          'flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold',
-          client.ativo ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
-        )}>
-          {initials || '?'}
-        </div>
-      )}
-
-      <div className="min-w-0 flex-1 grid grid-cols-12 gap-3 items-center">
-        <div className="col-span-12 sm:col-span-4 min-w-0">
-          <div className="flex items-center gap-2">
+      <div className="cl-who cll-quem">
+        <AvatarCliente nome={nome} chave={client.id} foto={avatarUrl} tamanho="xs" />
+        <div className="min-w-0">
+          <p className="cl-name truncate" title={nome}>{nome}</p>
+          <p className="cl-quiet flex items-center gap-1.5 min-w-0">
             <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', client.ativo ? 'bg-success' : 'bg-muted-foreground/40')} />
-            <p className="font-semibold text-sm text-foreground truncate">{nome}</p>
-          </div>
-          {client.empresa && <p className="text-xs text-muted-foreground truncate mt-0.5">{client.empresa}</p>}
+            <span className="truncate">{client.ativo ? 'Ativo' : 'Inativo'}</span>
+          </p>
         </div>
-        <div className="col-span-6 sm:col-span-3 min-w-0">
-          {client.segmento && <p className="text-xs text-muted-foreground truncate">{client.segmento}</p>}
-        </div>
-        <div className="col-span-6 sm:col-span-3 min-w-0 flex flex-col gap-0.5">
-          {phone && (
-            <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground truncate">
-              <MessageSquare className="h-3 w-3 text-success" /> <span className="font-mono">{phone}</span>
-            </span>
-          )}
-          {ig && (
-            <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground truncate">
-              <Instagram className="h-3 w-3 text-pink-500" /> @{ig}
-            </span>
-          )}
-        </div>
-        <div className="col-span-12 sm:col-span-2 flex items-center justify-end gap-2">
-          <TeamAvatars team={team} />
-          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-        </div>
+      </div>
+
+      <div className="cll-contato">
+        {phone && (
+          <span className="cl-quiet inline-flex min-w-0 items-center gap-1">
+            <MessageSquare className="h-3 w-3 shrink-0 text-success" />
+            <span className="font-mono truncate">{phone}</span>
+          </span>
+        )}
+        {ig && (
+          <span className="cl-quiet inline-flex min-w-0 items-center gap-1">
+            <Instagram className="h-3 w-3 shrink-0 text-pink-500" />
+            <span className="truncate">@{ig}</span>
+          </span>
+        )}
+        {!phone && !ig && <span className="cl-quiet">—</span>}
+      </div>
+
+      <div className="cll-ramo">
+        {client.empresa && <span className="cl-quiet truncate">{client.empresa}</span>}
+        {client.segmento && <span className="cl-quiet truncate">{client.segmento}</span>}
+        {!client.empresa && !client.segmento && <span className="cl-quiet">—</span>}
+      </div>
+
+      <div className="cll-equipe">
+        {team.length > 0 ? <TeamAvatars team={team} /> : <span className="cl-quiet italic">Sem equipe</span>}
+      </div>
+
+      <div className="cll-acao">
+        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
       </div>
     </button>
   )
@@ -312,7 +285,7 @@ export function ClientesListPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ativos')
   const [modalOpen, setModalOpen] = useState(false)
-  const [view, setView] = useState<ViewMode>('grid')
+  const [view, setView] = useState<ViewMode>('list')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [produtoFilter, setProdutoFilter] = useState<string>('')
   const [segmentoFilter, setSegmentoFilter] = useState<string>('')
@@ -322,12 +295,11 @@ export function ClientesListPage() {
   const [cadastroDe, setCadastroDe] = useState<string>('')
   const [cadastroAte, setCadastroAte] = useState<string>('')
   const navigate = useNavigate()
-  const { user: authUser } = useAuth()
   const { can } = usePermissoes()
   // "Vê a carteira inteira?" virou regra editável em /admin (recurso
   // clientes.carteira). Antes era `admin || gerente` fixo no código.
   const isAdminOrGerente = can('clientes.carteira', 'ver')
-  const { data: clients, isLoading } = useClientes()
+  const { data: clients, isLoading, isError, isFetching, refetch } = useClientes()
   const { data: avatarByClient } = useClientAvatars()
   const { data: assignments } = useAssignments()
   const { data: contracts } = useAllContracts()
@@ -435,111 +407,111 @@ export function ClientesListPage() {
   }, [clients, teamByClient])
 
   return (
-    <div className="space-y-4 lg:space-y-5">
+    <PageContainer className="cl-page gap-5 md:gap-6">
       <PageHeader
         title="Clientes"
         description={clients
           ? isAdminOrGerente
-            ? `${clients.length} cliente${clients.length !== 1 ? 's' : ''} no total`
-            : `Você está acompanhando ${clients.length} cliente${clients.length !== 1 ? 's' : ''}`
+            ? <><b>{clients.length} cliente{clients.length !== 1 ? 's' : ''}</b> no total · {stats.ativos} ativo{stats.ativos !== 1 ? 's' : ''}</>
+            : <>Você está acompanhando <b>{clients.length} cliente{clients.length !== 1 ? 's' : ''}</b></>
           : 'Gerencie seus clientes'}
         action={
-          <button onClick={() => setModalOpen(true)}
-            className="gradient-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity">
-            <Plus className="h-4 w-4" />
+          <button onClick={() => setModalOpen(true)} className="btn btn-primary">
+            <Plus aria-hidden />
             Novo cliente
           </button>
         }
       />
 
-      {/* Hero stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard icon={Users} label="Total" value={stats.total} color="primary" />
-        <StatCard icon={Sparkles} label="Ativos" value={stats.ativos} color="success" />
-        <StatCard icon={Instagram} label="Com Instagram" value={stats.comInstagram} color="accent" />
-        <StatCard icon={ShieldCheck} label="Com equipe" value={stats.comEquipe} color="warning" />
-      </div>
-
-      {/* Toolbar: search + filters + view toggle */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative max-w-sm flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por nome, empresa, segmento ou @handle..."
-            className="w-full rounded-lg border border-input bg-card pl-9 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
-          />
+      {/* Faixa de números: os mesmos números que a página já calcula, sem cartões */}
+      <dl className="cl-strip" aria-label="Resumo da carteira">
+        <div>
+          <dt><Users aria-hidden />Clientes</dt>
+          <dd>
+            <span className="v">{stats.total}</span>
+            <span className="quem">{isAdminOrGerente ? 'na carteira' : 'no seu acompanhamento'}</span>
+          </dd>
         </div>
+        <div>
+          <dt><Sparkles aria-hidden />Ativos</dt>
+          <dd>
+            <span className="v">{stats.ativos}</span>
+            <span className="quem">{stats.inativos} inativo{stats.inativos !== 1 ? 's' : ''}</span>
+          </dd>
+        </div>
+        <div>
+          <dt><Instagram aria-hidden />Com Instagram</dt>
+          <dd>
+            <span className="v">{stats.comInstagram}</span>
+            <span className="quem">@handle preenchido</span>
+          </dd>
+        </div>
+        <div>
+          <dt><ShieldCheck aria-hidden />Com equipe</dt>
+          <dd>
+            <span className="v">{stats.comEquipe}</span>
+            <span className="quem">estrategista ou atendimento</span>
+          </dd>
+        </div>
+      </dl>
 
-        <div className="flex items-center rounded-lg border border-border bg-card p-0.5">
+      {/* Controles: abas em pílula, busca, filtros e modo */}
+      <div className="cl-controls">
+        <div className="cl-views" role="group" aria-label="Situação do cliente">
           {([
-            { key: 'todos', label: `Todos (${stats.total})` },
-            { key: 'ativos', label: `Ativos (${stats.ativos})` },
-            { key: 'inativos', label: `Inativos (${stats.inativos})` },
+            { key: 'todos', label: 'Todos', n: stats.total },
+            { key: 'ativos', label: 'Ativos', n: stats.ativos },
+            { key: 'inativos', label: 'Inativos', n: stats.inativos },
           ] as const).map(opt => (
             <button
               key={opt.key}
+              type="button"
               onClick={() => setStatusFilter(opt.key)}
-              className={cn(
-                'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
-                statusFilter === opt.key
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
+              aria-pressed={statusFilter === opt.key}
+              className={cn('cl-tab', statusFilter === opt.key && 'on')}
             >
-              {opt.label}
+              {opt.label} <span className="n">{opt.n}</span>
             </button>
           ))}
         </div>
 
-        <button
-          onClick={() => setFiltersOpen(o => !o)}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors',
-            filtersOpen || activeFiltersCount > 0
-              ? 'border-primary/40 bg-primary/10 text-primary'
-              : 'border-border bg-card text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <Filter className="h-3.5 w-3.5" />
-          Filtros
-          {activeFiltersCount > 0 && (
-            <span className="ml-0.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
-              {activeFiltersCount}
-            </span>
-          )}
-        </button>
-
-        <div className="ml-auto flex items-center rounded-lg border border-border bg-card p-0.5">
-          <button
-            onClick={() => setView('grid')}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
-              view === 'grid' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
-            )}
-            title="Visualização em cards"
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-            Cards
+        <div className="cl-modo" role="group" aria-label="Modo de exibição">
+          <button type="button" onClick={() => setView('list')} aria-pressed={view === 'list'} title="Modo lista">
+            <ListIcon aria-hidden /><span>Lista</span>
           </button>
+          <button type="button" onClick={() => setView('grid')} aria-pressed={view === 'grid'} title="Modo cartões">
+            <LayoutGrid aria-hidden /><span>Cartões</span>
+          </button>
+        </div>
+
+        <div className="cl-search">
+          <Search aria-hidden />
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar nome, empresa, e-mail ou @handle"
+            aria-label="Buscar cliente por nome, empresa, e-mail, segmento ou @handle"
+          />
+        </div>
+
+        <div className="cl-filters">
           <button
-            onClick={() => setView('list')}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
-              view === 'list' ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
-            )}
-            title="Visualização em lista"
+            type="button"
+            onClick={() => setFiltersOpen(o => !o)}
+            aria-expanded={filtersOpen}
+            className={cn('cl-chip', activeFiltersCount > 0 && 'set')}
           >
-            <ListIcon className="h-3.5 w-3.5" />
-            Lista
+            <Filter aria-hidden />
+            Filtros
+            {activeFiltersCount > 0 && <span className="n">{activeFiltersCount}</span>}
           </button>
         </div>
       </div>
 
+
       {filtersOpen && (
-        <div className="glass-card border border-border p-4 space-y-3">
+        <div className="cl-filtros space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Filtros avançados</h3>
+            <h3 className="rot">Filtros avançados</h3>
             {activeFiltersCount > 0 && (
               <button
                 onClick={clearFilters}
@@ -549,9 +521,9 @@ export function ClientesListPage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
             <div>
-              <label className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Produto</label>
+              <label className="rot">Produto</label>
               <select
                 value={produtoFilter}
                 onChange={e => setProdutoFilter(e.target.value)}
@@ -562,7 +534,7 @@ export function ClientesListPage() {
               </select>
             </div>
             <div>
-              <label className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Ramo</label>
+              <label className="rot">Ramo</label>
               <select
                 value={segmentoFilter}
                 onChange={e => setSegmentoFilter(e.target.value)}
@@ -573,7 +545,7 @@ export function ClientesListPage() {
               </select>
             </div>
             <div>
-              <label className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Nicho</label>
+              <label className="rot">Nicho</label>
               <select
                 value={nichoFilter}
                 onChange={e => setNichoFilter(e.target.value)}
@@ -584,7 +556,7 @@ export function ClientesListPage() {
               </select>
             </div>
             <div>
-              <label className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Cadastrado de</label>
+              <label className="rot">Cadastrado de</label>
               <input
                 type="date"
                 value={cadastroDe}
@@ -593,7 +565,7 @@ export function ClientesListPage() {
               />
             </div>
             <div>
-              <label className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Cadastrado até</label>
+              <label className="rot">Cadastrado até</label>
               <input
                 type="date"
                 value={cadastroAte}
@@ -602,7 +574,7 @@ export function ClientesListPage() {
               />
             </div>
             <div>
-              <label className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Assinatura de</label>
+              <label className="rot">Assinatura de</label>
               <input
                 type="date"
                 value={assinaturaDe}
@@ -611,7 +583,7 @@ export function ClientesListPage() {
               />
             </div>
             <div>
-              <label className="text-2xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 block">Assinatura até</label>
+              <label className="rot">Assinatura até</label>
               <input
                 type="date"
                 value={assinaturaAte}
@@ -623,31 +595,50 @@ export function ClientesListPage() {
         </div>
       )}
 
-      {/* Content */}
-      {isLoading ? (
-        <div className={cn(
-          view === 'grid'
-            ? 'grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
-            : 'flex flex-col gap-2',
-        )}>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className={cn('glass-card shimmer', view === 'grid' ? 'h-44' : 'h-16')} />
-          ))}
+      {/* Conteúdo */}
+      {isError ? (
+        <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-5 space-y-3">
+          <p className="text-sm text-danger">Não foi possível carregar os clientes. Seus cadastros não foram alterados.</p>
+          <button type="button" onClick={() => void refetch()} disabled={isFetching}
+            className="rounded-lg border border-border px-3 py-2 text-sm font-medium disabled:opacity-50">
+            {isFetching ? 'Tentando novamente…' : 'Tentar novamente'}
+          </button>
         </div>
+      ) : isLoading ? (
+        view === 'grid' ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="cl-card h-40 shimmer" aria-hidden="true" />
+            ))}
+          </div>
+        ) : (
+          <div className="cl-panel" aria-busy="true" aria-label="Carregando clientes">
+            <CabecalhoLista />
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="cl-grid cll-grid cl-row">
+                <div className="cl-who">
+                  <span className="cl-av xs shimmer" aria-hidden="true" />
+                  <span className="h-3 w-40 rounded shimmer" aria-hidden="true" />
+                </div>
+                <div /><div /><div /><div />
+              </div>
+            ))}
+          </div>
+        )
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={Users}
           title={search ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}
           description={search ? 'Tente outros termos de busca.' : 'Comece adicionando o primeiro cliente.'}
           action={!search ? (
-            <button onClick={() => setModalOpen(true)}
-              className="gradient-primary rounded-lg px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 transition-opacity">
+            <button onClick={() => setModalOpen(true)} className="btn btn-primary">
+              <Plus aria-hidden />
               Novo cliente
             </button>
           ) : undefined}
         />
       ) : view === 'grid' ? (
-        <div className="grid grid-cols-1 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {filtered.map((client, i) => (
             <div key={client.id} className="stagger-enter" style={{ animationDelay: `${i * 20}ms` }}>
               <ClienteRichCard
@@ -660,7 +651,8 @@ export function ClientesListPage() {
           ))}
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="cl-panel">
+          <CabecalhoLista />
           {filtered.map((client, i) => (
             <div key={client.id} className="stagger-enter" style={{ animationDelay: `${i * 10}ms` }}>
               <ClienteRow
@@ -674,9 +666,15 @@ export function ClientesListPage() {
         </div>
       )}
 
+      <p className="cl-note">
+        Foto do Instagram quando o cliente tem snapshot da conta; sem foto, iniciais na cor do cliente.
+        A lista já vem filtrada pela aba escolhida; os cartões mostram a mesma carteira em blocos.
+      </p>
+
+
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Novo cliente" size="md">
         <ClienteForm onClose={() => setModalOpen(false)} />
       </Modal>
-    </div>
+    </PageContainer>
   )
 }

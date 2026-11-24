@@ -54,6 +54,8 @@ async function baixarModelo(m: ContratoModelo) {
     baixarBlob(new Blob([bytes], { type: MIME_DOCX }), nome)
   } else if (arq.arquivo_nome) {
     const res = await fetch(`/modelos-contrato/${arq.arquivo_nome}`)
+    // Sem o arquivo-base (versão instalada não traz modelos .docx): não baixa uma página de erro.
+    if (!res.ok) throw new Error('Este modelo ainda não tem arquivo. Suba o seu .docx.')
     baixarBlob(await res.blob(), nome)
   }
 }
@@ -116,7 +118,7 @@ function Catalogo() {
   return (
     <div className="animate-fade-in space-y-4 sm:space-y-6">
       <PageHeader
-        title="Produtos"
+        title="Produtos de contrato"
         description="Catálogo de produtos da empresa. É esta lista que aparece nos contratos, no formulário de venda e no gerador de contrato. Abra um produto para ver e enviar os modelos .docx dele."
       />
       <ContratosTabs />
@@ -124,7 +126,7 @@ function Catalogo() {
       {/* Barra de ferramentas */}
       <div className="flex flex-wrap items-center gap-3">
         <form onSubmit={handleCriar} className="flex items-center gap-2">
-          <div className="flex w-64 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring">
+          <div className="flex w-full sm:w-64 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring">
             <Package className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
               value={novoNome}
@@ -157,7 +159,7 @@ function Catalogo() {
               {mostrarInativos ? 'Ocultar inativos' : `Mostrar inativos (${inativos})`}
             </button>
           )}
-          <div className="flex w-56 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring">
+          <div className="flex w-full sm:w-56 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring">
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
               value={busca}
@@ -446,7 +448,7 @@ function ModelosDoProduto({
                 <span className="block truncate text-[11px] text-muted-foreground">{m.arquivo_nome ?? '—'}</span>
               </span>
               <span className="flex shrink-0 items-center">
-                <button onClick={() => baixarModelo(m)} className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Baixar">
+                <button onClick={() => baixarModelo(m).catch((e: unknown) => window.alert(e instanceof Error ? e.message : 'Não foi possível baixar o modelo.'))} className="rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Baixar">
                   <Download className="h-4 w-4" />
                 </button>
                 <button
@@ -477,7 +479,7 @@ function ModelosDoProduto({
               value={variante}
               onChange={(e) => setVariante(e.target.value)}
               placeholder="Variante (ex.: Anual) — opcional"
-              className={`${inp} w-56`}
+              className={`${inp} w-full sm:w-56`}
             />
             <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted">
               <Upload className="h-4 w-4" /> {arquivo ? arquivo.name : 'Escolher .docx'}

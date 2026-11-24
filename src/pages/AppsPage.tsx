@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { LayoutDashboard, MessageSquare, FileText, Headphones, Banknote, ExternalLink, Blocks, Loader2, Check } from 'lucide-react'
+import { LayoutDashboard, MessageSquare, FileText, Headphones, Banknote, Bot, ExternalLink, Blocks, Check } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
-import { useAuth } from '@/contexts/AuthContext'
 import { usePermissoes } from '@/hooks/usePermissoes'
 import { cn } from '@/lib/utils'
 import { useAppModules, useToggleAppModule, type AppModule } from '@/hooks/useAppModules'
@@ -15,11 +15,11 @@ const ICONS: Record<string, typeof LayoutDashboard> = {
   FileText,
   Headphones,
   Banknote,
+  Bot,
   ExternalLink,
 }
 
 export function AppsPage() {
-  const { user } = useAuth()
   const { can, carregando } = usePermissoes()
   // Fase 2: quem administra a Loja de Apps vem da matriz, nao do perfil fixo.
   if (!carregando && !can('apps', 'admin')) return <Navigate to="/" replace />
@@ -59,23 +59,22 @@ function AppsBoard() {
   const disponiveis = (apps ?? []).filter((a) => a.categoria === 'app')
 
   return (
-    <div className="space-y-6">
+    <PageContainer>
       <PageHeader
-        title="Apps"
-        description="Ative ou desative os aplicativos desta instalação. Apps desativados somem do menu e não podem ser acessados por URL. Nenhum dado é apagado — reativar restaura tudo."
+        title="Módulos ligados"
+        description="Ligue ou desligue partes do Desk. Um módulo desligado some do menu e não abre nem pelo endereço. Nenhum dado é apagado: ao religar, tudo volta."
       />
 
       {isLoading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Carregando apps…
-        </div>
+        <ul role="status" aria-label="Carregando apps" className="grid gap-3 sm:grid-cols-2">
+          {[0, 1, 2, 3].map((i) => <li key={i} className="sk h-[84px] rounded-lg" />)}
+        </ul>
       )}
 
       {isError && (
-        <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-          Não foi possível carregar os apps. Verifique se a migration de
-          <code className="mx-1 rounded bg-muted px-1.5 py-0.5 text-xs">app_modules</code>
-          foi aplicada. Enquanto isso, todos os apps continuam visíveis (fail-open).
+        <div role="alert" className="rounded-lg border border-note-border bg-note p-4 text-sm text-note-fg">
+          Não foi possível carregar a lista de apps agora. Enquanto isso, todos os apps continuam visíveis.
+          Tente recarregar a página; se persistir, avise a administração.
         </div>
       )}
 
@@ -103,7 +102,7 @@ function AppsBoard() {
         description="O app vai sumir do menu e ficar inacessível para todos os usuários desta instalação. Nenhum dado é apagado — você pode reativar a qualquer momento."
         confirmLabel="Desativar app"
       />
-    </div>
+    </PageContainer>
   )
 }
 
@@ -119,23 +118,23 @@ function AppCard({
   const Icon = (app.icone && ICONS[app.icone]) || Blocks
 
   return (
-    <li className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
+    <li className="flex items-start gap-3 rounded-lg border border-card-border bg-card p-4">
       <div className={cn(
         'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg',
-        app.enabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+        app.enabled ? 'bg-primary-muted text-primary' : 'bg-muted text-muted-foreground',
       )}>
         <Icon className="h-5 w-5" />
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <h3 className="truncate font-semibold text-foreground">{app.nome}</h3>
+          <h3 className="t-h4 truncate text-foreground">{app.nome}</h3>
           {app.enabled ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="tag tag-success">
               <Check className="h-3 w-3" /> Ativo
             </span>
           ) : (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            <span className="tag">
               Desativado
             </span>
           )}
@@ -177,7 +176,7 @@ function ToggleSwitch({
       disabled={disabled}
       onClick={onChange}
       className={cn(
-        'relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50',
+        'focus-ds relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-fast before:absolute before:-inset-2.5 before:content-[\'\'] disabled:opacity-50',
         checked ? 'bg-primary' : 'bg-muted-foreground/30',
       )}
     >

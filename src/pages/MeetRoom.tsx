@@ -22,13 +22,29 @@ import { useMeetingTranscription } from '@/hooks/useMeetingTranscription'
 import { supabase } from '@/lib/supabase'
 import { fetchLiveKitToken, endMeetingRoom, type MeetRole } from '@/lib/livekit'
 import { cn } from '@/lib/utils'
+import { RECURSOS } from '@/config/recursos'
 
 interface ConnectionData {
   token: string
   url: string
 }
 
+// Sala de vídeo só funciona com as funções livekit-token/livekit-end-room publicadas
+// (src/config/recursos.ts). Desligada, quem abre um link /meet vê um aviso simples.
 export default function MeetRoom() {
+  if (!RECURSOS.reuniaoVideo) {
+    return (
+      <FullScreenMessage
+        title="Videochamada indisponível"
+        desc="A sala de vídeo não está ligada neste app. Combine a reunião por outro meio ou fale com o administrador."
+        returnUrl="/"
+      />
+    )
+  }
+  return <MeetRoomAtivo />
+}
+
+function MeetRoomAtivo() {
   const { roomId } = useParams<{ roomId: string }>()
   const [searchParams] = useSearchParams()
 
@@ -850,7 +866,7 @@ function EffectsPopover({
       </div>
 
       {/* Blur + none options */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-2 gap-2 mb-3 sm:grid-cols-3">
         <EffectTile
           label="Nenhum"
           icon={<Ban className="w-4 h-4" />}
@@ -896,7 +912,7 @@ function EffectsPopover({
       </div>
 
       {/* Backgrounds grid */}
-      <div className="grid grid-cols-3 gap-2 max-h-[280px] overflow-y-auto">
+      <div className="grid grid-cols-2 gap-2 max-h-[280px] overflow-y-auto sm:grid-cols-3">
         {[...custom, ...PRESET_BACKGROUNDS].map((bg, i) => {
           const active = isActive({ type: 'image', url: bg.url, label: bg.label })
           return (

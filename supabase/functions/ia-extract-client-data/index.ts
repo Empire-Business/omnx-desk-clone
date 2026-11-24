@@ -1,3 +1,4 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -11,7 +12,7 @@ function jsonResponse(body: unknown, status = 200) {
   })
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -44,6 +45,23 @@ Deno.serve(async (req) => {
     const { conversation_id } = await req.json()
     if (!conversation_id || typeof conversation_id !== 'string') {
       return jsonResponse({ error: 'conversation_id is required' }, 400)
+    }
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(conversation_id)) {
+      return jsonResponse({ error: 'conversation_id inválido' }, 400)
+    }
+
+    // As leituras abaixo usam service_role (sem RLS). Antes, confere COMO o usuário
+    // (JWT dele + RLS) que ele enxerga a conversa — inclui empresa, número atribuído
+    // e grupo interno (restrito_admin, só admin/gerente).
+    if (jwt !== supabaseKey) {
+      const visRes = await fetch(
+        supabaseUrl + '/rest/v1/chat_conversations?id=eq.' + conversation_id + '&select=id&limit=1',
+        { headers: { 'apikey': Deno.env.get('SUPABASE_ANON_KEY') ?? '', 'Authorization': authHeader } }
+      )
+      const vis = visRes.ok ? await visRes.json() : []
+      if (!Array.isArray(vis) || vis.length === 0) {
+        return jsonResponse({ error: 'Conversa não encontrada' }, 404)
+      }
     }
 
     const msgRes = await fetch(

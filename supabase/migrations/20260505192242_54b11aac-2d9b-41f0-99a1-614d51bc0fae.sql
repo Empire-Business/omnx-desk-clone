@@ -7,7 +7,17 @@ USING (id = auth.uid() OR (SELECT perfil FROM public.users WHERE id = auth.uid()
 WITH CHECK (id = auth.uid() OR (SELECT perfil FROM public.users WHERE id = auth.uid()) = 'admin');
 
 -- 2. Anonymous public read on meetings
-DROP POLICY IF EXISTS "meetings_anon_read_by_room" ON public.meetings;
+-- Banco novo (instalação do zero): public.meetings só nasce na linha de base de
+-- 19/05 (20260519165000), que já não tem essa política. O Supabase recusa
+-- DROP POLICY IF EXISTS em tabela que não existe (42P01), então só roda se a
+-- tabela existir. Na produção este arquivo já rodou e nada muda (18/11/2026).
+DO $do$
+BEGIN
+  IF to_regclass('public.meetings') IS NOT NULL THEN
+    DROP POLICY IF EXISTS "meetings_anon_read_by_room" ON public.meetings;
+  END IF;
+END
+$do$;
 
 -- 3. Tighten permissive policies
 DROP POLICY IF EXISTS "Authenticated users can do anything on poll votes" ON public.internal_post_poll_votes;

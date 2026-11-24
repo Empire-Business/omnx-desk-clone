@@ -1,6 +1,6 @@
 # Guia de suporte — triagem de problemas no OMNX Desk
 
-> Atualizado em: 06/08/2026 às 12h00 BRT
+> Atualizado em: 26/10/2026 às 17h18 BRT — triagem das Automações WhatsApp.
 > Para quem recebe o problema e precisa decidir o que fazer com ele.
 > Complementa `SISTEMA-DE-TICKETS.md`, que descreve como a captura funciona por
 > dentro.
@@ -73,6 +73,73 @@ issue ou card, cole o link em `link_externo`.
 | "O valor no CRM está velho" | Ressincronização falhou | `vendas_pendentes.sincronizacao_erro` |
 | "Não recebi o e-mail" | Secret ausente ou fila com erro | `email_queue` — status e coluna `erro` |
 | Tela em branco depois de uma ação | Exceção não tratada | `/saude` → evento `erro_nao_tratado` na mesma rota e horário |
+
+---
+
+## Automações WhatsApp (`/automacoes-wa`)
+
+Primeiro, confirme **o que deveria ter chegado e para quem**:
+
+| Mensagem | Destinatário certo |
+|---|---|
+| Aviso diário | Gestor, no privado (clientes que pedem atenção + reuniões do dia) |
+| Resumo semanal | **Cliente**, no grupo dele ou no privado dele (assuntos e próximos passos) |
+| Link da reunião | Grupo do cliente |
+
+Se um gestor recebeu "resumo semanal" no privado, é a versão antiga da função
+(antes da refação de 26/10/2026) com o modo privado ligado — desligue o resumo e
+escale.
+
+O primeiro lugar a olhar é sempre a aba **Histórico** (`/automacoes-wa/historico`):
+cada envio ou tentativa vira uma linha com status e motivo.
+
+| Sintoma | Causa provável | Como confirmar |
+|---|---|---|
+| "Não chegou nada" e o Histórico está vazio | Interruptor desligado, horário ainda não passou, nenhum gestor ativo ou app desligado em `/apps` | Abas Alertas/Resumo/Gestores e `/apps`. O agendador roda a cada 15 min; o diário tenta até 3 h depois do horário |
+| Histórico `falhou` · "Salve o token da UAZAPI…" / "Salve a chave da Zernio…" | Token/chave não salvo, ou foi revogado | Aba Conexão mostra o status |
+| `falhou` · "Token da UAZAPI recusado" / "Chave da Zernio recusada" | Token trocado no provedor, ou token de **outro** número | Salvar de novo o token do número escolhido |
+| `falhou` · "A API oficial só envia com modelo aprovado" | Zernio sem o nome do modelo na aba Conexão | Campos "Modelo do aviso diário" / "do resumo semanal" |
+| `falhou` · "Modelo não encontrado na Zernio" | Nome ou idioma do modelo diferente do aprovado | Comparar com o painel da Zernio (minúsculas, `_`, idioma `pt_BR`) |
+| `falhou` · "janela de 24h está fechada" | Tentativa de texto livre pela oficial | Deve sair por modelo; escalar se persistir |
+| `falhou` · "Muitas mensagens para o mesmo número" | Limite da Meta por destinatário (~10/min) | Aguardar; a próxima rodada tenta |
+| "Os envios estão pausados" | **Disjuntor**: 5 falhas seguidas em 15 min naquele provedor | Corrigir a causa das falhas; volta sozinho depois de 15 min |
+| `falhou` · `sem_assunto` no resumo semanal | Pouca conversa na semana com aquele cliente — **não é erro** | Nada a fazer; não conta para o disjuntor |
+| `falhou` · `falha_ia` | IA fora do ar ou resposta inválida | Tenta até 3 vezes no dia; se repetir em vários dias, escalar |
+| Resumo semanal não sai no grupo, empresa na Zernio | A oficial não abre conversa de grupo | Esperado (`oficial_sem_grupo`); usar UAZAPI para grupo |
+| Link não sai: "Nenhum grupo de WhatsApp vinculado a <cliente>" | Grupo não ligado ao cliente no Chat, ou está em outro número | Vincular o grupo ao cliente no Chat, no número da aba Conexão |
+| Link: "Este cliente tem mais de um grupo" | Escolha obrigatória | Escolher o grupo na tela |
+| Link: "pode ter chegado… confirme o reenvio" | Timeout: o WhatsApp pode ter recebido | Conferir o grupo **antes** de reenviar com confirmação |
+| Link: "já foi enviado" | Cada reunião só manda o link uma vez | Esperado |
+| "Sem permissão" ao salvar token / testar / prévia | Exige **perfil** `admin`, não só a permissão da matriz | `/colaboradores` (perfil) |
+| "Limite de 5 testes por hora" / "20 prévias" / "20 links por hora" | Limites de proteção por empresa | Esperar a hora virar |
+
+**Consultas úteis (técnico, só leitura):**
+
+```sql
+-- Últimos envios de uma empresa
+select created_at, tipo, provider, status, erro, destino_nome
+  from public.wa_auto_envios
+ where tenant_id = '<uuid>'
+ order by created_at desc limit 50;
+
+-- O agendador está rodando?
+select jobname, schedule, active from cron.job where jobname like 'wa-auto-%';
+select j.jobname, d.status, d.start_time, d.return_message
+  from cron.job_run_details d join cron.job j using (jobid)
+ where j.jobname like 'wa-auto-%'
+ order by d.start_time desc limit 20;
+```
+
+> O agendador só chama a função se **alguma** empresa tiver a automação ligada.
+> Função de cron respondendo **401** = segredo não confere ou a função foi
+> publicada sem `verify_jwt = false` (ver `ESTRATEGIA-DE-ROLLBACK.md`).
+
+Nunca peça ao cliente o token da UAZAPI ou a chave da Zernio por mensagem: ele
+cola direto na aba Conexão. O Histórico nunca mostra token nem texto de conversa
+— se aparecer, é **crítico**.
+
+Mensagem enviada para o **cliente ou grupo de outra empresa** é vazamento entre
+empresas: **crítico**, desligue o app da empresa em `/apps` e escale na hora.
 
 ---
 

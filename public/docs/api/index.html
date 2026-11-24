@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>API do Desk</title>
+<!--
+  Página estática autocontida (sem CDN): Swagger UI vendorizado em ./vendor, lendo ./openapi.yaml.
+  A inicialização fica em init.js (externo) porque o CSP de /docs/api não permite script inline.
+  Caminhos absolutos para funcionar com ou sem barra final em /docs/api.
+-->
+<link rel="stylesheet" href="/docs/api/vendor/swagger-ui.css">
+<style>
+  body { margin: 0; background: #fafafa; }
+  .topbar { display: none; }
+  .aviso { font: 14px/1.5 system-ui, sans-serif; background: #fff8e1; border-bottom: 1px solid #f0d98a; padding: 10px 20px; }
+  .aviso a { color: #1a56db; }
+</style>
+</head>
+<body>
+<div class="aviso">
+  Documentação pública da API do Desk. Para conectar uma IA (Claude, Cursor, Codex), veja o
+  <a href="/docs/mcp">guia do MCP</a>. Chaves são criadas por um administrador em Desk &rarr; Chaves de acesso.
+</div>
+<div id="swagger-ui"></div>
+<script src="/docs/api/vendor/swagger-ui-bundle.js"></script>
+<script src="/docs/api/vendor/swagger-ui-standalone-preset.js"></script>
+<script src="/docs/api/init.js"></script>
+</body>
+</html>

@@ -17,10 +17,38 @@ Guia pra quem clonou esse template pelo HTIA2 (ou direto pelo GitHub via **Use t
 
 ## 2. Aplique o schema do app
 
-1. No painel do Supabase, abra **SQL Editor**
-2. Abra o arquivo `supabase/SETUP_COMPLETE.sql` desse repo
-3. Cole tudo no editor e clique em **Run**
-4. Resposta esperada: **Success. No rows returned.** sem nenhum erro
+São dois caminhos, e os dois levam ao mesmo schema (mesmas tabelas, funções, políticas e
+permissões). Escolha **um** por projeto e não misture os dois no mesmo banco (misturar dá erro de
+"already exists").
+
+**Com terminal (recomendado):** aplique as **migrações** de `supabase/migrations/`, em ordem
+(o nome de cada arquivo é a data, então a ordem alfabética é a ordem certa). É o caminho que
+continua valendo quando chegar migração nova.
+
+```bash
+supabase link --project-ref <ref-do-projeto-supabase>
+supabase db push          # aplica as migrações pendentes, em ordem
+```
+
+**Sem terminal:** o `supabase/SETUP_COMPLETE.sql` deste repo foi **regerado em 20/11/2026** a
+partir dessas mesmas migrações e aplica limpo num banco vazio (Postgres 15 ou 17: o
+`MAINTAIN`, privilégio que só existe do 17 em diante, sai num bloco guardado pela versão do
+servidor, então o arquivo não quebra num Supabase ainda em PG15). No **SQL Editor**, abra o
+arquivo, cole tudo e clique em **Run**. Resposta esperada: **Success. No rows returned.** sem
+nenhum erro. Ele é um retrato dessa data: migração que chegar depois não está nele — daí em
+diante, use as migrações.
+
+O arquivo traz o **schema e as permissões**, não os dados. Ficam de fora as linhas que as
+migrações semeiam: a empresa principal (`is_master`), o organograma de exemplo, as colunas do
+kanban, os departamentos de chat e os catálogos que as telas leem (`app_modules`,
+`permissoes_app`, `app_settings`). Num projeto instalado só pelo arquivo essas telas abrem
+vazias e **não existe empresa principal** — a primeira conta (passo 5) cria a empresa com o
+nome que a pessoa digitar e vira administradora dela, mas sem a marca de principal (sem
+superadmin e sem empresa do servidor para provisionar contas).
+
+Por isso: para uma instalação nova, o caminho é o **das migrações** (o de cima), que traz o
+schema e os dados na mesma passada. O arquivo serve para montar o schema quando você não tem
+terminal e vai preencher o catálogo depois.
 
 > Se der erro de "relation already exists", o banco não está vazio — rode primeiro:
 > ```sql
@@ -28,7 +56,7 @@ Guia pra quem clonou esse template pelo HTIA2 (ou direto pelo GitHub via **Use t
 > CREATE SCHEMA public;
 > GRANT ALL ON SCHEMA public TO postgres, public;
 > ```
-> e cole o `SETUP_COMPLETE.sql` de novo.
+> e repita o passo.
 
 ---
 

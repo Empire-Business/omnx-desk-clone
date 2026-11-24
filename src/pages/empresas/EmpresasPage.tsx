@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { Building2, Loader2, CheckCircle2, AlertCircle, Copy, Check, KeyRound } from 'lucide-react'
 import { useIsMasterAdmin, useProvisionTenant, type ProvisionData } from '@/hooks/useProvisionTenant'
-import { cn } from '@/lib/utils'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { VerificacaoDuasEtapas } from '@/components/seguranca/VerificacaoDuasEtapas'
 
 /**
  * Tela "Empresas" — só o admin do tenant MESTRE vê. Cria uma empresa nova
  * (tenant + 1º admin). Esse admin depois entra e adiciona a própria equipe.
  */
 export function EmpresasPage() {
-  const { isMaster, loading } = useIsMasterAdmin()
+  const { isMaster, mfaPendente, loading, recarregar } = useIsMasterAdmin()
   const { provision, saving } = useProvisionTenant()
 
   const [empresaNome, setEmpresaNome] = useState('')
@@ -51,38 +53,42 @@ export function EmpresasPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin" />
-      </div>
+      <PageContainer largura="formulario">
+        <div role="status" aria-label="Carregando" className="space-y-4">
+          <div className="sk h-10 w-2/3 rounded-md" />
+          <div className="sk h-56 rounded-lg" />
+        </div>
+      </PageContainer>
+    )
+  }
+
+  if (!isMaster && mfaPendente) {
+    return (
+      <PageContainer largura="formulario">
+        <VerificacaoDuasEtapas obrigatoria onConfirmada={recarregar} />
+      </PageContainer>
     )
   }
 
   if (!isMaster) {
     return (
-      <div className="mx-auto max-w-2xl p-4 sm:p-6">
+      <PageContainer largura="formulario">
         <div className="glass-card flex items-center gap-3 p-4 sm:p-6">
           <AlertCircle className="h-5 w-5 text-warning" />
           <p className="text-sm text-muted-foreground">
             Esta área é exclusiva do administrador da empresa mestre.
           </p>
         </div>
-      </div>
+      </PageContainer>
     )
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-4 sm:p-6">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
-          <Building2 className="h-5 w-5 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">Empresas</h1>
-          <p className="text-sm text-muted-foreground">
-            Crie uma empresa nova. Ela nasce isolada — o admin dela só enxerga os próprios dados.
-          </p>
-        </div>
-      </div>
+    <PageContainer largura="formulario">
+      <PageHeader
+        title="Empresas"
+        description="Crie uma empresa nova. Ela nasce isolada: o administrador dela só enxerga os próprios dados."
+      />
 
       {/* Resultado */}
       {resultado && (
@@ -107,7 +113,7 @@ export function EmpresasPage() {
           {resultado.login_url && (
             <button
               onClick={copiarAcesso}
-              className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50"
+              className="btn btn-secondary"
             >
               {copiado ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               Copiar link de acesso
@@ -132,13 +138,13 @@ export function EmpresasPage() {
         <button
           onClick={handleCriar}
           disabled={saving}
-          className="gradient-primary flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn btn-primary btn-lg w-full sm:w-auto"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />}
           {saving ? 'Criando empresa…' : 'Criar empresa'}
         </button>
       </div>
-    </div>
+    </PageContainer>
   )
 }
 
@@ -152,17 +158,14 @@ function Campo({
   type?: string
 }) {
   return (
-    <div className="space-y-1.5">
-      <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</label>
+    <div className="field">
+      <label>{label}</label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={cn(
-          'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground',
-          'placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30',
-        )}
+        className="input"
       />
     </div>
   )

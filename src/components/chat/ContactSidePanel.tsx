@@ -1,5 +1,6 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useEffect, useState, useCallback } from 'react'
-import { X, Phone, Building, RefreshCw, Info, Link2, UserPlus, Sparkles, Loader2, Users, ShieldCheck, FileText, ImageIcon, Mic, Film, Download } from 'lucide-react'
+import { X, Phone, Building, RefreshCw, Info, Link2, UserPlus, Loader2, Users, ShieldCheck, FileText, ImageIcon, Mic, Film, Download, ArrowLeft, ChevronDown } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { SUPABASE_URL } from '@/integrations/supabase/client'
@@ -11,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import type { ChatContact, ChatMessage } from '@/hooks/useChat'
 import type { Client } from '@/types/database'
 import { ChatDetailsOverlay } from './ChatActionsMenu'
+import { ListaTicketsDoCliente } from './TicketsDoCliente'
 import { ClienteForm, type ClienteFormExtras } from '@/components/clientes/ClienteForm'
 import { type VendaPendente, getComprovanteUrl } from '@/hooks/useVendasPendentes'
 
@@ -213,7 +215,7 @@ export function ContactSidePanel({
         ].filter((x) => x && String(x).trim()).join(' · ') || vendaData.cliente_endereco
       }
 
-      const { data: novoContrato } = await supabase.from('contratos').insert({
+      const { data: novoContrato } = await supabase.from('contratos').insert({ ...({
         cliente_id: client.id,
         cliente_nome: client.nome,
         status: 'rascunho',
@@ -248,7 +250,7 @@ export function ContactSidePanel({
           plataforma: p.plataforma ?? '',
           sinal: p.sinal ?? '',
         })),
-      }).select('id').single()
+      }), tenant_id: await tenantDaSessao() }).select('id').single()
       novoContratoId = novoContrato?.id ?? null
 
       if (novoContratoId && vendaData?.comprovantes?.length) {
@@ -263,14 +265,14 @@ export function ContactSidePanel({
               .from('contratos-anexos')
               .upload(storagePath, blob, { contentType: comp.mime_type ?? 'image/jpeg', upsert: false })
             if (!upErr) {
-              await supabase.from('contrato_anexos').insert({
+              await supabase.from('contrato_anexos').insert({ ...({
                 contrato_id: novoContratoId,
                 nome_original: comp.nome_original,
                 storage_path: storagePath,
                 mime_type: comp.mime_type ?? null,
                 tamanho_bytes: comp.tamanho_bytes ?? null,
                 categoria: 'comprovante_entrada',
-              })
+              }), tenant_id: await tenantDaSessao() })
             }
           } catch {
             // silencia erro de comprovante individual
@@ -289,14 +291,14 @@ export function ContactSidePanel({
             .from('contratos-anexos')
             .upload(storagePath, file, { contentType: file.type, upsert: false })
           if (!upErr) {
-            await supabase.from('contrato_anexos').insert({
+            await supabase.from('contrato_anexos').insert({ ...({
               contrato_id: novoContratoId,
               nome_original: file.name,
               storage_path: storagePath,
               mime_type: file.type,
               tamanho_bytes: file.size,
               categoria: 'contrato',
-            })
+            }), tenant_id: await tenantDaSessao() })
             const { data: signed } = await supabase.storage
               .from('contratos-anexos')
               .createSignedUrl(storagePath, 60 * 60 * 24 * 365)
@@ -355,21 +357,33 @@ export function ContactSidePanel({
   }, [contact.id])
 
   return (
-    <div className="relative flex w-full sm:w-80 shrink-0 flex-col border-l border-border bg-card/50 backdrop-blur-sm h-full overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h3 className="text-sm font-semibold text-foreground">Detalhes do contato</h3>
+    <div className="relative flex h-full w-full min-w-0 flex-col bg-card overflow-hidden">
+      {/* Cabeçalho: no celular é a 3ª etapa (lista → conversa → detalhes), com "voltar" */}
+      <div className="safe-area-top flex shrink-0 items-center gap-1 border-b border-border px-1.5 py-1.5 md:px-4 md:py-2">
         <button
+          type="button"
           onClick={onClose}
-          className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          className="btn btn-ghost btn-icon md:hidden"
+          aria-label="Voltar para a conversa"
+          title="Voltar"
         >
-          <X className="h-4 w-4" />
+          <ArrowLeft aria-hidden />
+        </button>
+        <h3 className="t-h5 m-0 min-w-0 flex-1 truncate">Detalhes do contato</h3>
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn btn-ghost btn-icon btn-sm hidden md:inline-flex"
+          aria-label="Fechar detalhes do contato"
+          title="Fechar"
+        >
+          <X aria-hidden />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-contain safe-area-bottom">
         {/* Contact info */}
-        <div className="px-3 sm:px-4 py-5 space-y-4">
+        <div className="px-4 py-5 space-y-4">
           <div className="flex flex-col items-center gap-2">
             <div className="relative group">
               {contact.foto_url && !imgFailed ? (
@@ -380,45 +394,47 @@ export function ContactSidePanel({
                   onError={() => setImgFailed(true)}
                 />
               ) : (
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-muted text-primary font-bold text-xl">
+                <div className="av !h-16 !w-16 text-xl" data-h="0" aria-hidden>
                   {(contact.nome ?? formatPhone(contact.numero_whatsapp)).slice(0, 2).toUpperCase()}
                 </div>
               )}
               {/* Refresh photo button */}
               <button
+                type="button"
                 onClick={() => fetchPicMutation.mutate(contact.id)}
                 disabled={fetchPicMutation.isPending}
-                className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-card border border-border shadow-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors opacity-0 group-hover:opacity-100"
+                className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-card ring-hairline text-muted-foreground hover:text-foreground hover:bg-accent transition-[opacity,background-color] duration-fast opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 focus-ds"
                 title="Atualizar foto de perfil"
+                aria-label="Atualizar foto de perfil"
               >
-                <RefreshCw className={cn('h-3 w-3', fetchPicMutation.isPending && 'animate-spin')} />
+                <RefreshCw className={cn('h-3.5 w-3.5', fetchPicMutation.isPending && 'animate-spin')} aria-hidden />
               </button>
             </div>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-foreground">
+            <div className="text-center min-w-0 max-w-full">
+              <p className="text-[15px] font-[650] text-foreground break-words">
                 {linkedClient?.nome ?? contact.nome ?? 'Sem nome'}
               </p>
               {linkedClient?.nome && contact.nome && contact.nome !== linkedClient.nome && (
-                <p className="text-2xs text-muted-foreground mt-0.5">{contact.nome}</p>
+                <p className="text-[12.5px] text-muted-foreground mt-0.5">{contact.nome}</p>
               )}
               {fetchPicMutation.isPending && (
-                <p className="text-2xs text-muted-foreground mt-0.5">Buscando foto...</p>
+                <p className="text-[12px] text-muted-foreground mt-0.5">Buscando foto…</p>
               )}
             </div>
           </div>
 
           {/* Phone */}
-          <div className="flex items-center gap-2.5 rounded-lg bg-muted/50 px-3 py-2.5">
-            <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="text-sm text-foreground tabular-nums">{formatPhone(contact.numero_whatsapp)}</span>
+          <div className="flex items-center gap-2.5 rounded-lg bg-bg-1 ring-hairline px-3 py-2.5">
+            <Phone className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden />
+            <span className="mono text-sm text-foreground">{formatPhone(contact.numero_whatsapp)}</span>
           </div>
 
         </div>
 
         {vendaData && !linkedClient && !linkingClient && (
-          <div className="mx-3 sm:mx-4 mb-0 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
-            <p className="text-xs font-semibold text-primary">Venda encontrada</p>
-            <p className="text-2xs text-muted-foreground mt-0.5 truncate">
+          <div className="mx-4 mb-4 rounded-lg bg-primary-light px-3 py-2 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--primary)_14%,transparent)]">
+            <p className="text-[12.5px] font-semibold text-link">Venda encontrada</p>
+            <p className="text-[12px] text-muted-foreground mt-0.5 truncate">
               {vendaData.produto_nome ?? '—'}
               {vendaData.valor_total_venda != null && ` · R$ ${Number(vendaData.valor_total_venda).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
             </p>
@@ -431,35 +447,37 @@ export function ContactSidePanel({
         )}
 
         {/* Linked client */}
-        <div className="border-t border-border px-3 sm:px-4 py-4">
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
+        <div className="border-t border-stroke-weak px-4 py-4">
+          <h4 className="text-[12px] font-[650] tracking-[.02em] text-muted-foreground mb-2.5">
             Cliente
           </h4>
 
           {/* Current linked client info */}
           {linkedClient && !linkingClient && (
-            <div className="relative rounded-lg border border-border p-3 space-y-1">
+            <div className="relative rounded-lg bg-card ring-hairline p-3 space-y-1">
               {canAssign && (
                 <button
+                  type="button"
                   onClick={() => setLinkingClient(true)}
-                  className="absolute top-2 right-2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                  className="btn btn-ghost btn-icon btn-sm absolute top-1.5 right-1.5"
                   title="Alterar cliente"
+                  aria-label="Alterar cliente vinculado"
                 >
-                  <Link2 className="h-3 w-3" />
+                  <Link2 aria-hidden />
                 </button>
               )}
-              <div className="flex items-center gap-2 pr-6">
-                <Building className="h-4 w-4 text-primary shrink-0" />
+              <div className="flex items-center gap-2 pr-9">
+                <Building className="h-4 w-4 text-link shrink-0" aria-hidden />
                 <span className="text-sm font-semibold text-foreground truncate">{linkedClient.nome}</span>
               </div>
               {linkedClient.email && (
-                <p className="text-2xs text-muted-foreground pl-6 truncate">{linkedClient.email}</p>
+                <p className="text-[12.5px] text-muted-foreground pl-6 truncate">{linkedClient.email}</p>
               )}
               {linkedClient.telefone && (
-                <p className="text-2xs text-muted-foreground pl-6">{linkedClient.telefone}</p>
+                <p className="mono text-[12px] text-muted-foreground pl-6">{linkedClient.telefone}</p>
               )}
               {linkedClient.segmento && (
-                <span className="inline-block text-2xs bg-muted rounded-full px-2 py-0.5 text-muted-foreground ml-6 mt-1">
+                <span className="tag ml-6 mt-1">
                   {linkedClient.segmento}
                 </span>
               )}
@@ -468,30 +486,33 @@ export function ContactSidePanel({
 
           {!linkedClient && !linkingClient && (
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">Nenhum cliente vinculado.</p>
+              <p className="text-[13px] text-muted-foreground">Nenhum cliente vinculado.</p>
               {canAssign && (
                 <div className="flex flex-col gap-1.5">
                   <button
+                    type="button"
                     onClick={() => setLinkingClient(true)}
-                    className="w-full flex items-center justify-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+                    className="btn btn-secondary w-full"
                   >
-                    <Link2 className="h-3.5 w-3.5" />
+                    <Link2 aria-hidden />
                     Vincular cliente existente
                   </button>
                   {!showCreateForm && (
                     <button
+                      type="button"
                       onClick={handleExtractClientData}
                       disabled={extracting}
-                      className="w-full flex items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/10 transition-colors disabled:opacity-50"
+                      aria-busy={extracting}
+                      className="btn btn-iris w-full"
                     >
                       {extracting ? (
                         <>
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          Extraindo dados com IA, aguarde…
+                          <Loader2 className="animate-spin" aria-hidden />
+                          Lendo a conversa com IA…
                         </>
                       ) : (
                         <>
-                          <UserPlus className="h-3.5 w-3.5" />
+                          <UserPlus aria-hidden />
                           Cadastrar novo cliente
                         </>
                       )}
@@ -504,18 +525,20 @@ export function ContactSidePanel({
 
           {/* Link client form */}
           {linkingClient && (
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <input
                 autoFocus
                 type="text"
-                placeholder="Buscar cliente ou contrato..."
+                placeholder="Buscar cliente ou contrato…"
+                aria-label="Buscar cliente"
                 value={clientSearch}
                 onChange={(e) => setClientSearch(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                className="input"
               />
-              <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-background">
+              <div className="max-h-[min(12rem,40dvh)] overflow-y-auto rounded-lg bg-card ring-hairline">
                 <button
-                  className="w-full px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted"
+                  type="button"
+                  className="w-full min-h-11 sm:min-h-9 px-3 py-2 text-left text-[13px] text-muted-foreground hover:bg-accent transition-colors duration-fast"
                   onClick={() => {
                     updateContact.mutate(
                       { id: contact.id, client_id: null },
@@ -530,9 +553,10 @@ export function ContactSidePanel({
                   .slice(0, 50)
                   .map((c) => (
                     <button
+                      type="button"
                       key={c.id}
                       disabled={updateContact.isPending}
-                      className="w-full px-3 py-2 text-left text-xs hover:bg-muted disabled:opacity-50"
+                      className="w-full min-h-11 sm:min-h-9 px-3 py-2 text-left text-[13px] text-foreground hover:bg-accent transition-colors duration-fast disabled:opacity-50"
                       onClick={() => {
                         updateContact.mutate(
                           { id: contact.id, client_id: c.id },
@@ -544,12 +568,13 @@ export function ContactSidePanel({
                     </button>
                   ))}
                 {availableClients.filter((c) => !clientSearch.trim() || c.nome.toLowerCase().includes(clientSearch.toLowerCase())).length === 0 && (
-                  <p className="px-3 py-2 text-xs text-muted-foreground">Nenhum cliente encontrado.</p>
+                  <p className="px-3 py-2 text-[13px] text-muted-foreground">Nenhum cliente encontrado.</p>
                 )}
               </div>
               <button
+                type="button"
                 onClick={() => { setLinkingClient(false); setClientSearch('') }}
-                className="text-2xs text-muted-foreground hover:text-foreground"
+                className="btn btn-ghost btn-sm"
               >
                 Cancelar
               </button>
@@ -557,13 +582,17 @@ export function ContactSidePanel({
           )}
         </div>
 
+        {/* Tickets do cliente vinculado */}
+        <ListaTicketsDoCliente clienteId={contact.client_id} />
+
         {/* Mídia & Documentos */}
         <MediaSection conversationId={currentConversationId} />
 
         {/* Detalhes do WhatsApp (link discreto) */}
         {instanceId && (
-          <div className="border-t border-border px-3 sm:px-4 py-3">
+          <div className="border-t border-stroke-weak px-4 py-3">
             <button
+              type="button"
               onClick={() => {
                 chatDetailsMutation.mutate(
                   { instance_id: instanceId, number: contact.numero_whatsapp },
@@ -571,10 +600,10 @@ export function ContactSidePanel({
                 )
               }}
               disabled={chatDetailsMutation.isPending}
-              className="w-full flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-2xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors disabled:opacity-50"
+              className="btn btn-ghost btn-sm w-full text-muted-foreground"
             >
-              <Info className="h-3 w-3" />
-              {chatDetailsMutation.isPending ? 'Carregando...' : 'Ver detalhes do WhatsApp'}
+              <Info aria-hidden />
+              {chatDetailsMutation.isPending ? 'Carregando…' : 'Ver detalhes do WhatsApp'}
             </button>
           </div>
         )}
@@ -588,19 +617,21 @@ export function ContactSidePanel({
       {/* Create Client Form Overlay */}
       {showCreateForm && (
         <div className="absolute inset-0 z-20 flex flex-col bg-card overflow-hidden">
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div className="flex items-center gap-2">
-              <UserPlus className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Cadastrar novo cliente</h3>
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2">
+            <div className="flex min-w-0 items-center gap-2">
+              <UserPlus className="h-4 w-4 shrink-0 text-link" aria-hidden />
+              <h3 className="t-h5 m-0 truncate">Cadastrar novo cliente</h3>
             </div>
             <button
+              type="button"
               onClick={() => { setShowCreateForm(false); setExtractedData(null) }}
-              className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="btn btn-ghost btn-icon btn-sm"
+              aria-label="Fechar cadastro"
             >
-              <X className="h-4 w-4" />
+              <X aria-hidden />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <ClienteForm
               initial={{
                 ...(extractedData ?? {}),
@@ -625,48 +656,55 @@ function GroupMembersSection({ contactId }: { contactId: string }) {
   const [expanded, setExpanded] = useState(true)
 
   return (
-    <div className="border-t border-border px-3 sm:px-4 py-4">
+    <div className="border-t border-stroke-weak px-4 py-4">
       <button
+        type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between mb-2.5"
+        aria-expanded={expanded}
+        className="w-full min-h-9 flex items-center justify-between mb-1.5 rounded-md focus-ds"
       >
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-          <Users className="h-3.5 w-3.5" />
-          Membros {members.length > 0 && `(${members.length})`}
+        <h4 className="text-[12px] font-[650] tracking-[.02em] text-muted-foreground flex items-center gap-1.5">
+          <Users className="h-3.5 w-3.5" aria-hidden />
+          Membros
+          {members.length > 0 && <span className="count">{members.length}</span>}
         </h4>
-        <span className="text-2xs text-muted-foreground">{expanded ? '▲' : '▼'}</span>
+        <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform duration-fast', expanded && 'rotate-180')} aria-hidden />
       </button>
 
       {expanded && (
         <>
           {isLoading ? (
-            <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Carregando membros...
+            <div className="space-y-2 py-1" aria-busy="true" aria-label="Carregando membros">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex items-center gap-2.5 px-2">
+                  <div className="sk h-7 w-7 rounded-full" />
+                  <div className="sk h-3 flex-1 max-w-[60%]" />
+                </div>
+              ))}
             </div>
           ) : members.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-1">
+            <p className="text-[13px] text-muted-foreground py-1">
               Nenhum membro encontrado. Reabra o painel para atualizar.
             </p>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {members.map((member) => (
-                <div key={member.id} className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/50 transition-colors">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary text-xs font-semibold">
+                <div key={member.id} className="flex items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-accent transition-colors duration-fast">
+                  <div className="av !h-7 !w-7 text-[11px]" data-h="0" aria-hidden>
                     {(member.nome ?? member.numero_whatsapp).slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-foreground truncate">
+                    <p className="text-[13px] font-medium text-foreground truncate">
                       {member.nome ?? formatPhone(member.numero_whatsapp)}
                     </p>
                     {member.nome && (
-                      <p className="text-2xs text-muted-foreground font-mono truncate">
+                      <p className="mono text-[11.5px] text-muted-foreground truncate">
                         {formatPhone(member.numero_whatsapp)}
                       </p>
                     )}
                   </div>
                   {(member.is_admin || member.is_super_admin) && (
-                    <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary" title={member.is_super_admin ? 'Super Admin' : 'Admin'} />
+                    <span title={member.is_super_admin ? 'Administrador principal' : 'Administrador'}><ShieldCheck className="h-3.5 w-3.5 shrink-0 text-link" aria-label={member.is_super_admin ? 'Administrador principal' : 'Administrador'} /></span>
                   )}
                 </div>
               ))}
@@ -705,37 +743,35 @@ function MediaSection({ conversationId }: { conversationId: string }) {
   const items = grouped[activeTab] ?? []
 
   return (
-    <div className="border-t border-border px-3 sm:px-4 py-4">
-      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
-        Mídia & arquivos
+    <div className="border-t border-stroke-weak px-4 py-4">
+      <h4 className="text-[12px] font-[650] tracking-[.02em] text-muted-foreground mb-2.5">
+        Mídia e arquivos
       </h4>
-      <div className="flex gap-1 mb-2">
+      <div className="seg mb-2 w-full" role="group" aria-label="Tipo de mídia">
         {MEDIA_TABS.map(tab => {
           const Icon = tab.icon
           const count = grouped[tab.key]?.length ?? 0
           const active = activeTab === tab.key
           return (
             <button
+              type="button"
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               disabled={count === 0}
-              className={cn(
-                'flex-1 flex flex-col items-center gap-0.5 rounded-md px-1 py-1.5 text-2xs font-medium transition-colors',
-                active
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted disabled:opacity-40 disabled:hover:bg-transparent',
-              )}
+              aria-pressed={active}
+              aria-label={`${tab.label}: ${count}`}
+              className="!flex-1 justify-center disabled:opacity-40"
               title={tab.label}
             >
-              <Icon className="h-3.5 w-3.5" />
-              <span className="tabular-nums">{count}</span>
+              <Icon className="h-3.5 w-3.5" aria-hidden />
+              <span className="mono text-[12px]">{count}</span>
             </button>
           )
         })}
       </div>
 
       {items.length === 0 ? (
-        <p className="text-2xs text-muted-foreground text-center py-3">Nenhum item nesta categoria</p>
+        <p className="text-[12.5px] text-muted-foreground text-center py-3">Nenhum item nesta categoria</p>
       ) : activeTab === 'imagem' ? (
         <div className="grid grid-cols-3 gap-1">
           {items.slice(0, 9).map(m => (
@@ -744,7 +780,7 @@ function MediaSection({ conversationId }: { conversationId: string }) {
               href={m.media_url ?? '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className="aspect-square rounded-md overflow-hidden bg-muted hover:opacity-80 transition-opacity"
+              className="aspect-square rounded-md overflow-hidden bg-bg-2 hover:opacity-80 transition-opacity duration-fast focus-ds"
             >
               <img src={m.media_url ?? ''} alt="" className="h-full w-full object-cover" />
             </a>
@@ -758,7 +794,7 @@ function MediaSection({ conversationId }: { conversationId: string }) {
               href={m.media_url ?? '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-foreground hover:bg-muted transition-colors"
+              className="flex min-h-10 items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-foreground hover:bg-accent transition-colors duration-fast focus-ds"
             >
               <Download className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <span className="truncate flex-1">
@@ -770,7 +806,7 @@ function MediaSection({ conversationId }: { conversationId: string }) {
       )}
 
       {items.length > (activeTab === 'imagem' ? 9 : 8) && (
-        <p className="text-2xs text-muted-foreground text-center mt-2">
+        <p className="text-[12px] text-muted-foreground text-center mt-2">
           +{items.length - (activeTab === 'imagem' ? 9 : 8)} a mais
         </p>
       )}

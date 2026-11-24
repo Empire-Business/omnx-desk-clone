@@ -1,40 +1,37 @@
 /// <reference lib="webworker" />
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
+import { precacheAndRoute, cleanupOutdatedCaches, addPlugins } from 'workbox-precaching'
 import { registerRoute } from 'workbox-routing'
-import { NetworkFirst, CacheFirst } from 'workbox-strategies'
+import { CacheFirst } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
+import { precacheAssetsPlugin } from './lib/precacheAssetsPlugin'
+import { BRAND } from '@/config/brand'
 
 declare let self: ServiceWorkerGlobalScope
 
 // ── Auto-update: activate new SW immediately ────────────────────────────────
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim())
+  event.waitUntil((async () => {
+    // Versões antigas guardavam respostas autenticadas e imagens privadas.
+    await Promise.all(['supabase-api-cache', 'images-cache'].map(name => caches.delete(name)))
+    await self.clients.claim()
+  })())
 })
 
 // ── Precache ────────────────────────────────────────────────────────────────
 cleanupOutdatedCaches()
+addPlugins([precacheAssetsPlugin])
 precacheAndRoute(self.__WB_MANIFEST)
 
 // ── Runtime caching ─────────────────────────────────────────────────────────
 
-// Supabase API — Network first with fallback
+// Somente imagens estáticas públicas. API, Storage e anexos usam a rede;
+// nenhuma resposta privada pode sobreviver à troca de sessão pelo SW.
 registerRoute(
-  ({ url }) => url.hostname === 'wuzmckatbmlpkdxtfhqr.supabase.co',
-  new NetworkFirst({
-    cacheName: 'supabase-api-cache',
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 60 * 60 * 24 }),
-    ],
-    networkTimeoutSeconds: 10,
-  })
-)
-
-// Images — Cache first
-registerRoute(
-  ({ request }) => request.destination === 'image',
+  ({ request, url }) => request.destination === 'image'
+    && url.origin === self.location.origin && /^\/(?:assets|icons)\//.test(url.pathname),
   new CacheFirst({
-    cacheName: 'images-cache',
+    cacheName: 'public-static-images-v1',
     plugins: [
       new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 }),
     ],
@@ -48,7 +45,7 @@ self.addEventListener('push', (event) => {
 
   const data = event.data.json()
 
-  const options: NotificationOptions = {
+  const options: NotificationOptions & { vibrate: number[]; renotify: boolean } = {
     body: data.body ?? '',
     icon: '/icons/icon-192.png',
     badge: '/icons/favicon-32.png',
@@ -61,7 +58,7 @@ self.addEventListener('push', (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(data.title ?? 'OMNX Desk', options)
+    self.registration.showNotification(data.title ?? BRAND.appName, options)
   )
 })
 

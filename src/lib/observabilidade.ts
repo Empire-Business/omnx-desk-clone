@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { mensagemErro } from './mensagemErro'
 
 /**
  * Observabilidade — registro estruturado de eventos por app (§19 do brief).
@@ -59,11 +60,15 @@ function limpar(detalhe: Record<string, unknown>): Record<string, unknown> {
  * quem loga um erro genérico não deveria precisar lembrar disso.
  */
 export function appDaRota(caminho: string): string {
-  if (caminho.startsWith('/chat')) return 'chat'
-  if (caminho.startsWith('/contratos')) return 'contratos'
-  if (caminho.startsWith('/atendimento') || caminho === '/') return 'atendimento'
-  if (caminho.startsWith('/cobranca')) return 'cobranca'
-  if (caminho.startsWith('/portal')) return 'portal'
+  // Compara por segmento (não por "começa com"): "/iaxyz" não é a Íris.
+  const em = (...prefixos: string[]) => prefixos.some((p) => caminho === p || caminho.startsWith(`${p}/`))
+  // Endereços novos e antigos (os antigos ainda aparecem no instante do redirecionamento).
+  if (em('/conversas', '/chat')) return 'chat'
+  if (em('/contratos')) return 'contratos'
+  if (caminho === '/' || em('/tickets', '/atendimento')) return 'atendimento'
+  if (em('/clientes/grupos', '/ia', '/automacoes-wa')) return 'automacoes-wa'
+  if (em('/cobranca')) return 'cobranca'
+  if (em('/portal')) return 'portal'
   return 'nucleo'
 }
 
@@ -118,7 +123,7 @@ export function instalarObservabilidade(): void {
     const motivo = ev.reason
     registrarEvento({
       evento: 'promessa_rejeitada',
-      mensagem: motivo instanceof Error ? `${motivo.name}: ${motivo.message}` : String(motivo),
+      mensagem: mensagemErro(motivo),
     })
   })
 }

@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { Check, Loader2, Plus, Trash2, X } from 'lucide-react'
+import { Check, Plus, Trash2, TriangleAlert, X } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { AtendimentoTabs } from '@/components/atendimento/AtendimentoTabs'
+import { SelectDs } from '@/components/atendimento/TicketUi'
 import {
   useAtendimentoTipos, useAtendimentoEtapas, useSalvarTipo, useSalvarEtapa, useExcluirEtapa,
   type AtendimentoEtapa, type AtendimentoTipo,
@@ -10,27 +12,41 @@ import {
 import { usePermissoes } from '@/hooks/usePermissoes'
 import { classeEtapa, CORES_ETAPA } from '@/lib/atendimento'
 import { cn } from '@/lib/utils'
+import { formatoAposentado } from '@/lib/formatosAtendimento'
 
-const campo =
-  'rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none'
+/** Campo do DS; 16 px no celular para o iPhone não dar zoom ao tocar. */
+const campo = 'input text-base sm:text-sm'
+
+function EsqueletoItens() {
+  return (
+    <ul aria-hidden className="m-0 mt-4 grid list-none gap-3 p-0">
+      {[0, 1, 2].map((i) => (
+        <li key={i} className="flex items-center gap-3">
+          <span className="sk h-5 rounded-full" style={{ width: `${30 + i * 12}%` }} />
+          <span className="sk ml-auto h-5 w-14 rounded-full" />
+        </li>
+      ))}
+    </ul>
+  )
+}
 
 /**
  * Configuração do app: tipos de solicitação e etapas do fluxo.
  *
- * É aqui que o app deixa de ser "só para social media": trocando esses dois
- * conjuntos, o mesmo app serve uma clínica ou um escritório sem mudar código.
+ * Trocando esses dois conjuntos, o mesmo app serve empresas de serviços, uma
+ * clínica ou um escritório sem mudar código.
  */
 export function AtendimentoConfigPage() {
   const { can, carregando } = usePermissoes()
 
   if (carregando) return null
-  if (!can('atendimento', 'admin')) return <Navigate to="/atendimento" replace />
+  if (!can('atendimento', 'admin')) return <Navigate to="/" replace />
 
   return (
-    <div className="space-y-6">
+    <PageContainer className="gap-5 md:gap-6">
       <PageHeader
-        title="Configuração do Atendimento"
-        description="Defina as etapas do fluxo de trabalho e os tipos de solicitação que sua operação atende."
+        title="Configuração dos tickets"
+        description="Defina as etapas pelas quais um ticket passa e os tipos de pedido que sua operação atende."
       />
 
       <AtendimentoTabs />
@@ -38,10 +54,10 @@ export function AtendimentoConfigPage() {
       {/* O ramo da empresa saiu daqui: é dado da conta, não deste app.
           Fica em Configurações → Ramo da empresa. O ponteiro existe porque
           quem já conhecia a tela viria procurar o seletor aqui. */}
-      <p className="text-sm text-muted-foreground">
-        O ramo da empresa (Social Media, Clínica, Escritório) — que define os nomes, as abas e
+      <p className="m-0 max-w-[72ch] text-sm text-muted-foreground">
+        O ramo da empresa (Serviços, Clínica, Escritório) — que define os nomes, as abas e
         os indicadores — agora fica em{' '}
-        <Link to="/configuracoes" className="font-medium text-primary hover:underline">
+        <Link to="/configuracoes" className="font-semibold text-link hover:underline">
           Configurações → Ramo da empresa
         </Link>
         .
@@ -51,7 +67,7 @@ export function AtendimentoConfigPage() {
         <SecaoEtapas />
         <SecaoTipos />
       </div>
-    </div>
+    </PageContainer>
   )
 }
 
@@ -87,25 +103,46 @@ function SecaoEtapas() {
   const marcarFinal = (etapa: AtendimentoEtapa) =>
     salvar.mutate({ ...etapa, is_final: !etapa.is_final })
 
+  // Só leitura: avisa quando a configuração atrapalha resolver/reabrir e a
+  // criação automática dos tickets do WhatsApp (que precisa de uma etapa aberta
+  // e uma final).
+  const lista = etapas ?? []
+  const finais = lista.filter((e) => e.is_final).length
+  const abertas = lista.length - finais
+  const aviso = isLoading || lista.length === 0
+    ? null
+    : finais === 0
+      ? 'Nenhuma etapa está marcada como final. Sem ela, nenhum ticket pode ser resolvido — nem à mão, nem pela Íris.'
+      : abertas === 0
+        ? 'Todas as etapas estão marcadas como final. É preciso ao menos uma etapa aberta para os tickets novos.'
+        : finais > 1
+          ? 'Há mais de uma etapa final. A Íris sempre usa a primeira; todas aparecem como "Resolvido" na tela.'
+          : null
+
   return (
-    <section className="rounded-xl border border-border bg-card p-4">
-      <h2 className="font-display text-base font-semibold text-foreground">Etapas do fluxo</h2>
-      <p className="mt-0.5 text-sm text-muted-foreground">
-        Viram as colunas do kanban, na ordem em que aparecem aqui. A etapa marcada como
-        <strong className="font-medium"> final</strong> é a que dá a demanda por entregue.
+    <section className="min-w-0 rounded-lg border border-card-border bg-card p-4 md:p-5">
+      <h2 className="t-h4 m-0 text-foreground">Etapas do ticket</h2>
+      <p className="m-0 mt-1 text-sm text-muted-foreground">
+        Viram as colunas do quadro, na ordem em que aparecem aqui. A etapa marcada como
+        <strong className="font-semibold"> final</strong> é a que dá o ticket por resolvido. Mudar essa
+        marcação muda na hora o status dos tickets que já estão na etapa.
       </p>
+      {aviso && (
+        <p role="alert" className="m-0 mt-3 flex items-start gap-2 rounded-md bg-warning-light px-3 py-2 text-sm text-foreground">
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+          {aviso}
+        </p>
+      )}
 
       {isLoading ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
-        </div>
+        <EsqueletoItens />
       ) : (
-        <ul className="mt-4 divide-y divide-border">
+        <ul className="m-0 mt-4 list-none divide-y divide-stroke-weak p-0">
           {(etapas ?? []).map((etapa) => (
-            <li key={etapa.id} className="flex items-center gap-2 py-2">
+            <li key={etapa.id} className="flex min-h-11 items-center gap-2 py-1.5">
               <span
                 className={cn(
-                  'rounded-full px-2 py-0.5 text-xs font-medium',
+                  'min-w-0 truncate rounded-full px-2 py-0.5 text-[12.5px] font-semibold',
                   classeEtapa(etapa.cor),
                 )}
               >
@@ -113,30 +150,33 @@ function SecaoEtapas() {
               </span>
 
               <button
+                type="button"
                 onClick={() => marcarFinal(etapa)}
+                aria-pressed={etapa.is_final}
                 className={cn(
-                  'ml-auto inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors',
+                  'ml-auto inline-flex h-11 shrink-0 items-center gap-1 rounded-full px-3 text-[12.5px] font-semibold transition-colors duration-fast focus-ds md:h-7 md:px-2.5',
                   etapa.is_final
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    : 'text-muted-foreground hover:bg-muted',
+                    ? 'bg-success-light text-success'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                 )}
                 title={
                   etapa.is_final
-                    ? 'Esta etapa encerra a demanda. Clique para desmarcar.'
-                    : 'Marcar como etapa que encerra a demanda'
+                    ? 'Esta etapa resolve o ticket. Clique para desmarcar.'
+                    : 'Marcar como etapa que resolve o ticket'
                 }
               >
-                {etapa.is_final ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                {etapa.is_final ? <Check className="h-3.5 w-3.5" aria-hidden /> : <X className="h-3.5 w-3.5" aria-hidden />}
                 Final
               </button>
 
               <button
+                type="button"
                 onClick={() => remover(etapa)}
-                className="rounded p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                className="btn btn-ghost btn-icon btn-sm shrink-0 hover:bg-danger-light hover:text-danger"
                 title={`Excluir ${etapa.nome}`}
                 aria-label={`Excluir etapa ${etapa.nome}`}
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 aria-hidden />
               </button>
             </li>
           ))}
@@ -144,33 +184,30 @@ function SecaoEtapas() {
       )}
 
       {erro && (
-        <p className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{erro}</p>
+        <p role="alert" className="m-0 mt-3 rounded-md bg-danger-light px-3 py-2 text-sm text-danger">{erro}</p>
       )}
 
       <form onSubmit={adicionar} className="mt-4 flex flex-wrap items-center gap-2">
         <input
-          className={cn(campo, 'flex-1 min-w-[140px]')}
+          className={cn(campo, 'min-w-[140px] flex-1')}
           placeholder="Nova etapa (ex.: Roteiro)"
           value={nome}
           onChange={(e) => setNome(e.target.value)}
           aria-label="Nome da nova etapa"
         />
-        <select
-          className={campo}
-          value={cor}
-          onChange={(e) => setCor(e.target.value)}
-          aria-label="Cor da etapa"
-        >
-          {CORES_ETAPA.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
+        <span className="w-32 shrink-0">
+          <SelectDs value={cor} onChange={(e) => setCor(e.target.value)} aria-label="Cor da etapa">
+            {CORES_ETAPA.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </SelectDs>
+        </span>
         <button
           type="submit"
           disabled={salvar.isPending || !nome.trim()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          className="btn btn-primary max-sm:w-full"
         >
-          <Plus className="h-4 w-4" /> Adicionar
+          {salvar.isPending ? <span className="btn-spin" aria-hidden /> : <Plus aria-hidden />} Adicionar
         </button>
       </form>
     </section>
@@ -185,6 +222,7 @@ function SecaoTipos() {
 
   const adicionar = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!nome.trim() || formatoAposentado(nome)) return
     const ordem = ((tipos ?? []).at(-1)?.ordem ?? 0) + 10
     salvar.mutate({ nome: nome.trim(), ordem }, { onSuccess: () => setNome('') })
   }
@@ -193,41 +231,40 @@ function SecaoTipos() {
   // ele, e apagar deixaria o histórico sem saber o que foi entregue.
   const alternar = (tipo: AtendimentoTipo) => salvar.mutate({ ...tipo, ativo: !tipo.ativo })
 
+  // Formatos retirados nunca aparecem nos novos tickets, mesmo ativos no
+  // banco; ficam separados para não parecerem opções disponíveis.
+  const emUso = (tipos ?? []).filter((tipo) => !formatoAposentado(tipo.nome))
+  const retirados = (tipos ?? []).filter((tipo) => formatoAposentado(tipo.nome))
+  const nomeRetirado = formatoAposentado(nome)
+
   return (
-    <section className="rounded-xl border border-border bg-card p-4">
-      <h2 className="font-display text-base font-semibold text-foreground">
-        Tipos de solicitação
-      </h2>
-      <p className="mt-0.5 text-sm text-muted-foreground">
-        O que sua operação entrega. Um tipo desativado some do formulário, mas continua
-        aparecendo nas demandas antigas.
+    <section className="min-w-0 rounded-lg border border-card-border bg-card p-4 md:p-5">
+      <h2 className="t-h4 m-0 text-foreground">Tipos de solicitação</h2>
+      <p className="m-0 mt-1 text-sm text-muted-foreground">
+        O que sua operação atende. Um tipo desativado some do formulário, mas continua
+        aparecendo nos tickets antigos.
       </p>
 
       {isLoading ? (
-        <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
-        </div>
+        <EsqueletoItens />
       ) : (
-        <ul className="mt-4 divide-y divide-border">
-          {(tipos ?? []).map((tipo) => (
-            <li key={tipo.id} className="flex items-center gap-2 py-2">
+        <ul className="m-0 mt-4 list-none divide-y divide-stroke-weak p-0">
+          {emUso.map((tipo) => (
+            <li key={tipo.id} className="flex min-h-11 items-center gap-2 py-1.5">
               <div className="min-w-0 flex-1">
                 <p
                   className={cn(
-                    'truncate text-sm font-medium',
+                    'm-0 truncate text-sm font-medium',
                     tipo.ativo ? 'text-foreground' : 'text-muted-foreground line-through',
                   )}
                 >
                   {tipo.nome}
                 </p>
                 {tipo.descricao && (
-                  <p className="truncate text-xs text-muted-foreground">{tipo.descricao}</p>
+                  <p className="m-0 truncate text-[12.5px] text-muted-foreground">{tipo.descricao}</p>
                 )}
               </div>
-              <button
-                onClick={() => alternar(tipo)}
-                className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:bg-muted"
-              >
+              <button type="button" onClick={() => alternar(tipo)} className="btn btn-ghost btn-sm shrink-0">
                 {tipo.ativo ? 'Desativar' : 'Reativar'}
               </button>
             </li>
@@ -235,22 +272,42 @@ function SecaoTipos() {
         </ul>
       )}
 
+      {retirados.length > 0 && (
+        <details className="mt-3 rounded-md bg-bg-2 px-3 py-2 ring-hairline">
+          <summary className="flex min-h-11 cursor-pointer items-center text-[12.5px] font-semibold text-muted-foreground md:min-h-0">
+            Formatos retirados ({retirados.length})
+          </summary>
+          <p className="m-0 mt-2 text-[12.5px] text-muted-foreground">
+            Não aparecem mais nos novos tickets. Continuam guardados só para que os
+            tickets antigos mostrem o que foi pedido.
+          </p>
+          <ul className="m-0 mt-1 pl-4 text-[12.5px] text-muted-foreground">
+            {retirados.map((tipo) => <li key={tipo.id}>{tipo.nome}</li>)}
+          </ul>
+        </details>
+      )}
+
       <form onSubmit={adicionar} className="mt-4 flex flex-wrap items-center gap-2">
         <input
-          className={cn(campo, 'flex-1 min-w-[140px]')}
-          placeholder="Novo tipo (ex.: Podcast)"
+          className={cn(campo, 'min-w-[140px] flex-1')}
+          placeholder="Novo tipo (ex.: Suporte técnico)"
           value={nome}
           onChange={(e) => setNome(e.target.value)}
           aria-label="Nome do novo tipo"
         />
         <button
           type="submit"
-          disabled={salvar.isPending || !nome.trim()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          disabled={salvar.isPending || !nome.trim() || nomeRetirado}
+          className="btn btn-primary max-sm:w-full"
         >
-          <Plus className="h-4 w-4" /> Adicionar
+          {salvar.isPending ? <span className="btn-spin" aria-hidden /> : <Plus aria-hidden />} Adicionar
         </button>
       </form>
+      {nomeRetirado && (
+        <p className="m-0 mt-1.5 text-[12.5px] text-muted-foreground">
+          Esse formato foi retirado e não aparece nos novos tickets.
+        </p>
+      )}
     </section>
   )
 }

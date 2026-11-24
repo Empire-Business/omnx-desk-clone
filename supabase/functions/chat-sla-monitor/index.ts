@@ -1,14 +1,11 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { cronWaProtegido } from '../_shared/cron-wa-protegido.ts'
 
 // SLA Monitor — runs as a cron job every 5 minutes
 // Checks conversations for SLA violations and updates flags
 
-Deno.serve(async (_req) => {
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  )
-
+servirComLicenca(cronWaProtegido(async (_req, supabase) => {
   const now = new Date()
   let updated1stResponse = 0
   let updatedResolution = 0
@@ -27,7 +24,7 @@ Deno.serve(async (_req) => {
       const idsToFlag: string[] = []
 
       for (const conv of convs1st) {
-        const dept = conv.chat_departments as { sla_primeira_resposta_minutos: number } | null
+        const dept = Array.isArray(conv.chat_departments) ? conv.chat_departments[0] : conv.chat_departments
         const slaMinutes = dept?.sla_primeira_resposta_minutos
         if (!slaMinutes || slaMinutes <= 0) continue
 
@@ -60,7 +57,7 @@ Deno.serve(async (_req) => {
       const idsToFlag: string[] = []
 
       for (const conv of convsRes) {
-        const dept = conv.chat_departments as { sla_resolucao_horas: number } | null
+        const dept = Array.isArray(conv.chat_departments) ? conv.chat_departments[0] : conv.chat_departments
         const slaHours = dept?.sla_resolucao_horas
         if (!slaHours || slaHours <= 0) continue
 
@@ -99,4 +96,4 @@ Deno.serve(async (_req) => {
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     )
   }
-})
+}, () => createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })))

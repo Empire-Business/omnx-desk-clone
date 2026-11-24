@@ -120,7 +120,7 @@ export function PortalEntregaDetailPage() {
                   const hasRenderer = true // ContentItemRenderer imported directly
                   if (hasRenderer) {
                     return (
-                      <ContentItemRenderer key={item.id} item={item} readOnly />
+                      <ContentItemRenderer key={item.id} item={item} />
                     )
                   }
 
@@ -168,9 +168,8 @@ export function PortalEntregaDetailPage() {
           {/* Approval panel */}
           {latestVersion && (
             <ApprovalPanel
-              deliveryId={delivery.id}
-              versionId={latestVersion.id}
-              deliveryStatus={delivery.status}
+              delivery={delivery}
+              latestVersionId={latestVersion.id}
               userPerfil="cliente"
             />
           )}

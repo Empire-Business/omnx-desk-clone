@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { DeliveryApproval, DeliveryComment } from '@/types/database'
@@ -81,13 +82,13 @@ export function useApproveDelivery() {
     }) => {
       const { error: approvalError } = await supabase
         .from('delivery_approvals')
-        .insert({
+        .insert({ ...({
           delivery_id: deliveryId,
           version_id: versionId,
           aprovado_por: userId,
           aprovado: true,
           notas: notas ?? null,
-        })
+        }), tenant_id: await tenantDaSessao() })
       if (approvalError) throw approvalError
 
       const { data, error: statusError } = await supabase
@@ -123,13 +124,13 @@ export function useRejectDelivery() {
     }) => {
       const { error: approvalError } = await supabase
         .from('delivery_approvals')
-        .insert({
+        .insert({ ...({
           delivery_id: deliveryId,
           version_id: versionId,
           aprovado_por: userId,
           aprovado: false,
           notas: notas ?? null,
-        })
+        }), tenant_id: await tenantDaSessao() })
       if (approvalError) throw approvalError
 
       const { data, error: statusError } = await supabase
@@ -165,12 +166,12 @@ export function useAddComment() {
     }) => {
       const { data, error } = await supabase
         .from('delivery_comments')
-        .insert({
+        .insert({ ...({
           delivery_id: deliveryId,
           version_id: versionId ?? null,
           autor_id: userId,
           texto,
-        })
+        }), tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
