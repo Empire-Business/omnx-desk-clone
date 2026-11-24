@@ -71,11 +71,42 @@ export interface VendaPendente {
   /** Mensagem da última tentativa de envio ao CRM que falhou; null quando deu certo. */
   sincronizacao_erro: string | null
   historico_edicoes: VendaPendenteEdicao[] | null
+  /** De onde a venda veio: formulário público do closer ou CRM OMNX. */
+  origem: 'formulario' | 'crm'
+  /** Id da venda no CRM OMNX, quando já ligada. */
+  crm_venda_id: string | null
+  /** Última vez que a venda ficou igual no CRM OMNX. */
+  crm_sincronizado_em: string | null
+  /** Último envio ao CRM OMNX não aplicado (cliente não encontrado, erro…); null quando deu certo. */
+  crm_sincronizacao_erro: string | null
   criado_em: string
   atualizado_em: string
 }
 
 const key = ['vendas-pendentes'] as const
+
+/**
+ * Data de assinatura do contrato gerado a partir de cada venda, indexada pelo id
+ * da venda. O onboarding mostrava só "enviada em", e a equipe confundia a entrada
+ * do lead com a assinatura — que é o que deixa o contrato ativo.
+ */
+export function useAssinaturasPorVenda() {
+  return useQuery({
+    queryKey: [...key, 'assinaturas'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('contratos')
+        .select('venda_pendente_id, data_assinatura')
+        .not('venda_pendente_id', 'is', null)
+      if (error) throw error
+      const mapa: Record<string, string | null> = {}
+      for (const c of data ?? []) {
+        if (c.venda_pendente_id) mapa[c.venda_pendente_id] = c.data_assinatura
+      }
+      return mapa
+    },
+  })
+}
 
 export function useVendasPendentes(status?: VendaPendente['status']) {
   return useQuery({

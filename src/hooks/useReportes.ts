@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { ContextoReporte } from '@/lib/reporte-contexto'
@@ -6,7 +7,7 @@ import type { EntradaConsole, EntradaRede } from '@/lib/reporte-buffers'
 /**
  * Reporte de erros (multi-tenant). A RLS resolve o tenant e a visibilidade:
  * usuário comum vê/insere os próprios; admin vê e tria todos do tenant.
- * O front nunca envia tenant_id (trigger set_tenant_id carimba).
+ * O front confirma o tenant da sessão antes de inserir; a RLS valida o acesso.
  */
 
 export type ReporteImpacto = 'baixo' | 'medio' | 'alto' | 'critico'
@@ -91,7 +92,7 @@ export function useCriarReporte() {
       } = await supabase.auth.getUser()
       const { data, error } = await supabase
         .from('reportes_erro')
-        .insert({ ...input, reportado_por: user?.id })
+        .insert({ ...input, contexto: { ...input.contexto }, console_logs: input.console_logs?.map(log => ({ ...log })), network_logs: input.network_logs?.map(log => ({ ...log })), reportado_por: user?.id, tenant_id: await tenantDaSessao() })
         .select('*')
         .single()
       if (error) throw error

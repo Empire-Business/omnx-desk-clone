@@ -1,3 +1,5 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
+import { sessaoDeskLiberada } from '../_shared/desk-session.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -16,7 +18,7 @@ const ALERT_WORDS = [
   'tribunal',
 ]
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
@@ -54,6 +56,14 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Invalid token' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    const deskSession = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } }, auth: { persistSession: false },
+    })
+    if (!await sessaoDeskLiberada(deskSession)) {
+      return new Response(JSON.stringify({ error: 'password_change_required' }), {
+        status: 403, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       })
     }
   }

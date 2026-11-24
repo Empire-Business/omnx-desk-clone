@@ -3,7 +3,8 @@
 // e notifica todos os usuários com perfil 'atendimento'.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { resolveEmpireBridge, empireHeaders } from '../_shared/empire-bridge.ts'
+import { autoVincularVendaEmpire } from '../_shared/empire-auto-vinculo.ts'
+import { travaDeLicenca } from '../_shared/htai-licenca.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -128,6 +129,9 @@ function validate(p: Payload): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+  // Licença HTAI (desligada sem HTAI_ENTITLEMENTS_MODE; ver docs/LICENCA-HTAI.md)
+  const licencaNegada = await travaDeLicenca(corsHeaders)
+  if (licencaNegada) return licencaNegada
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -258,66 +262,13 @@ Deno.serve(async (req) => {
     // Auto-vínculo: se o lead no CRM for inequívoco (exatamente 1 oportunidade candidata),
     // sincroniza a venda direto com a vendas_fechamento do GHL, sem validação manual.
     // Casos ambíguos (0 ou >1 oportunidade) ficam na fila de pendência para resolução manual.
-    // Falha aqui nunca quebra a criação da venda.
-    try {
-      // Credencial do tenant dono da venda recém-criada.
-      const bridge = await resolveEmpireBridge(admin, venda.tenant_id ?? null)
-      if (bridge) {
-        const buscaRes = await fetch(`${bridge.baseUrl}/crm-buscar-lead`, {
-          method: 'POST',
-          headers: empireHeaders(bridge.secret),
-          body: JSON.stringify({ telefone: payload.cliente_whatsapp, email: payload.cliente_email ?? null }),
-        })
-        const buscaData = (await buscaRes.json().catch(() => ({}))) as {
-          candidatos?: Array<{ oportunidades?: Array<{ oportunidade_id: string }> }>
-        }
-        const todasOpps = (buscaData.candidatos ?? []).flatMap((c) => c.oportunidades ?? [])
-        if (buscaRes.ok && todasOpps.length === 1) {
-          const oppId = todasOpps[0].oportunidade_id
-          const compsComUrl: Array<{ url: string; nome_original: string; mime_type: string; sinal: string | null }> = []
-          for (const c of comprovantes) {
-            const { data: signed } = await admin.storage
-              .from('vendas-comprovantes')
-              .createSignedUrl(c.storage_path, 600)
-            if (signed?.signedUrl) {
-              compsComUrl.push({ url: signed.signedUrl, nome_original: c.nome_original, mime_type: c.mime_type, sinal: c.sinal })
-            }
-          }
-          const vendaPayload = {
-            nome_contratante: payload.cliente_nome,
-            cpf_cnpj_contratante: payload.cliente_cpf_cnpj ?? null,
-            logradouro_rua_avenida: payload.cliente_logradouro ?? payload.cliente_endereco ?? null,
-            numero_endereco: payload.cliente_numero ?? null,
-            complemento_endereco: payload.cliente_complemento ?? null,
-            bairro: payload.cliente_bairro ?? null,
-            municipio: payload.cliente_municipio ?? null,
-            estado_uf: payload.cliente_uf ?? null,
-            cep: payload.cliente_cep ?? null,
-            produto_vendido: payload.produto_nome ?? null,
-            observacoes_venda: payload.observacoes ?? null,
-            closer_nome: payload.closer_nome,
-            closer_email: payload.closer_email,
-            pagamentos: payload.pagamentos,
-          }
-          const regRes = await fetch(`${bridge.baseUrl}/crm-registrar-venda`, {
-            method: 'POST',
-            headers: empireHeaders(bridge.secret),
-            body: JSON.stringify({ oportunidade_id: oppId, venda: vendaPayload, comprovantes: compsComUrl }),
-          })
-          const regData = (await regRes.json().catch(() => ({}))) as { id?: string; error?: string }
-          if (regRes.ok && !regData.error) {
-            await admin.from('vendas_pendentes').update({
-              ghl_oportunidade_id: oppId,
-              ghl_venda_id: regData.id ?? null,
-              sincronizado_em: new Date().toISOString(),
-              sincronizacao_erro: null,
-            }).eq('id', venda.id)
-          }
-        }
-      }
-    } catch (e) {
-      console.error('auto-vínculo falhou (venda segue pendente):', (e as Error).message)
-    }
+    // Falha aqui nunca quebra a criação da venda (o helper captura e registra no log).
+    await autoVincularVendaEmpire(admin, {
+      vendaId: venda.id,
+      tenantId: venda.tenant_id ?? null,
+      dados: payload,
+      comprovantes,
+    })
 
     // Notifica todos os usuários com perfil 'atendimento' (+ admin/gerente, pra não perder ninguém)
     const { data: alvos } = await admin
@@ -333,7 +284,7 @@ Deno.serve(async (req) => {
         tipo: 'venda_pendente',
         titulo,
         mensagem,
-        link: '/comissoes/vendas-pendentes',
+        link: '/contratos/onboarding',
         metadata: { venda_id: venda.id, closer_nome: payload.closer_nome, cliente_nome: payload.cliente_nome },
       }))
       await admin.from('notifications').insert(notifs)

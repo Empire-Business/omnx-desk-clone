@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
@@ -26,7 +27,7 @@ export function useSaveAppSetting() {
     mutationFn: async ({ chave, valor }: { chave: string; valor: string }) => {
       const { error } = await supabase
         .from('app_settings')
-        .upsert({ chave, valor }, { onConflict: 'chave' })
+        .upsert({ ...({ chave, valor }), tenant_id: await tenantDaSessao() }, { onConflict: 'chave' })
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: settingsKeys.all }),
@@ -40,7 +41,7 @@ export function useSaveAppSettings() {
       for (const entry of entries) {
         const { error } = await supabase
           .from('app_settings')
-          .upsert({ chave: entry.chave, valor: entry.valor }, { onConflict: 'chave' })
+          .upsert({ ...({ chave: entry.chave, valor: entry.valor }), tenant_id: await tenantDaSessao() }, { onConflict: 'chave' })
         if (error) throw error
       }
     },

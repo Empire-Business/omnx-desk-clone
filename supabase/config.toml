@@ -1,6 +1,6 @@
 project_id = "wuzmckatbmlpkdxtfhqr"
 
-# Provisionamento de empresa chamado máquina-a-máquina pela plataforma (Empire OS):
+# Provisionamento de empresa chamado máquina-a-máquina pela plataforma (High Ticket AI):
 # a chamada não traz JWT de usuário, então a verificação automática é desligada e a
 # autorização é feita DENTRO da função (X-Platform-Key OU JWT de master admin).
 [functions.provision-tenant]
@@ -22,11 +22,20 @@ verify_jwt = false
 [functions.chat-api]
 verify_jwt = false
 
+[functions.chat-api-v2]
+verify_jwt = false
+
+[functions.desk-mcp]
+verify_jwt = false
+
 [functions.chat-broadcast-scheduler]
 verify_jwt = false
 
 [functions.chat-sla-monitor]
 verify_jwt = false
+
+[functions.tempo-resposta-admin]
+verify_jwt = true
 
 [functions.cobranca-scheduler]
 verify_jwt = false
@@ -108,3 +117,67 @@ verify_jwt = false
 
 [functions.webhook-dispatch]
 verify_jwt = false
+
+[functions.wa-auto-relatorio-diario]
+verify_jwt = false
+
+# O handler valida Bearer via Auth getUser e confere a sessão real, ator e geração.
+[functions.desk-change-password]
+verify_jwt = false
+
+[functions.wa-auto-resumo-semanal]
+verify_jwt = false
+
+[functions.wa-auto-satisfacao]
+verify_jwt = false
+
+# Relacionamento por cliente (F5, substitui wa-auto-satisfacao): pg_cron com
+# x-cron-secret (Vault); prévia do admin com JWT validado dentro da função
+# (auth.getUser + vinculos_pode_gerir).
+[functions.wa-relacionamento-analisar]
+verify_jwt = false
+
+# Transcrição de áudio / descrição de imagem: chamado pelo pg_cron com x-cron-secret (Vault).
+[functions.wa-midia-processar]
+verify_jwt = false
+
+[functions.uazapi-recuperar-mensagens]
+verify_jwt = false
+
+# Assistente da equipe: chamado pelo pg_net/pg_cron com x-cron-secret (Vault).
+# wa-agente-admin fica com verify_jwt padrão (true) — não entra aqui.
+[functions.wa-agente-responder]
+verify_jwt = false
+
+# Vínculos de conversas: pg_cron (x-cron-secret do Vault) e botão "Recalcular"
+# da tela (JWT validado dentro da função + vinculos_pode_gerir).
+[functions.wa-vinculos-sugerir]
+verify_jwt = false
+
+# JWTs de dois projetos e token por workspace: validação por ação no handler.
+[functions.iris-gt3]
+verify_jwt = false
+
+# Ajuda interna: gateway e handler validam o usuário; conhecimento público apenas.
+[functions.iris-ajuda]
+verify_jwt = true
+
+# Licença HTAI desta instalação: chamada pelo agendador (x-cron-secret conferido
+# no Vault, sem JWT) e pela tela (JWT conferido dentro da função).
+[functions.htai-licenca]
+verify_jwt = false
+
+# Exportar os dados da empresa (sempre aberta, mesmo com a licença negada):
+# JWT e administração conferidos dentro da função.
+[functions.htai-exportar]
+verify_jwt = false
+
+# Ponte de vendas CRM OMNX -> Desk: sem JWT; autorização só pela assinatura HMAC
+# (X-OMNX-Signature com o segredo crm_omnx do tenant, conferido na função).
+[functions.crm-venda-receber]
+verify_jwt = false
+
+# Ponte de vendas Desk -> CRM OMNX: chamada pelos gatilhos do banco com a chave anon
+# (passa pelo gateway) e o x-notify-secret do Vault (autorização real, na função).
+[functions.crm-omnx-notificar]
+verify_jwt = true

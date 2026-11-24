@@ -9,7 +9,6 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
-  EyeOff,
   Shield,
   Globe,
   RefreshCw,
@@ -18,6 +17,9 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { AbasRolaveis } from '@/components/ui/AbasRolaveis'
+import { TabelaResponsiva } from '@/components/ui/TabelaResponsiva'
 import { cn } from '@/lib/utils'
 import {
   useApiKeys,
@@ -37,6 +39,15 @@ import {
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type Tab = 'api-keys' | 'webhooks'
+
+interface ChaveApi {
+  id: string
+  nome: string
+  key_prefix: string
+  permissoes: string[]
+  ativo: boolean
+  ultimo_uso: string | null
+}
 
 interface ApiKeyForm {
   nome: string
@@ -106,7 +117,7 @@ function Toggle({
     >
       <span
         className={cn(
-          'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition duration-200',
+          'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-pop ring-0 transition duration-200',
           checked ? 'translate-x-5' : 'translate-x-0'
         )}
       />
@@ -152,33 +163,33 @@ function WebhookLogSection({ webhookId }: { webhookId: string }) {
 
   return (
     <div className="space-y-2 max-h-60 overflow-y-auto">
-      {logs.map((log: { id: string; status_code: number; created_at: string; response_body?: string; error?: string }) => (
+      {logs.map((log) => (
         <div
           key={log.id}
           className="flex items-start gap-3 rounded-lg border border-border/50 bg-background/50 p-3"
         >
           <span
             className={cn(
-              'mt-0.5 inline-flex items-center rounded px-1.5 py-0.5 font-mono text-2xs font-semibold',
-              log.status_code >= 200 && log.status_code < 300
+              'mt-0.5 inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[12px] font-semibold',
+              log.status_code !== null && log.status_code >= 200 && log.status_code < 300
                 ? 'bg-success-light text-success'
                 : 'bg-danger-light text-danger'
             )}
           >
-            {log.status_code}
+            {log.status_code ?? 'Sem resposta'}
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-xs text-muted-foreground">
-              {formatRelativeDate(log.created_at)}
+              {formatRelativeDate(log.criado_em)}
             </p>
             {log.response_body && (
-              <p className="mt-1 truncate font-mono text-2xs text-muted-foreground">
+              <p className="mt-1 truncate font-mono text-[12px] text-muted-foreground">
                 {log.response_body}
               </p>
             )}
-            {log.error && (
-              <p className="mt-1 truncate text-2xs text-danger">
-                {log.error}
+            {!log.sucesso && !log.response_body && (
+              <p className="mt-1 truncate text-[12px] text-danger">
+                Não foi possível entregar este evento.
               </p>
             )}
           </div>
@@ -239,9 +250,10 @@ export function ApiWebhooksPage() {
       const result = await createKey.mutateAsync({
         nome: keyForm.nome,
         permissoes: keyForm.permissoes,
-        expiracao: keyForm.expiracao,
+        expira_em: keyForm.expiracao === 'never' ? null : new Date(Date.now() + Number(keyForm.expiracao) * 86400000).toISOString(),
       })
       setCreatedKey(result.fullKey)
+      createKey.reset() // a chave completa não fica no cache de mutações; só neste estado local
       setKeyForm({ nome: '', permissoes: [], expiracao: '90' })
     } catch {
       // error handled by mutation
@@ -318,39 +330,31 @@ export function ApiWebhooksPage() {
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6 animate-fade-in">
+    <PageContainer>
       <PageHeader
-        title="API & Webhooks"
-        description="Gerencie chaves de API e webhooks para integracoes externas."
+        title="API e Webhooks"
+        description="Gerencie chaves de API e webhooks para integrações externas."
       />
+      <p className="text-sm text-muted-foreground">
+        Documentação pública, sem login:{' '}
+        <a href="/docs/api/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary underline">
+          API REST <ExternalLink className="h-3 w-3" aria-hidden="true" />
+        </a>
+        {' · '}
+        <a href="/docs/mcp" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary underline">
+          Conectar uma IA (MCP) <ExternalLink className="h-3 w-3" aria-hidden="true" />
+        </a>
+        <br />
+        A API v2 (<code>chat-api-v2</code>) e o MCP aceitam as mesmas chaves, mas <strong>não oferecem envio de mensagens</strong>: a permissão &quot;Enviar mensagens&quot; só vale na API original.
+      </p>
 
-      {/* Tabs */}
-      <div className="flex gap-1 rounded-lg border border-border bg-muted/30 p-1 w-fit">
-        <button
-          onClick={() => setTab('api-keys')}
-          className={cn(
-            'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors',
-            tab === 'api-keys'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          <Key className="h-4 w-4" />
-          API Keys
-        </button>
-        <button
-          onClick={() => setTab('webhooks')}
-          className={cn(
-            'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors',
-            tab === 'webhooks'
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
-        >
-          <Webhook className="h-4 w-4" />
-          Webhooks
-        </button>
-      </div>
+      <AbasRolaveis
+        rotulo="Seções de integração"
+        itens={[
+          { id: 'api-keys', rotulo: 'Chaves de API', icone: Key, ativo: tab === 'api-keys', onClick: () => setTab('api-keys') },
+          { id: 'webhooks', rotulo: 'Webhooks', icone: Webhook, ativo: tab === 'webhooks', onClick: () => setTab('webhooks') },
+        ]}
+      />
 
       {/* ── API Keys Tab ── */}
       {tab === 'api-keys' && (
@@ -370,7 +374,7 @@ export function ApiWebhooksPage() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <code className="flex-1 rounded-lg border border-border bg-background px-3 py-2.5 font-mono text-sm text-foreground break-all">
+                <code className="t-mono min-w-0 flex-1 break-all rounded-md border border-stroke-default bg-background px-3 py-2.5">
                   {createdKey}
                 </code>
                 <button
@@ -403,7 +407,7 @@ export function ApiWebhooksPage() {
           {!showKeyForm && !createdKey && (
             <button
               onClick={() => setShowKeyForm(true)}
-              className="gradient-primary flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+              className="btn btn-primary"
             >
               <Plus className="h-4 w-4" />
               Nova API Key
@@ -425,8 +429,8 @@ export function ApiWebhooksPage() {
                   type="text"
                   value={keyForm.nome}
                   onChange={(e) => setKeyForm((prev) => ({ ...prev, nome: e.target.value }))}
-                  placeholder="Ex: Integracao CRM"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-colors"
+                  placeholder="Ex.: Integração CRM"
+                  className="input w-full"
                 />
               </div>
 
@@ -441,7 +445,7 @@ export function ApiWebhooksPage() {
                       className={cn(
                         'flex cursor-pointer items-center gap-2.5 rounded-lg border p-3 transition-colors',
                         keyForm.permissoes.includes(perm.value)
-                          ? 'border-primary/40 bg-primary/5'
+                          ? 'border-primary/40 bg-primary-muted'
                           : 'border-border hover:bg-muted/30'
                       )}
                     >
@@ -464,7 +468,7 @@ export function ApiWebhooksPage() {
                 <select
                   value={keyForm.expiracao}
                   onChange={(e) => setKeyForm((prev) => ({ ...prev, expiracao: e.target.value }))}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-colors"
+                  className="input w-full"
                 >
                   {EXPIRACAO_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -478,7 +482,7 @@ export function ApiWebhooksPage() {
                 <button
                   onClick={handleCreateKey}
                   disabled={createKey.isPending || !keyForm.nome.trim()}
-                  className="gradient-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="btn btn-primary"
                 >
                   {createKey.isPending ? (
                     <>
@@ -497,7 +501,7 @@ export function ApiWebhooksPage() {
                     setShowKeyForm(false)
                     setKeyForm({ nome: '', permissoes: [], expiracao: '90' })
                   }}
-                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                  className="btn btn-secondary"
                 >
                   Cancelar
                 </button>
@@ -506,14 +510,13 @@ export function ApiWebhooksPage() {
           )}
 
           {/* Keys table */}
-          <div className="glass-card overflow-hidden">
+          <div>
             {keysLoading ? (
-              <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                Carregando chaves...
+              <div role="status" aria-label="Carregando chaves" className="glass-card space-y-2 p-4">
+                {[0, 1, 2].map((i) => <div key={i} className="sk h-10 rounded-md" />)}
               </div>
             ) : !apiKeys || apiKeys.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
+              <div className="glass-card flex flex-col items-center justify-center gap-3 py-12 text-center">
                 <Key className="h-10 w-10 text-muted-foreground/40" />
                 <div>
                   <p className="text-sm font-medium text-foreground">Nenhuma API Key</p>
@@ -523,109 +526,44 @@ export function ApiWebhooksPage() {
                 </div>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Nome
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Prefixo
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Permissoes
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Status
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Ultimo uso
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Acoes
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {apiKeys.map((key: {
-                      id: string
-                      nome: string
-                      key_prefix: string
-                      permissoes: string[]
-                      ativo: boolean
-                      ultimo_uso: string | null
-                    }) => (
-                      <tr key={key.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Key className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium text-foreground">{key.nome}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <code className="rounded bg-muted/50 px-2 py-0.5 font-mono text-xs text-foreground">
-                            {key.key_prefix}...
-                          </code>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap gap-1">
-                            {(key.permissoes ?? []).map((perm: string) => (
-                              <span
-                                key={perm}
-                                className="inline-flex items-center rounded-full bg-primary-muted px-2 py-0.5 text-2xs font-medium text-primary"
-                              >
-                                {perm}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={cn(
-                              'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-                              key.ativo
-                                ? 'bg-success-light text-success'
-                                : 'bg-danger-light text-danger'
-                            )}
-                          >
-                            {key.ativo ? 'Ativa' : 'Revogada'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
-                            {formatRelativeDate(key.ultimo_uso)}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            {key.ativo && (
-                              <button
-                                onClick={() => revokeKey.mutateAsync(key.id)}
-                                disabled={revokeKey.isPending}
-                                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
-                                title="Revogar"
-                              >
-                                <Shield className="h-3.5 w-3.5" />
-                                Revogar
-                              </button>
-                            )}
-                            <button
-                              onClick={() => deleteKey.mutateAsync(key.id)}
-                              disabled={deleteKey.isPending}
-                              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-danger hover:bg-danger-light transition-colors"
-                              title="Excluir"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <TabelaResponsiva
+                rotulo="Chaves de API"
+                linhas={apiKeys as ChaveApi[]}
+                chave={(k) => k.id}
+                colunas={[
+                  { id: 'nome', titulo: 'Nome', principal: true, celula: (k) => (
+                    <div className="flex items-center gap-2">
+                      <Key className="h-4 w-4 text-muted-foreground" aria-hidden />
+                      <span className="font-medium text-foreground">{k.nome}</span>
+                    </div>
+                  ) },
+                  { id: 'prefixo', titulo: 'Prefixo', celula: (k) => <code className="t-mono rounded bg-muted px-2 py-0.5 text-foreground">{k.key_prefix}...</code> },
+                  { id: 'permissoes', titulo: 'Permissões', celula: (k) => (
+                    <div className="flex flex-wrap gap-1">
+                      {(k.permissoes ?? []).map((perm: string) => <span key={perm} className="tag">{perm}</span>)}
+                    </div>
+                  ) },
+                  { id: 'status', titulo: 'Situação', celula: (k) => <span className={k.ativo ? 'tag tag-success' : 'tag tag-danger'}>{k.ativo ? 'Ativa' : 'Revogada'}</span> },
+                  { id: 'uso', titulo: 'Último uso', celula: (k) => (
+                    <span className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground">
+                      <Clock className="h-3 w-3" aria-hidden />
+                      {formatRelativeDate(k.ultimo_uso)}
+                    </span>
+                  ) },
+                ]}
+                acoes={(k) => (
+                  <>
+                    {k.ativo && (
+                      <button onClick={() => revokeKey.mutateAsync(k.id)} disabled={revokeKey.isPending} className="btn btn-ghost btn-sm" title="Revogar">
+                        <Shield className="h-3.5 w-3.5" aria-hidden /> Revogar
+                      </button>
+                    )}
+                    <button onClick={() => deleteKey.mutateAsync(k.id)} disabled={deleteKey.isPending} className="btn btn-ghost btn-sm text-danger" title="Excluir" aria-label="Excluir chave">
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </>
+                )}
+              />
             )}
           </div>
         </div>
@@ -638,7 +576,7 @@ export function ApiWebhooksPage() {
           {!showWebhookForm && (
             <button
               onClick={() => setShowWebhookForm(true)}
-              className="gradient-primary flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+              className="btn btn-primary"
             >
               <Plus className="h-4 w-4" />
               Novo Webhook
@@ -666,7 +604,7 @@ export function ApiWebhooksPage() {
                       setWebhookForm((prev) => ({ ...prev, nome: e.target.value }))
                     }
                     placeholder="Ex: CRM Webhook"
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-colors"
+                    className="input w-full"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -680,7 +618,7 @@ export function ApiWebhooksPage() {
                       setWebhookForm((prev) => ({ ...prev, url: e.target.value }))
                     }
                     placeholder="https://api.exemplo.com/webhook"
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground font-mono placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-colors"
+                    className="input mono w-full"
                   />
                 </div>
               </div>
@@ -696,7 +634,7 @@ export function ApiWebhooksPage() {
                       className={cn(
                         'flex cursor-pointer items-center gap-2.5 rounded-lg border p-3 transition-colors',
                         webhookForm.eventos.includes(evento.value)
-                          ? 'border-primary/40 bg-primary/5'
+                          ? 'border-primary/40 bg-primary-muted'
                           : 'border-border hover:bg-muted/30'
                       )}
                     >
@@ -720,7 +658,7 @@ export function ApiWebhooksPage() {
                     !webhookForm.nome.trim() ||
                     !webhookForm.url.trim()
                   }
-                  className="gradient-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="btn btn-primary"
                 >
                   {(createWebhook.isPending || updateWebhook.isPending) ? (
                     <>
@@ -730,13 +668,13 @@ export function ApiWebhooksPage() {
                   ) : (
                     <>
                       <Globe className="h-4 w-4" />
-                      {editingWebhookId ? 'Salvar alteracoes' : 'Criar webhook'}
+                      {editingWebhookId ? 'Salvar alterações' : 'Criar webhook'}
                     </>
                   )}
                 </button>
                 <button
                   onClick={handleCancelWebhookForm}
-                  className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                  className="btn btn-secondary"
                 >
                   Cancelar
                 </button>
@@ -762,14 +700,7 @@ export function ApiWebhooksPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {webhooks.map((webhook: {
-                id: string
-                nome: string
-                url: string
-                eventos: string[]
-                ativo: boolean
-                created_at: string
-              }) => (
+              {webhooks.map((webhook) => (
                 <div key={webhook.id} className="glass-card p-3 sm:p-4 space-y-3">
                   <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
                     <div className="min-w-0 flex-1 space-y-2">
@@ -778,7 +709,7 @@ export function ApiWebhooksPage() {
                         <h3 className="text-sm font-semibold text-foreground">{webhook.nome}</h3>
                         <span
                           className={cn(
-                            'inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-medium',
+                            'inline-flex items-center rounded-full px-2 py-0.5 text-[12px] font-medium',
                             webhook.ativo
                               ? 'bg-success-light text-success'
                               : 'bg-danger-light text-danger'
@@ -799,7 +730,7 @@ export function ApiWebhooksPage() {
                         {(webhook.eventos ?? []).map((evento: string) => (
                           <span
                             key={evento}
-                            className="inline-flex items-center rounded-full bg-primary-muted px-2 py-0.5 text-2xs font-medium text-primary"
+                            className="inline-flex items-center rounded-full bg-primary-muted px-2 py-0.5 text-[12px] font-medium text-primary"
                           >
                             {evento}
                           </span>
@@ -810,7 +741,7 @@ export function ApiWebhooksPage() {
                     <div className="flex items-center gap-2 shrink-0">
                       <Toggle
                         checked={webhook.ativo}
-                        onChange={() => toggleWebhook.mutateAsync(webhook.id)}
+                        onChange={() => toggleWebhook.mutate({ id: webhook.id, ativo: webhook.ativo })}
                         disabled={toggleWebhook.isPending}
                       />
                       <button
@@ -843,7 +774,7 @@ export function ApiWebhooksPage() {
                       ) : (
                         <ChevronRight className="h-3.5 w-3.5" />
                       )}
-                      Ultimos logs
+                      Últimos registros
                     </button>
 
                     {expandedLogs[webhook.id] && (
@@ -858,6 +789,6 @@ export function ApiWebhooksPage() {
           )}
         </div>
       )}
-    </div>
+    </PageContainer>
   )
 }

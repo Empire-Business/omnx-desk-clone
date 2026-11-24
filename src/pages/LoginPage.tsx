@@ -1,11 +1,39 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
+import { completeSaasSwitch, isSaasSwitchIntent } from '@/lib/saasSwitch'
+import { RECURSOS } from '@/config/recursos'
+import { BRAND } from '@/config/brand'
 import { OmnxLockup } from '@/components/icons/OmnxLockup'
+import { usePrimeiroAcessoAberto } from '@/hooks/usePrimeiroAcesso'
+import { PrimeiroAcessoForm } from '@/components/auth/PrimeiroAcessoForm'
 
-type Mode = 'login' | 'forgot' | 'otp-send' | 'otp-verify'
+type Mode = 'login' | 'forgot' | 'otp-send' | 'otp-verify' | 'primeiro-acesso'
+
+/**
+ * Marca do login. App da família OMNX: wordmark "OMNX" + nome curto do produto
+ * (visual do Clients). Outro nome de app (instalação de cliente): o selo neutro
+ * do OmnxLockup, que já segue o BRAND.
+ */
+function MarcaLogin({ variante }: { variante: 'arte' | 'clara' }) {
+  const arte = variante === 'arte'
+  if (!BRAND.familiaOmnx) {
+    return (
+      <span className={arte ? 'login-brand login-brand-art' : 'login-brand'}>
+        <OmnxLockup word={BRAND.appName} height={arte ? 30 : 32} variant={arte ? 'light' : 'dark'} />
+      </span>
+    )
+  }
+  return (
+    <span className={arte ? 'login-brand login-brand-art' : 'login-brand'}>
+      <img src={arte ? '/assets/logo-dark.svg' : '/assets/logo-light.svg'} alt="OMNX" />
+      <small>{BRAND.produto.toUpperCase()}</small>
+    </span>
+  )
+}
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -17,8 +45,14 @@ export function LoginPage() {
   const [success, setSuccess] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [mode, setMode] = useState<Mode>('login')
-  const { signIn, signInWithGoogle, sendOtp, verifyOtp, resetPassword } = useAuth()
+  const { signIn, signInWithEmpire, sendOtp, verifyOtp, resetPassword, signOut, refreshAccess } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const empireSsoStarted = useRef(false)
+  const switchCompletionStarted = useRef(false)
+  // Só true enquanto o app não tem administradora (o banco decide; na produção
+  // da empresa é sempre false). Ver src/lib/primeiroAcesso.ts.
+  const primeiroAcessoAberto = usePrimeiroAcessoAberto()
 
   function resetState() {
     setError('')
@@ -62,16 +96,73 @@ export function LoginPage() {
     }
   }
 
-  async function handleGoogleLogin() {
+  const handleEmpireLogin = useCallback(async () => {
     setError('')
+    setSubmitting(true)
     try {
-      await signInWithGoogle()
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Erro ao entrar com Google.'
-      )
+      const { data: currentSession, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError) throw sessionError
+      if (currentSession.session) {
+        const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' })
+        if (signOutError) throw signOutError
+      }
+      const intent = searchParams.get('sso_intent')
+      const redirectTo = isSaasSwitchIntent(intent)
+        ? `${window.location.origin}/login?empire_sso=complete&sso_intent=${encodeURIComponent(intent)}`
+        : undefined
+      await signInWithEmpire(redirectTo)
+    } catch {
+      setError('Não foi possível entrar com a High Ticket AI. Tente novamente.')
+      setSubmitting(false)
     }
-  }
+  }, [searchParams, signInWithEmpire])
+
+  useEffect(() => {
+    if (searchParams.get('empire_sso') !== '1' || empireSsoStarted.current) return
+    empireSsoStarted.current = true
+    void handleEmpireLogin()
+  }, [handleEmpireLogin, searchParams])
+
+  useEffect(() => {
+    if (searchParams.get('empire_sso') !== 'complete' || switchCompletionStarted.current) return
+    switchCompletionStarted.current = true
+    const intent = searchParams.get('sso_intent')
+
+    void (async () => {
+      setSubmitting(true)
+      try {
+        const state = await refreshAccess()
+        if (state.access?.state === 'password_change_required') {
+          navigate('/trocar-senha', { replace: true })
+          return
+        }
+        if (state.accessError || state.access?.state !== 'ok') throw new Error('access_unconfirmed')
+      } catch {
+        setError('Não foi possível confirmar o acesso. Tente novamente em instantes.')
+        setSubmitting(false)
+        return
+      }
+      const { data } = await supabase.auth.getSession()
+      const targetTenantId = isSaasSwitchIntent(intent) && data.session?.access_token
+        ? await completeSaasSwitch(intent, data.session.access_token).catch(() => null)
+        : null
+      const { data: profile } = targetTenantId && data.session
+        ? await supabase
+          .from('profiles')
+          .select('tenant_id')
+          .eq('user_id', data.session.user.id)
+          .maybeSingle()
+        : { data: null }
+      const tenantMatches = profile?.tenant_id === targetTenantId
+      if (tenantMatches) {
+        navigate('/', { replace: true })
+        return
+      }
+      await signOut()
+      setError('Não foi possível confirmar a conta desta plataforma. Entre novamente.')
+      setSubmitting(false)
+    })()
+  }, [navigate, searchParams, signOut, refreshAccess])
 
   function handleOtpChange(index: number, value: string) {
     // Paste handling — distribute across inputs
@@ -109,6 +200,7 @@ export function LoginPage() {
       case 'forgot': return 'Recuperar senha'
       case 'otp-send': return 'Entrar com código'
       case 'otp-verify': return 'Digite o código recebido'
+      case 'primeiro-acesso': return 'Criar a primeira conta'
       default: return 'Faça login para continuar'
     }
   }
@@ -131,25 +223,41 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md rounded-lg border border-border bg-card p-4 sm:p-6 lg:p-8 shadow-xl animate-fade-in">
-        {/* Logo */}
-        <div className="mb-6 sm:mb-8 text-center">
-          <div className="flex justify-center">
-            <OmnxLockup word="DESK" height={40} variant="dark" />
+    <div className="login-cume">
+      <div className="login-card animate-fade-in">
+        {/* Painel da montanha (visual copiado do OMNX Clients); some no celular */}
+        <aside className="login-art" aria-hidden>
+          <MarcaLogin variante="arte" />
+          <div>
+            <h2>Gestão do dia a dia, num só lugar.</h2>
+            <p>Atendimento, contratos e entregas da sua operação.</p>
           </div>
+        </aside>
+
+        <div className="login-form">
+        {/* Logo (só no celular) + título */}
+        <div className="mb-6 sm:mb-8 text-center">
+          <div className="mb-6 flex justify-center min-[761px]:hidden">
+            <MarcaLogin variante="clara" />
+          </div>
+          <h1 className="login-title">Bem-vindo ao {BRAND.appName}</h1>
           <p className="mt-3 text-sm text-muted-foreground">
             {getSubtitle()}
           </p>
         </div>
 
+        {mode === 'primeiro-acesso' && (
+          <PrimeiroAcessoForm onVoltar={() => { setMode('login'); resetState() }} />
+        )}
+
+        {mode !== 'primeiro-acesso' && (
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Email — shown in login, forgot, otp-send */}
           {mode !== 'otp-verify' && (
             <div className="space-y-1.5">
               <label
                 htmlFor="email"
-                className="block text-[13px] font-medium text-foreground tracking-wide"
+                className="block text-[15px] font-medium text-foreground"
               >
                 Email
               </label>
@@ -160,7 +268,7 @@ export function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="seu@email.com"
-                className="w-full rounded-sm border-[1.5px] border-input bg-muted px-3.5 py-2.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring focus:bg-card focus:shadow-[0_0_0_3px_var(--primary-glow)] transition-all"
+                className="input w-full"
               />
             </div>
           )}
@@ -168,21 +276,12 @@ export function LoginPage() {
           {/* Password — only in login mode */}
           {mode === 'login' && (
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="password"
-                  className="block text-[13px] font-medium text-foreground tracking-wide"
-                >
-                  Senha
-                </label>
-                <button
-                  type="button"
-                  onClick={() => { setMode('forgot'); resetState() }}
-                  className="text-[13px] text-accent hover:text-accent/80 transition-colors"
-                >
-                  Esqueci minha senha
-                </button>
-              </div>
+              <label
+                htmlFor="password"
+                className="block text-[15px] font-medium text-foreground"
+              >
+                Senha
+              </label>
               <div className="relative">
                 <input
                   id="password"
@@ -190,8 +289,8 @@ export function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full rounded-sm border-[1.5px] border-input bg-muted px-3.5 py-2.5 pr-10 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ring focus:bg-card focus:shadow-[0_0_0_3px_var(--primary-glow)] transition-all"
+                  placeholder="Sua senha"
+                  className="input w-full pr-10"
                 />
                 <button
                   type="button"
@@ -200,6 +299,15 @@ export function LoginPage() {
                   tabIndex={-1}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <div className="pt-1 text-right">
+                <button
+                  type="button"
+                  onClick={() => { setMode('forgot'); resetState() }}
+                  className="text-sm font-medium text-link hover:underline transition-colors"
+                >
+                  Esqueci minha senha
                 </button>
               </div>
             </div>
@@ -223,7 +331,7 @@ export function LoginPage() {
                     onChange={(e) => handleOtpChange(i, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(i, e)}
                     onFocus={(e) => e.target.select()}
-                    className="h-10 w-8 sm:h-12 sm:w-10 rounded-sm border-[1.5px] border-input bg-muted text-center text-base sm:text-lg font-semibold text-foreground focus:outline-none focus:border-ring focus:bg-card focus:shadow-[0_0_0_3px_var(--primary-glow)] transition-all"
+                    className="input h-11 w-9 px-0 text-center text-lg font-semibold sm:h-12 sm:w-11"
                   />
                 ))}
               </div>
@@ -237,7 +345,7 @@ export function LoginPage() {
           )}
 
           {success && (
-            <p className="rounded-sm bg-emerald-500/10 px-3 py-2 text-sm text-emerald-600 dark:text-emerald-400">
+            <p className="rounded-md bg-success-light px-3 py-2 text-sm text-success">
               {success}
             </p>
           )}
@@ -245,22 +353,44 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-sm bg-primary px-4 py-2.5 font-semibold text-primary-foreground tracking-wide shadow-md transition-all hover:bg-primary-hover hover:-translate-y-px hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-50"
+            className="btn btn-primary btn-lg w-full"
           >
             {getButtonLabel()}
           </button>
         </form>
+        )}
 
         {/* Login mode: show OTP alternative */}
         {mode === 'login' && (
-          <div className="mt-4 text-center">
+          <div className="mt-4 space-y-3 text-center">
+            <div className="login-divider" role="separator"><span>ou</span></div>
             <button
               type="button"
               onClick={() => { setMode('otp-send'); resetState() }}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="btn btn-secondary btn-lg w-full"
             >
               Entrar com código por email
             </button>
+            {RECURSOS.loginHtaiProvider && (
+              <button
+                type="button"
+                onClick={() => void handleEmpireLogin()}
+                disabled={submitting}
+                className="btn btn-secondary btn-lg w-full"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Entrar com High Ticket AI
+              </button>
+            )}
+            {primeiroAcessoAberto && (
+              <button
+                type="button"
+                onClick={() => { setMode('primeiro-acesso'); resetState() }}
+                className="btn btn-secondary btn-lg w-full"
+              >
+                Criar a primeira conta
+              </button>
+            )}
           </div>
         )}
 
@@ -275,7 +405,7 @@ export function LoginPage() {
             <button
               type="button"
               onClick={handleGoogleLogin}
-              className="flex w-full items-center justify-center gap-3 rounded-sm border-[1.5px] border-input bg-card px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted hover:-translate-y-px hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring/30"
+              className="btn btn-secondary btn-lg w-full"
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
@@ -310,7 +440,7 @@ export function LoginPage() {
                   }
                 }}
                 disabled={submitting}
-                className="text-sm text-accent hover:text-accent/80 transition-colors disabled:opacity-50"
+                className="text-sm text-link hover:underline transition-colors disabled:opacity-50"
               >
                 Reenviar código
               </button>
@@ -325,9 +455,9 @@ export function LoginPage() {
           </div>
         )}
 
-        {/* Gold bottom accent */}
-        <div className="mt-8 h-px bg-gradient-to-r from-accent to-transparent" />
+        </div>
       </div>
+      <p className="login-caption">Tecnologia que desenvolve pessoas.</p>
     </div>
   )
 }

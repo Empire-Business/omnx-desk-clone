@@ -66,7 +66,7 @@ export function UserAccessPanel({ user }: UserAccessPanelProps) {
         <div className="flex items-center justify-between mb-2">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Smartphone className="h-4 w-4 text-primary" />
-            Instâncias WhatsApp
+            Números de WhatsApp
           </h4>
           {!addingInstance && (
             <button
@@ -81,7 +81,7 @@ export function UserAccessPanel({ user }: UserAccessPanelProps) {
 
         {isAdminOrGerente && (
           <p className="text-xs text-muted-foreground mb-2 bg-muted/50 rounded-md px-2 py-1.5">
-            Admins e gerentes têm acesso a todas as instâncias automaticamente.
+            Administradores e gerentes têm acesso a todos os números automaticamente.
           </p>
         )}
 
@@ -129,7 +129,7 @@ export function UserAccessPanel({ user }: UserAccessPanelProps) {
           ))}
           {instanceAssignments.length === 0 && !isAdminOrGerente && (
             <p className="text-xs text-muted-foreground py-2">
-              Nenhuma instância atribuída. O usuário não verá conversas.
+              Nenhum número atribuído. A pessoa não verá conversas.
             </p>
           )}
         </div>
@@ -142,7 +142,7 @@ export function UserAccessPanel({ user }: UserAccessPanelProps) {
               onChange={(e) => setSelectedInstanceId(e.target.value)}
               className="flex-1 rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
-              <option value="">Selecione uma instância...</option>
+              <option value="">Selecione um número...</option>
               {availableInstances.map((inst) => (
                 <option key={inst.id} value={inst.id}>
                   {inst.nome} {inst.numero_whatsapp ? `(${formatPhone(inst.numero_whatsapp)})` : ''}

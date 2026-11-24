@@ -2,6 +2,7 @@
 // Fluxo: import/base64 -> convert (docx->pdf) -> export/url. Depois busca o PDF
 // e devolve em base64. A API key fica no secret CLOUDCONVERT_API_KEY.
 import { encodeBase64 } from 'https://deno.land/std@0.224.0/encoding/base64.ts'
+import { travaDeLicenca } from '../_shared/htai-licenca.ts'
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +21,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
+  // Licença HTAI (desligada sem HTAI_ENTITLEMENTS_MODE; ver docs/LICENCA-HTAI.md)
+  const licencaNegada = await travaDeLicenca(cors)
+  if (licencaNegada) return licencaNegada
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405)
 
   const KEY = Deno.env.get('CLOUDCONVERT_API_KEY')

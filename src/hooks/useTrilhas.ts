@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -61,6 +62,7 @@ export const trilhasKeys = {
   all: ['trilhas'] as const,
   list: (tipo?: 'interno' | 'cliente') => ['trilhas', 'list', tipo ?? 'all'] as const,
   detail: (id: string) => ['trilhas', 'detail', id] as const,
+  comAulas: (tipo: 'interno' | 'cliente') => ['trilhas', 'com-aulas', tipo] as const,
   progress: (userId: string) => ['trilhas', 'progress', userId] as const,
 }
 
@@ -80,6 +82,22 @@ export function useTrilhas(tipo?: 'interno' | 'cliente') {
       const { data, error } = await query
       if (error) throw error
       return data as LearningPath[]
+    },
+  })
+}
+
+/** Trilhas com módulos e aulas (contagens e progresso dos cartões de /aulas). Ordem: `trilhaOrdenada`. */
+export function useTrilhasComAulas(tipo: 'interno' | 'cliente') {
+  return useQuery({
+    queryKey: trilhasKeys.comAulas(tipo),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('learning_paths')
+        .select('*, learning_modules(*, learning_lessons(*))')
+        .eq('tipo', tipo)
+        .order('ordem', { ascending: true })
+      if (error) throw error
+      return data as LearningPathWithModules[]
     },
   })
 }
@@ -135,12 +153,12 @@ export function useMarkLessonComplete() {
       const { data, error } = await supabase
         .from('learning_progress')
         .upsert(
-          {
+          { ...({
             user_id: user.id,
             lesson_id: lessonId,
             concluido: true,
             concluido_em: new Date().toISOString(),
-          },
+          }), tenant_id: await tenantDaSessao() },
           { onConflict: 'user_id,lesson_id' },
         )
         .select()
@@ -169,7 +187,7 @@ export function useCreatePath() {
     }) => {
       const { data, error } = await supabase
         .from('learning_paths')
-        .insert({ ativo: true, ordem: 0, ...input })
+        .insert({ ...({ ativo: true, ordem: 0, ...input }), tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -192,14 +210,15 @@ export function useCreateModule() {
     }) => {
       const { data, error } = await supabase
         .from('learning_modules')
-        .insert({ ordem: 0, ...input })
+        .insert({ ...({ ordem: 0, ...input }), tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
       return data as LearningModule
     },
-    onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({ queryKey: trilhasKeys.detail(vars.path_id) })
+    onSuccess: () => {
+      // A trilha e os cartões da lista (contagem de módulos e aulas).
+      queryClient.invalidateQueries({ queryKey: trilhasKeys.all })
     },
   })
 }
@@ -209,7 +228,6 @@ export function useCreateLesson() {
   return useMutation({
     mutationFn: async (input: {
       module_id: string
-      path_id: string // used only for cache invalidation
       titulo: string
       descricao?: string
       tipo: 'video' | 'texto' | 'pdf' | 'link'
@@ -218,17 +236,17 @@ export function useCreateLesson() {
       duracao_minutos?: number
       ordem?: number
     }) => {
-      const { path_id: _path_id, ...insertInput } = input
       const { data, error } = await supabase
         .from('learning_lessons')
-        .insert({ ordem: 0, ...insertInput })
+        .insert({ ...({ ordem: 0, ...input }), tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
       return data as LearningLesson
     },
-    onSuccess: (_data, vars) => {
-      queryClient.invalidateQueries({ queryKey: trilhasKeys.detail(vars.path_id) })
+    onSuccess: () => {
+      // A trilha e os cartões da lista (contagem de módulos e aulas).
+      queryClient.invalidateQueries({ queryKey: trilhasKeys.all })
     },
   })
 }

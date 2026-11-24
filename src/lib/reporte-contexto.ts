@@ -1,3 +1,4 @@
+import { BRAND } from '@/config/brand'
 /**
  * Captura de contexto técnico para o Reporte de Erros.
  *
@@ -46,7 +47,7 @@ function detectarDispositivo(ua: string): string {
 /** Monta o contexto técnico atual. `rota` é o pathname da tela ativa. */
 export function capturarContexto(rota: string): ContextoReporte {
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
-  const appName = (import.meta.env.VITE_APP_NAME as string) || 'OMNX Desk'
+  const appName = BRAND.appName
   return {
     url: typeof window !== 'undefined' ? window.location.href : '',
     rota,

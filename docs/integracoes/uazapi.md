@@ -1,6 +1,7 @@
 # Integração UAZAPI — EmpireDesk
 
 > Documentação técnica da integração WhatsApp via UAZAPI
+> Atualizado em: 27/10/2026 às 10h40 BRT — recuperação de mensagens perdidas (UAZAPI /message/find).
 
 ---
 
@@ -38,9 +39,13 @@ Nome:  UAZAPI_TOKEN_{InstanceName}
 Valor: {Instance Token}
 ```
 
-**Exemplos:**
-- `UAZAPI_TOKEN_Cami` = `d2889a98-b9fa-43ea-b37c-5aafa83e16d9`
-- `UAZAPI_TOKEN_DESK` = `4654121c-ca3a-449b-be0d-126f6731a3e6`
+**Exemplos:** `UAZAPI_TOKEN_Cami`, `UAZAPI_TOKEN_DESK` (o valor fica **só** no
+painel de secrets do Supabase — nunca em documento ou código).
+
+> ⚠️ **Pendente (27/10/2026):** os tokens reais das instâncias Cami e DESK estavam
+> escritos neste documento e foram removidos, mas continuam no histórico do Git.
+> **Trocar os dois tokens no painel da UAZAPI** e atualizar os secrets
+> `UAZAPI_TOKEN_*` no Supabase.
 
 > O nome do secret deve corresponder EXATAMENTE ao `instance_id` cadastrado na tabela `whatsapp_instances`.
 
@@ -55,8 +60,30 @@ Em **Chat → Instâncias WhatsApp → Nova instância**:
 
 Na instância UAZAPI, configurar webhook com:
 - **URL:** `https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/uazapi-webhook`
+  — ou, com o número **protegido**, `…/uazapi-webhook/k/<token>` (ver abaixo)
 - **Eventos:** `messages`
-- **Excluir:** `wasSentByApi`, `isGroupYes`
+- **Excluir:** `wasSentByApi` (os grupos precisam chegar: a Íris e a análise de
+  clientes dependem deles — não exclua `isGroupYes` nos números usados por elas)
+
+#### Webhook protegido por token (27/10/2026)
+
+Pense numa **senha na campainha**: só quem sabe a senha toca e é atendido. Cada
+número ganha um token secreto no **caminho** do endereço do webhook
+(`/uazapi-webhook/k/<token>`).
+
+- Quem coloca: o botão **"Proteger conexão"** na aba Assistente de
+  `/automacoes-wa` (função `wa-agente-admin`, ação `proteger_webhook`). Ela gera
+  um token de 32 bytes, troca **só a URL** do webhook na UAZAPI (mantém eventos e
+  filtros), confere e grava no banco **apenas o sha256** (`wa_webhook_tokens`).
+  Rodar de novo = trocar a chave; a antiga vale mais 10 minutos.
+- O que muda no `uazapi-webhook`: token válido → a instância e a empresa vêm do
+  **token** (não do corpo). Sem token, token inválido ou instância divergente →
+  a mensagem é gravada no Chat como sempre, **mas a Íris não é acionada** e a
+  autoria por telefone/LID não vale (só `fromMe` conta como equipe).
+- O token **nunca** vai para log (o caminho é registrado como `/k/***`) nem
+  para a tela.
+- Fase final do plano: depois de todos os números protegidos, recusar webhook
+  sem token. Até lá, aceitar sem token evita perder mensagens do Chat.
 
 ---
 
@@ -66,7 +93,7 @@ Na instância UAZAPI, configurar webhook com:
 
 - **Path:** `supabase/functions/uazapi-webhook/index.ts`
 - **URL:** `https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/uazapi-webhook`
-- **verify_jwt:** `false` (webhook externo, sem auth)
+- **verify_jwt:** `false` (webhook externo; autenticação pelo token no caminho, ver acima)
 - **Método:** `POST`
 
 #### Payload recebido do UAZAPI
@@ -142,16 +169,82 @@ Resposta:
 
 #### Fluxo do webhook
 
-1. Valida `EventType` (`messages`, `messages.upsert`, etc.)
-2. Ignora mensagens `fromMe: true`
+1. Confere o token do caminho (`/k/<token>`), se houver
+2. Valida `EventType` (`messages`, `messages.upsert`, etc.)
 3. Extrai número do remetente de `sender_pn`
 4. Detecta tipo de mídia via `detectMedia()` (suporta `content` como objeto ou string JSON)
-5. **Se mídia:** chama `POST /message/download` no UAZAPI para obter URL pública
-6. Busca instância no DB por `instanceName`
-7. Faz upsert do contato (`chat_contacts`)
+5. **Se mídia:** chama `POST /message/download` no UAZAPI e guarda o arquivo no bucket `chat-media`
+6. Busca instância no DB (pelo token, quando protegido; senão por `instanceName`)
+7. Faz upsert do contato (`chat_contacts`); contato novo **herda o vínculo** confirmado do mesmo grupo/telefone (`cliente_canais`)
 8. Busca ou cria conversa aberta (`chat_conversations`)
-9. Insere mensagem (`chat_messages`) com dedup por `message_id_wpp`
-9. Atualiza `atualizado_em` da conversa
+9. Insere mensagem (`chat_messages`) com dedup por `message_id_wpp` e com a **autoria** (ver abaixo)
+10. Atualiza `atualizado_em` da conversa
+11. Se a mensagem chama a Íris num grupo liberado (e o número está protegido), põe o pedido na fila `wa_agente_pedidos`.
+    **Áudio** no grupo também entra: citando a Íris → gatilho `quote`; de membro da equipe sem menção/citação →
+    gatilho `audio` (o `wa-agente-responder` transcreve e só responde se o nome dela aparecer na fala)
+
+#### Autoria: quem escreveu cada mensagem (27/10/2026)
+
+Antes, só o que saía do próprio número da instância (`fromMe`) contava como
+equipe. Nos grupos dos clientes a equipe escreve do **celular pessoal**, então
+tudo virava "Cliente". Agora cada mensagem grava:
+
+| Coluna | Conteúdo |
+|---|---|
+| `autor_tipo` | `cliente`, `equipe`, `ia`, `sistema` ou `desconhecido` |
+| `autor_user_id` | Pessoa da equipe, quando reconhecida |
+| `autor_chave` | LID ou telefone do remetente no grupo |
+| `autor_nome` | Nome de exibição |
+| `autor_origem` | `webhook`, `backfill`, `heuristica_backfill`… |
+
+Equipe = número da empresa, membro da Íris ou **WhatsApp pessoal cadastrado** na
+aba Assistente (`equipe_identidades`). O LID (identificador de privacidade que o
+WhatsApp usa nos grupos) é aprendido pelo webhook e fica na linha do telefone.
+Reconhecimento por telefone/LID só com webhook protegido. Quem só foi reconhecido
+pelo nome **não** apaga "aguardando resposta" (nome é fácil de imitar). O gatilho
+`update_aguardando_resposta` passou a usar `autor_tipo`. Migration
+`20261027120000` (com backfill de 90 dias).
+
+#### Recuperar mensagens perdidas (27/10/2026)
+
+Se um número ficar sem mandar webhook (o Chat para de receber, mesmo "conectado"),
+a função `uazapi-recuperar-mensagens` busca na UAZAPI (`POST /chat/find` +
+`POST /message/find`, retenção de até 7 dias) as mensagens do período que não
+estão em `chat_messages` e as reenvia ao `uazapi-webhook` em **modo recuperação**
+(header `x-recuperacao`): grava com o horário original e não dispara push, Íris,
+robô nem CSAT. Chamada só pelo servidor (segredo `wa_auto_cron_secret`), primeiro
+com `dry_run` (padrão) para ver as contagens:
+
+```sql
+SELECT net.http_post(
+  url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/uazapi-recuperar-mensagens',
+  headers := jsonb_build_object('Content-Type','application/json','x-cron-secret', s.decrypted_secret),
+  body := '{"instance_uuid":"<uuid>","desde":"2026-10-26T02:00:00Z","dry_run":true}'::jsonb,
+  timeout_milliseconds := 150000)
+FROM vault.decrypted_secrets s WHERE s.name = 'wa_auto_cron_secret';
+-- resposta: SELECT content FROM net._http_response WHERE id = <id devolvido>;
+```
+
+Mensagens mais antigas que a retenção da UAZAPI só voltam com
+`POST /message/history-sync` (pede ao celular; não implementado).
+
+#### Transcrição de áudio e descrição de imagem (27/10/2026)
+
+O "Problema conhecido 4" (transcrição) foi resolvido **sem** a transcrição da
+UAZAPI/Whisper: cada áudio (e imagem sem legenda ou com legenda curta) que está
+no Storage entra na fila `chat_midia_texto`; a função `wa-midia-processar`
+(a cada 5 min) transcreve com **Gemini 2.5 Flash** e descreve imagens com
+**Gemini 2.5 Flash-Lite**, via OpenRouter (mesma chave já usada, com
+`data_collection: 'deny'`). Limites: 15 MB, 15 min de áudio, 300 por
+empresa/dia. Grupo interno nunca entra. No Chat, o áudio ganha **"Ver
+transcrição"**. Migration `20261027130000`.
+
+**Áudio para a Íris (grupo interno):** a fila acima não pega grupo interno, então
+o `wa-agente-responder` transcreve **na hora** o áudio que virou pedido (mesmo
+pedido ao OpenRouter, `_shared/wa-midia-transcrever.ts`; até 5 min de áudio) e
+grava o resultado como `ok` em `chat_midia_texto`. Se a mídia ainda não estiver
+no Storage, o pedido volta à fila até 3 vezes; depois a Íris responde que não
+conseguiu ouvir e pede para escrever. Migration `20261027160000`.
 
 ---
 
@@ -258,6 +351,10 @@ Body: { "number": "5521975218427", "presence": "composing|recording|paused", "de
 | `chat_conversations` | Conversas (aberta, em_atendimento, aguardando, encerrada) |
 | `chat_messages` | Mensagens (texto, audio, imagem, video, documento) |
 | `chat_departments` | Departamentos de atendimento |
+| `cliente_canais` | Vínculo grupo/telefone → cliente, válido em todos os números (27/10/2026) |
+| `equipe_identidades` | WhatsApp da equipe (números da empresa, membros da Íris, celular pessoal) |
+| `chat_midia_texto` | Transcrição de áudio / descrição de imagem |
+| `wa_webhook_tokens` | sha256 do token do webhook de cada número |
 
 ### Campos de `chat_messages`
 
@@ -269,6 +366,7 @@ Body: { "number": "5521975218427", "presence": "composing|recording|paused", "de
 | `enviado_por_agente` | bool | Se enviado por agente humano |
 | `enviado_por_ia` | bool | Se enviado por IA bot |
 | `message_id_wpp` | text | ID da mensagem no WhatsApp (deduplicação) |
+| `autor_tipo` / `autor_user_id` / `autor_chave` / `autor_nome` / `autor_origem` | text/uuid | Quem escreveu (27/10/2026) |
 
 ### Realtime
 
@@ -340,7 +438,9 @@ Body: { "number": "5521975218427", "presence": "composing|recording|paused", "de
 
 3. **Envio de mídia pelo agente** — Atualmente só texto é suportado no envio. Para enviar áudio/imagem/documento pelo chat, seria necessário usar o endpoint `/send/media`.
 
-4. **Transcrição de áudio** — O UAZAPI suporta transcrição via Whisper (OpenAI) no `POST /message/download` com `transcribe: true`. Requer chave OpenAI configurada na instância.
+4. ~~**Transcrição de áudio**~~ — resolvido em 27/10/2026 por `wa-midia-processar` (ver acima). A opção `transcribe: true` da UAZAPI (Whisper) não é usada.
+
+5. **Mesmo grupo em vários números** — `message_id_wpp` é único no banco: quando 2 números da empresa estão no mesmo grupo, a mensagem fica gravada só na conversa do número que recebeu primeiro. A linha do tempo por cliente (`cliente_timeline`) junta todas as cópias do grupo para a análise e para a Íris.
 
 ---
 
@@ -357,3 +457,8 @@ Body: { "number": "5521975218427", "presence": "composing|recording|paused", "de
 | 2026-03-10 | Tratamento de `content` como objeto ou string JSON |
 | 2026-03-10 | Download de mídia via `POST /message/download` (URL pública MP3) |
 | 2026-03-10 | Player de áudio funcional na UI do chat |
+| 2026-10-27 | Webhook protegido por token no caminho (`/uazapi-webhook/k/<token>`), botão "Proteger conexão" |
+| 2026-10-27 | Autoria das mensagens (`autor_*`, `equipe_identidades`) e "aguardando resposta" corrigido nos grupos |
+| 2026-10-27 | Transcrição de áudio e descrição de imagem (`wa-midia-processar`) |
+| 2026-10-27 | Íris entende áudio da equipe no grupo interno (gatilho `audio`, transcrição na hora) |
+| 2026-10-27 | Tokens reais removidos deste documento (trocar na UAZAPI: pendente) |

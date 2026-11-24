@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Activity, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
+import { Activity, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { AbasRolaveis } from '@/components/ui/AbasRolaveis'
+import { TabelaResponsiva } from '@/components/ui/TabelaResponsiva'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { usePermissoes } from '@/hooks/usePermissoes'
-import { supabase } from '@/lib/supabase'
-import { cn } from '@/lib/utils'
+import { useSaude } from '@/hooks/useSaude'
 
 /**
  * Painel de saúde do sistema (§19 do brief).
@@ -26,23 +27,6 @@ const JANELAS = [
   { horas: 24 * 30, label: '30 dias' },
 ] as const
 
-interface ResumoApp {
-  app: string
-  erros: number
-  avisos: number
-  ultimo: string | null
-}
-
-interface LinhaLog {
-  id: string
-  app: string
-  nivel: string
-  evento: string
-  mensagem: string | null
-  rota: string | null
-  created_at: string
-}
-
 function fmtQuando(iso: string | null): string {
   if (!iso) return '—'
   const d = new Date(iso)
@@ -53,30 +37,9 @@ export function SaudePage() {
   const { can, carregando } = usePermissoes()
   const [horas, setHoras] = useState<number>(24)
 
-  const { data: resumo, isLoading } = useQuery({
-    queryKey: ['saude', 'resumo', horas],
-    queryFn: async (): Promise<ResumoApp[]> => {
-      const { data, error } = await supabase.rpc('resumo_saude_apps' as never, { p_horas: horas } as never)
-      if (error) throw error
-      return (data ?? []) as unknown as ResumoApp[]
-    },
-    enabled: can('auditoria', 'admin'),
-  })
-
-  const { data: ultimos } = useQuery({
-    queryKey: ['saude', 'ultimos'],
-    queryFn: async (): Promise<LinhaLog[]> => {
-      const { data, error } = await supabase
-        .from('app_logs' as never)
-        .select('id, app, nivel, evento, mensagem, rota, created_at')
-        .eq('nivel', 'erro')
-        .order('created_at', { ascending: false })
-        .limit(30)
-      if (error) throw error
-      return (data ?? []) as unknown as LinhaLog[]
-    },
-    enabled: can('auditoria', 'admin'),
-  })
+  const saude = useSaude(horas, can('auditoria', 'admin'))
+  const { data: resumo, isLoading, isError: resumoFalhou } = saude.resumo
+  const { data: ultimos, isLoading: ultimosCarregando, isError: ultimosFalharam } = saude.ultimos
 
   if (carregando) return null
   // Mesmo gate da Auditoria: quem investiga incidente é quem lê os dois.
@@ -85,33 +48,24 @@ export function SaudePage() {
   const totalErros = (resumo ?? []).reduce((s, r) => s + Number(r.erros), 0)
 
   return (
-    <div className="space-y-6">
+    <PageContainer>
       <PageHeader
         title="Saúde do sistema"
         description="Erros registrados por app. Serve para descobrir o que está quebrando antes de alguém reclamar."
       />
 
-      <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-muted/40 p-1 w-fit">
-        {JANELAS.map((j) => (
-          <button
-            key={j.horas}
-            onClick={() => setHoras(j.horas)}
-            className={cn(
-              'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-              horas === j.horas
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {j.label}
-          </button>
-        ))}
-      </div>
+      <AbasRolaveis
+        variante="segmentado"
+        rotulo="Período"
+        itens={JANELAS.map((j) => ({ id: String(j.horas), rotulo: j.label, ativo: horas === j.horas, onClick: () => setHoras(j.horas) }))}
+      />
 
-      {isLoading ? (
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Carregando…
-        </p>
+      {resumoFalhou ? (
+        <p role="alert" className="text-sm text-danger">Não foi possível carregar o resumo deste período. Tente novamente.</p>
+      ) : isLoading ? (
+        <div role="status" aria-label="Carregando" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => <div key={i} className="sk h-24 rounded-lg" />)}
+        </div>
       ) : totalErros === 0 ? (
         <EmptyState
           icon={CheckCircle2}
@@ -130,7 +84,7 @@ export function SaudePage() {
                   <Activity className="h-4 w-4 text-muted-foreground" />
                 )}
               </div>
-              <p className="mt-2 font-display text-2xl font-bold tabular-nums text-foreground">
+              <p className="mt-2 t-h2 tabular-nums text-foreground">
                 {r.erros}
                 <span className="ml-1 text-xs font-normal text-muted-foreground">erro(s)</span>
               </p>
@@ -142,37 +96,26 @@ export function SaudePage() {
         </div>
       )}
 
-      {(ultimos?.length ?? 0) > 0 && (
+      {ultimosFalharam && <p role="alert" className="text-sm text-danger">Não foi possível carregar os últimos erros deste período.</p>}
+      {ultimosCarregando && <p role="status" className="text-sm text-muted-foreground">Carregando erros do período…</p>}
+      {!ultimosFalharam && (ultimos?.length ?? 0) > 0 && (
         <section>
-          <h2 className="mb-2 font-display text-base font-semibold text-foreground">Últimos erros</h2>
-          <div className="overflow-x-auto rounded-xl border border-border bg-card">
-            <table className="w-full text-sm">
-              <thead className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Quando</th>
-                  <th className="px-4 py-2 font-medium">App</th>
-                  <th className="px-4 py-2 font-medium">Evento</th>
-                  <th className="px-4 py-2 font-medium">Mensagem</th>
-                  <th className="px-4 py-2 font-medium">Tela</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {(ultimos ?? []).map((l) => (
-                  <tr key={l.id}>
-                    <td className="whitespace-nowrap px-4 py-2 text-muted-foreground">{fmtQuando(l.created_at)}</td>
-                    <td className="px-4 py-2 capitalize">{l.app}</td>
-                    <td className="px-4 py-2 font-mono text-xs">{l.evento}</td>
-                    <td className="max-w-md truncate px-4 py-2 text-muted-foreground" title={l.mensagem ?? ''}>
-                      {l.mensagem ?? '—'}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{l.rota ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <h2 className="t-h4 mb-2 text-foreground">Últimos erros do período</h2>
+          <p className="mb-3 text-[13px] text-muted-foreground">Até 30 registros mais recentes da janela selecionada.</p>
+          <TabelaResponsiva
+            rotulo="Últimos erros do período"
+            linhas={ultimos ?? []}
+            chave={(l) => String(l.id)}
+            colunas={[
+              { id: 'quando', titulo: 'Quando', principal: true, celula: (l) => fmtQuando(l.created_at) },
+              { id: 'app', titulo: 'App', celula: (l) => <span className="capitalize">{l.app}</span> },
+              { id: 'evento', titulo: 'Evento', celula: (l) => <span className="t-mono">{l.evento}</span> },
+              { id: 'mensagem', titulo: 'Mensagem', celula: (l) => <span className="line-clamp-2 break-words" title={l.mensagem ?? ''}>{l.mensagem ?? '—'}</span> },
+              { id: 'rota', titulo: 'Tela', celula: (l) => <span className="t-mono break-all text-muted-foreground">{l.rota ?? '—'}</span> },
+            ]}
+          />
         </section>
       )}
-    </div>
+    </PageContainer>
   )
 }

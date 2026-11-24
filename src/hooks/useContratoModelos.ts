@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
@@ -67,13 +68,13 @@ export function useUpsertModelo() {
           .eq('id', input.id)
         if (error) throw error
       } else {
-        const { error } = await tabela().insert({
+        const { error } = await tabela().insert({ ...({
           produto_id: input.produto_id,
           variante: input.variante,
           titulo: input.titulo,
           arquivo_nome: input.arquivo_nome,
           arquivo_b64: input.arquivo_b64,
-        })
+        }), tenant_id: await tenantDaSessao() })
         if (error) throw error
       }
     },

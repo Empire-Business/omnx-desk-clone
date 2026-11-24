@@ -366,7 +366,7 @@ export function DisparoPage() {
             </div>
 
             {todasTags.length > 0 && (
-              <Campo rotulo="Tags do contrato" opcional>
+              <Campo rotulo="Etiquetas do contrato" opcional>
                 <div className="flex flex-wrap gap-2">
                   {todasTags.map((t) => (
                     <PillTag
@@ -845,7 +845,7 @@ function Pill({ ativo, onClick, children }: {
       onClick={onClick}
       aria-pressed={ativo}
       className={cn(
-        'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+        'inline-flex min-h-11 items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-0',
         ativo
           ? 'border-primary bg-primary text-primary-foreground'
           : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground',
@@ -873,7 +873,7 @@ function PillTag({ ativo, cor, onClick, children }: {
       onClick={onClick}
       aria-pressed={ativo}
       className={cn(
-        'inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+        'inline-flex h-11 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:h-7',
         ativo ? '' : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
       )}
       style={ativo ? { backgroundColor: `${cor}1a`, color: cor, borderColor: `${cor}55` } : undefined}

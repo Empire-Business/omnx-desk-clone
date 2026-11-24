@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Heart, Star } from 'lucide-react'
 import { useNpsSurvey, useNpsResponses, useSubmitResponse } from '@/hooks/useNps'
 import { cn } from '@/lib/utils'
+import { BRAND } from '@/config/brand'
 
 // ─── Confetti ────────────────────────────────────────────────────────────────
 
@@ -308,7 +309,7 @@ export function PortalNpsPage() {
         />
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          Powered by <span className="font-medium text-primary">OMNX Desk</span>
+          Powered by <span className="font-medium text-primary">{BRAND.appName}</span>
         </p>
       </div>
     </div>

@@ -1,21 +1,31 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { buscarSituacaoMfa, MFA_NADA_EXIGIDO } from '@/lib/mfa'
 
 /**
  * True se o usuário logado é admin do tenant MESTRE — quem pode criar empresas.
  * Usa a RPC is_master_admin (guarda no banco); o front só decide o que mostrar.
+ * `mfaPendente`: no app instalado, é superadmin mas a sessão ainda não passou
+ * pela verificação em duas etapas (o banco só libera com aal2).
  */
 export function useIsMasterAdmin() {
   const [isMaster, setIsMaster] = useState(false)
+  const [mfaPendente, setMfaPendente] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [versao, setVersao] = useState(0)
+  const recarregar = useCallback(() => setVersao((v) => v + 1), [])
 
   useEffect(() => {
     let alive = true
     ;(async () => {
       try {
-        const { data, error } = await supabase.rpc('is_master_admin' as never)
+        const [{ data, error }, mfa] = await Promise.all([
+          supabase.rpc('is_master_admin' as never),
+          buscarSituacaoMfa().catch(() => MFA_NADA_EXIGIDO),
+        ])
         if (!alive) return
         setIsMaster(error ? false : Boolean(data))
+        setMfaPendente(mfa.pendente)
       } catch {
         if (alive) setIsMaster(false)
       } finally {
@@ -25,9 +35,9 @@ export function useIsMasterAdmin() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [versao])
 
-  return { isMaster, loading }
+  return { isMaster, mfaPendente, loading, recarregar }
 }
 
 export interface ProvisionInput {

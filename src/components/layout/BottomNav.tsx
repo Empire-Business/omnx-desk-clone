@@ -1,103 +1,172 @@
-import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Users, MessageSquare, Package } from 'lucide-react'
+import { useState } from 'react'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { CircleHelp, LogOut, Menu, Moon, Sun } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useTheme } from '@/hooks/useTheme'
 import { useInboxUnreadConversationCount } from '@/hooks/useChat'
+import { useUnreadCount } from '@/hooks/useNotifications'
+import { useAcessoNavegacao } from '@/hooks/useAcessoNavegacao'
+import { ITENS_BARRA_INFERIOR, ITENS_MAIS, itemAtivo, type ContadorNav } from '@/config/navegacao'
+import { PainelInferior, LinhaPainel } from '@/components/ui/PainelInferior'
+import { useAjuda } from '@/components/ajuda/ajudaContexto'
 import { cn } from '@/lib/utils'
 
-type Item = {
-  to: string
-  label: string
-  icon: React.ComponentType<{ className?: string }>
-  match?: (pathname: string) => boolean
+interface BottomNavProps {
+  /**
+   * `true` (padrão): presa ao rodapé da tela, por cima do conteúdo (o `main`
+   * reserva o espaço). `false`: no fluxo do layout — usado em Conversas, que
+   * ocupa a altura total e não pode ter nada por cima do campo de mensagem.
+   */
+  fixa?: boolean
 }
 
-const ITEMS: Item[] = [
-  { to: '/', label: 'Início', icon: LayoutDashboard, match: (p) => p === '/' },
-  { to: '/clientes', label: 'Clientes', icon: Users, match: (p) => p.startsWith('/clientes') },
-  { to: '/chat', label: 'Chat', icon: MessageSquare, match: (p) => p.startsWith('/chat') },
-  { to: '/entregas', label: 'Entregas', icon: Package, match: (p) => p.startsWith('/entregas') },
-]
+/**
+ * Barra inferior do celular: Início, Conversas, Tickets, Contratos e "Mais".
+ * Aparece em TODA tela abaixo de 768 px (`md:hidden`) — o mesmo ponto em que a
+ * barra lateral some. Antes ela sumia em 640 px e deixava a faixa 640–767 px
+ * sem nenhum menu.
+ */
+export function BottomNav({ fixa = true }: BottomNavProps) {
+  const { pathname } = useLocation()
+  const { pode } = useAcessoNavegacao()
+  const contadores = useContadores()
+  const [maisAberto, setMaisAberto] = useState(false)
 
-export function BottomNav() {
-  const { user } = useAuth()
-  const totalUnread = useInboxUnreadConversationCount()
-
-  const initials = (user?.nome ?? user?.email ?? '??').slice(0, 2).toUpperCase()
+  const itens = ITENS_BARRA_INFERIOR.filter((i) => pode(i.acesso))
+  const maisAtivo = ITENS_MAIS.some((i) => itemAtivo(i, pathname))
 
   return (
-    <nav
-      className={cn(
-        'sm:hidden fixed bottom-0 inset-x-0 z-40',
-        'border-t border-border bg-card/95 backdrop-blur-sm',
-        'pb-[env(safe-area-inset-bottom)]',
-      )}
-    >
-      <div className="flex h-14 items-stretch">
-        {ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.to === '/'}
-            className={({ isActive }) => {
-              const active = item.match ? item.match(window.location.pathname) : isActive
-              return cn(
-                'relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors',
-                active
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground',
-              )
-            }}
-          >
-            {({ isActive }) => {
-              const active = item.match ? item.match(window.location.pathname) : isActive
-              return (
-                <>
-                  <div className="relative">
-                    <item.icon className="h-5 w-5" />
-                    {item.to === '/chat' && totalUnread > 0 && (
-                      <span className="absolute -top-1.5 -right-2 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
-                        {totalUnread > 99 ? '99+' : totalUnread}
-                      </span>
-                    )}
-                  </div>
-                  <span className={cn('text-[10px] font-medium', active && 'font-semibold')}>{item.label}</span>
-                </>
-              )
-            }}
-          </NavLink>
-        ))}
-
-        {/* Avatar → Configurações */}
-        <NavLink
-          to="/configuracoes"
-          className={({ isActive }) =>
-            cn(
-              'relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors',
-              isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
-            )
-          }
-        >
-          {({ isActive }) => (
-            <>
-              <div
-                className={cn(
-                  'h-6 w-6 rounded-full overflow-hidden flex items-center justify-center text-[10px] font-bold',
-                  isActive
-                    ? 'ring-2 ring-primary ring-offset-1 ring-offset-card bg-primary-muted text-primary'
-                    : 'bg-muted text-muted-foreground',
-                )}
+    <>
+      <nav
+        aria-label="Navegação principal"
+        className={cn(
+          // DS `.bnav`: 64 px, cartão 94% com desfoque leve, borda fina em cima, área segura.
+          'md:hidden z-40 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-[8px]',
+          fixa ? 'fixed inset-x-0 bottom-0' : 'shrink-0',
+        )}
+      >
+        <div className="flex h-16 items-stretch">
+          {itens.map((item) => {
+            const ativo = itemAtivo(item, pathname)
+            const n = item.contador ? contadores[item.contador] : 0
+            return (
+              <NavLink
+                key={item.id}
+                to={item.rota}
+                aria-current={ativo ? 'page' : undefined}
+                className={cn(CLASSE_BOTAO, ativo ? CLASSE_ATIVO : CLASSE_INATIVO)}
               >
-                {user?.foto_url ? (
-                  <img src={user.foto_url} alt={user.nome ?? ''} className="h-full w-full object-cover" />
-                ) : (
-                  initials
-                )}
-              </div>
-              <span className={cn('text-[10px] font-medium', isActive && 'font-semibold')}>Você</span>
-            </>
-          )}
-        </NavLink>
-      </div>
-    </nav>
+                <span className="relative">
+                  <item.icone className={cn(CLASSE_ICONE, ativo && '-translate-y-px')} aria-hidden />
+                  {n > 0 && (
+                    <span className="count is-primary absolute -top-1.5 left-[calc(50%+6px)] h-4 min-w-4 px-1 text-[10px] shadow-[0_0_0_2px_var(--card)]">
+                      {n > 99 ? '99+' : n}
+                      <span className="sr-only"> não lidas</span>
+                    </span>
+                  )}
+                </span>
+                <span className="max-w-full truncate px-1 text-[11px] font-semibold">{item.rotulo}</span>
+              </NavLink>
+            )
+          })}
+          <button
+            type="button"
+            onClick={() => setMaisAberto(true)}
+            aria-haspopup="dialog"
+            aria-expanded={maisAberto}
+            aria-current={maisAtivo ? 'page' : undefined}
+            className={cn(CLASSE_BOTAO, maisAtivo ? CLASSE_ATIVO : CLASSE_INATIVO)}
+          >
+            <span className="relative">
+              <Menu className={cn(CLASSE_ICONE, maisAtivo && '-translate-y-px')} aria-hidden />
+              {contadores.notificacoes > 0 && (
+                <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-destructive shadow-[0_0_0_2px_var(--card)]" aria-hidden />
+              )}
+            </span>
+            <span className="text-[11px] font-semibold">Mais{contadores.notificacoes > 0 && <span className="sr-only"> (há notificações não lidas)</span>}</span>
+          </button>
+        </div>
+      </nav>
+
+      <PainelMais aberto={maisAberto} onFechar={() => setMaisAberto(false)} contadores={contadores} />
+    </>
+  )
+}
+
+// DS `.bnav button`: alvo ≥ 48 px, ícone 21 px, rótulo 11 px 600; ativo em
+// azul com um traço de 2 px no topo e o ícone subindo 1 px.
+const CLASSE_BOTAO = cn(
+  'group relative flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-[3px] transition-colors duration-fast ease-std',
+  'focus-visible:outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]',
+)
+const CLASSE_ATIVO =
+  'text-link before:absolute before:inset-x-[30%] before:top-0 before:h-0.5 before:rounded-b-sm before:bg-primary before:content-[""]'
+const CLASSE_INATIVO = 'text-muted-foreground hover:text-foreground'
+const CLASSE_ICONE = 'h-[21px] w-[21px] transition-transform duration-base ease-out group-active:scale-90'
+
+function useContadores(): Record<ContadorNav, number> {
+  const conversas = useInboxUnreadConversationCount()
+  const { data: notificacoes = 0 } = useUnreadCount()
+  return { conversas, notificacoes }
+}
+
+/** Painel "Mais": o resto do menu, com as MESMAS regras da barra lateral. */
+function PainelMais({
+  aberto,
+  onFechar,
+  contadores,
+}: {
+  aberto: boolean
+  onFechar: () => void
+  contadores: Record<ContadorNav, number>
+}) {
+  const navigate = useNavigate()
+  const { user, signOut } = useAuth()
+  const { theme, toggleTheme } = useTheme()
+  const { pode } = useAcessoNavegacao()
+  const { abrirMenu } = useAjuda()
+
+  const itens = ITENS_MAIS.filter((i) => pode(i.acesso))
+  const ir = (rota: string) => { onFechar(); navigate(rota) }
+  const nome = user?.nome ?? user?.email?.split('@')[0] ?? 'Você'
+
+  return (
+    <PainelInferior aberto={aberto} onFechar={onFechar} titulo="Mais opções" descricao={nome}>
+      {aberto && (
+        <div className="space-y-0.5">
+          {itens.map((item) => (
+            <LinhaPainel
+              key={item.id}
+              icone={item.icone}
+              rotulo={item.rotulo}
+              descricao={item.descricao}
+              contador={item.contador ? contadores[item.contador] : undefined}
+              onClick={() => ir(item.rota)}
+            />
+          ))}
+          <LinhaPainel
+            icone={CircleHelp}
+            rotulo="Ajuda"
+            descricao="Perguntar à Íris, reportar um problema ou abrir o manual."
+            onClick={() => { onFechar(); abrirMenu() }}
+          />
+          <div className="my-1 border-t border-border" />
+          <LinhaPainel
+            icone={theme === 'dark' ? Sun : Moon}
+            rotulo={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
+            onClick={toggleTheme}
+          />
+          <LinhaPainel
+            icone={LogOut}
+            rotulo="Sair"
+            destrutivo
+            onClick={() => {
+              onFechar()
+              void signOut().then(() => navigate('/login')).catch(() => {})
+            }}
+          />
+        </div>
+      )}
+    </PainelInferior>
   )
 }

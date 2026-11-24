@@ -16,7 +16,7 @@ const labelClass = 'block text-sm font-medium text-foreground mb-1.5'
 
 const PROFILE_OPTIONS: { value: UserProfile; label: string }[] = [
   { value: 'admin', label: 'Admin' },
-  { value: 'gerente', label: 'Gerente' },
+  { value: 'gerente', label: 'Gestor' },
   { value: 'atendimento', label: 'Atendimento' },
   { value: 'estrategista', label: 'Estrategista' },
 ]

@@ -1,3 +1,5 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
+import { sessaoDeskLiberada } from '../_shared/desk-session.ts'
 // Edge function: cami-deliveries
 //
 // Lê content_cards + content_approvals do projeto cami-plataforma-lb e devolve
@@ -17,7 +19,7 @@
 //   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY (omnx — já existem)
 //   CAMI_SUPABASE_URL, CAMI_SERVICE_ROLE_KEY (do cami-plataforma-lb)
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -141,7 +143,7 @@ async function listAllAuthEmails(client: SupabaseClient): Promise<Map<string, st
   return map
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405, headers: corsHeaders })
@@ -171,7 +173,7 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: auth } },
     })
     const { data: u } = await userClient.auth.getUser()
-    if (!u.user) return json({ error: 'unauthorized' }, 401)
+    if (!u.user || !await sessaoDeskLiberada(userClient)) return json({ error: 'unauthorized' }, 401)
 
     const omnxAdmin = createClient(supabaseUrl, serviceKey)
     const { data: profile } = await omnxAdmin

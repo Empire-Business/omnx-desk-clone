@@ -1,3 +1,4 @@
+import type { TablesUpdate } from '@/integrations/supabase/types'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -5,13 +6,10 @@ import {
   DollarSign,
   Plug,
   Settings,
-  Eye,
-  EyeOff,
   Copy,
   Check,
   Save,
   Smartphone,
-  Handshake,
   FileBarChart,
   Building2,
   UserCog,
@@ -23,10 +21,15 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { PermissoesMatriz } from '@/components/admin/PermissoesMatriz'
+import { PapeisResumo } from '@/components/admin/PapeisResumo'
 import { useAppSettings, useSaveAppSetting } from '@/hooks/useAppSettings'
 import { useInstances } from '@/hooks/useChat'
 import { supabase } from '@/lib/supabase'
+import { SUPABASE_URL } from '@/integrations/supabase/client'
+import { BRAND } from '@/config/brand'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { AbasRolaveis } from '@/components/ui/AbasRolaveis'
 import { cn, formatPhone } from '@/lib/utils'
 import type { InstanceCategoria } from '@/types/database'
 import { instanceCorHex } from '@/lib/instanceColors'
@@ -36,7 +39,7 @@ import { instanceCorHex } from '@/lib/instanceColors'
 type SettingsTab = 'chat' | 'cobranca' | 'permissoes' | 'integracoes' | 'sistema'
 
 const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
-  { id: 'chat', label: 'Chat', icon: MessageSquare },
+  { id: 'chat', label: 'Conversas', icon: MessageSquare },
   { id: 'cobranca', label: 'Cobrança', icon: DollarSign },
   { id: 'permissoes', label: 'Permissões', icon: ShieldCheck },
   { id: 'integracoes', label: 'Integrações', icon: Plug },
@@ -44,12 +47,12 @@ const SETTINGS_TABS: Array<{ id: SettingsTab; label: string; icon: React.Compone
 ]
 
 const QUICK_LINKS = [
-  { label: 'Interações', description: 'Histórico de interações com clientes', icon: Handshake, to: '/interacoes' },
+  // "Interações" (/interacoes) saiu: a tela não existe mais e o cartão abria tela em branco.
   { label: 'Relatórios', description: 'Relatórios e métricas da plataforma', icon: FileBarChart, to: '/relatorios' },
   { label: 'Departamentos', description: 'Gestão de departamentos e equipes', icon: Building2, to: '/departamentos' },
   { label: 'Colaboradores', description: 'Cadastro e permissões de colaboradores', icon: UserCog, to: '/colaboradores' },
-  { label: 'API & Webhooks', description: 'Chaves de API e webhooks outbound', icon: Key, to: '/api-webhooks' },
-  { label: 'Auditoria', description: 'Log de auditoria e ações do sistema', icon: Shield, to: '/auditoria' },
+  { label: 'Chaves de acesso', description: 'Ligue o Desk a outros sistemas (chaves e avisos automáticos)', icon: Key, to: '/api-webhooks' },
+  { label: 'Registro de ações', description: 'Quem fez o quê no sistema, e quando', icon: Shield, to: '/auditoria' },
 ]
 
 // ─── Reusable components ──────────────────────────────────────────────────────
@@ -71,7 +74,7 @@ function Toggle({ checked, onChange, disabled }: {
       aria-checked={checked}
     >
       <span className={cn(
-        'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition duration-200',
+        'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-pop ring-0 transition duration-200',
         checked ? 'translate-x-5' : 'translate-x-0',
       )} />
     </button>
@@ -81,10 +84,10 @@ function Toggle({ checked, onChange, disabled }: {
 function FieldLabel({ children, hint }: { children: React.ReactNode; hint?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-2">
-      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+      <label className="text-[12.5px] font-semibold text-fg-2">
         {children}
       </label>
-      {hint && <span className="text-[11px] text-muted-foreground/70">{hint}</span>}
+      {hint && <span className="text-[12px] text-muted-foreground">{hint}</span>}
     </div>
   )
 }
@@ -107,10 +110,7 @@ function InputField({ label, value, onChange, type = 'text', placeholder, suffix
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className={cn(
-            'w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all',
-            suffix && 'pr-14',
-          )}
+          className={cn('input w-full', suffix && 'pr-14')}
         />
         {suffix && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground">
@@ -131,7 +131,7 @@ function SaveButton({ onClick, saving, saved }: {
     <button
       onClick={onClick}
       disabled={saving}
-      className="gradient-primary flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+      className="btn btn-primary"
     >
       {saving ? (
         <>
@@ -197,7 +197,7 @@ function InstanceCategoriaManager() {
   const { data: instances = [], refetch } = useInstances(null)
   const [updating, setUpdating] = useState<string | null>(null)
 
-  async function handleUpdate(instanceId: string, patch: Record<string, unknown>) {
+  async function handleUpdate(instanceId: string, patch: TablesUpdate<'whatsapp_instances'>) {
     setUpdating(instanceId)
     await supabase.from('whatsapp_instances').update(patch).eq('id', instanceId)
     setUpdating(null)
@@ -207,7 +207,7 @@ function InstanceCategoriaManager() {
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
-        Configure visibilidade, categoria e cor de cada instância. Instâncias inativas não aparecem no seletor de envio.
+        Configure visibilidade, categoria e cor de cada número. Números inativos não aparecem no seletor de envio.
       </p>
       {instances.map(inst => (
         <div key={inst.id} className="flex flex-col gap-3 rounded-lg border border-border px-3 py-2.5 bg-card sm:flex-row sm:items-center sm:justify-between">
@@ -248,7 +248,7 @@ function InstanceCategoriaManager() {
         </div>
       ))}
       {instances.length === 0 && (
-        <p className="text-xs text-muted-foreground py-2">Nenhuma instância cadastrada.</p>
+        <p className="text-xs text-muted-foreground py-2">Nenhum número de WhatsApp cadastrado.</p>
       )}
     </div>
   )
@@ -260,8 +260,8 @@ function SettingsBlock({ title, description, children }: { title: string; descri
   return (
     <div className="space-y-4">
       <div className="space-y-1">
-        <h3 className="text-base font-bold text-foreground">{title}</h3>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+        <h3 className="t-h4 text-foreground">{title}</h3>
+        {description && <p className="text-[13px] text-muted-foreground">{description}</p>}
       </div>
       <div className="space-y-4">{children}</div>
     </div>
@@ -277,7 +277,6 @@ export function AdminPage() {
   const saveSetting = useSaveAppSetting()
   const ss = useSettingsState(settings)
   const [saving, setSaving] = useState(false)
-  const [showApiKey, setShowApiKey] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
 
   async function saveSettings(keys: string[]) {
@@ -300,19 +299,19 @@ export function AdminPage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <PageContainer>
       <PageHeader
-        title="Painel administrativo"
-        description="Acesso rápido aos módulos de gestão e configurações globais da plataforma."
+        title="Quem pode o quê"
+        description="O que cada perfil pode ver e fazer, e as configurações gerais da empresa."
       />
 
       {/* ── Acesso rápido ────────────────────────────────────────────────── */}
       <section className="space-y-3">
         <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-muted text-primary">
             <Zap className="h-3.5 w-3.5" />
           </span>
-          <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">Acesso rápido</h2>
+          <h2 className="t-h4 text-foreground">Acesso rápido</h2>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {QUICK_LINKS.map((tool) => (
@@ -321,12 +320,12 @@ export function AdminPage() {
               onClick={() => navigate(tool.to)}
               className="glass-card flex items-center gap-3 p-4 text-left hover:bg-muted/30 hover:border-primary/20 transition-all group"
             >
-              <div className="rounded-lg bg-primary/10 p-2.5 shrink-0 group-hover:bg-primary/20 transition-colors">
+              <div className="rounded-lg bg-primary-muted p-2.5 shrink-0 group-hover:bg-primary/20 transition-colors">
                 <tool.icon className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-foreground">{tool.label}</p>
-                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{tool.description}</p>
+                <p className="mt-0.5 truncate text-[12.5px] text-muted-foreground">{tool.description}</p>
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0 group-hover:text-foreground group-hover:translate-x-0.5 transition-all" />
             </button>
@@ -337,30 +336,17 @@ export function AdminPage() {
       {/* ── Configurações ───────────────────────────────────────────────── */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-muted text-primary">
             <Sliders className="h-3.5 w-3.5" />
           </span>
-          <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">Configurações</h2>
+          <h2 className="t-h4 text-foreground">Configurações</h2>
         </div>
 
-        {/* Tabs */}
-        <div className="glass-card p-1 inline-flex overflow-x-auto scrollbar-hide">
-          {SETTINGS_TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={cn(
-                'flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap',
-                tab === t.id
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
-              )}
-            >
-              <t.icon className="h-4 w-4" />
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {/* Abas */}
+        <AbasRolaveis
+          rotulo="Seções de configuração"
+          itens={SETTINGS_TABS.map((t) => ({ id: t.id, rotulo: t.label, icone: t.icon, ativo: tab === t.id, onClick: () => setTab(t.id) }))}
+        />
 
         {/* Painel */}
         <div className="glass-card p-5 sm:p-6 space-y-6 animate-fade-in">
@@ -368,7 +354,7 @@ export function AdminPage() {
           {/* ── Chat ── */}
           {tab === 'chat' && (
             <>
-              <SettingsBlock title="Chat" description="Tempos de resposta, mensagens automáticas e identificação do agente.">
+              <SettingsBlock title="Conversas" description="Tempos de resposta, mensagens automáticas e identificação do agente.">
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <InputField
                     label="SLA primeira resposta"
@@ -404,7 +390,7 @@ export function AdminPage() {
                     onChange={(e) => ss.set('chat_greeting_message', e.target.value)}
                     placeholder="Olá! Seja bem-vindo. Como posso ajudá-lo?"
                     rows={3}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none"
+                    className="textarea w-full resize-none"
                   />
                 </div>
 
@@ -446,7 +432,7 @@ export function AdminPage() {
 
               <div className="border-t border-border" />
 
-              <SettingsBlock title="Instâncias WhatsApp" description="Defina categoria, cor e status de cada instância conectada.">
+              <SettingsBlock title="Números de WhatsApp" description="Defina categoria, cor e situação de cada número conectado.">
                 <InstanceCategoriaManager />
               </SettingsBlock>
             </>
@@ -471,7 +457,7 @@ export function AdminPage() {
               </div>
 
               <InputField
-                label="Máx. envios por hora por instância"
+                label="Máx. envios por hora por número"
                 value={ss.get('cobranca_max_envios_hora', '30')}
                 onChange={(v) => ss.set('cobranca_max_envios_hora', v)}
                 type="number"
@@ -516,49 +502,36 @@ export function AdminPage() {
           {/* ── Integrações ── */}
           {tab === 'integracoes' && (
             <SettingsBlock title="Integrações" description="Credenciais de serviços externos e URLs de webhook.">
-              <div className="space-y-1.5">
-                <FieldLabel>OpenRouter API Key</FieldLabel>
-                <div className="relative">
-                  <input
-                    type={showApiKey ? 'text' : 'password'}
-                    value={ss.get('openrouter_api_key', '')}
-                    onChange={(e) => ss.set('openrouter_api_key', e.target.value)}
-                    placeholder="sk-or-..."
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2.5 pr-12 text-sm text-foreground font-mono placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                  />
-                  <button
-                    onClick={() => setShowApiKey((v) => !v)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
+              {/* A chave da IA (OpenRouter) não fica mais aqui: app_settings é lido pelo
+                  navegador, e chave secreta só mora nos segredos das funções
+                  (OPENROUTER_API_KEY). Nenhuma função lia este campo. */}
+              <div className="rounded-lg bg-bg-1 ring-hairline px-3 py-2.5 text-[13px] text-muted-foreground">
+                A chave da inteligência artificial (OpenRouter) fica guardada nos segredos do servidor, não nesta tela.
+                Para trocar, peça ao responsável técnico pelo app.
               </div>
 
               <InputField
-                label="UAZAPI Server URL"
-                value={ss.get('uazapi_server_url', 'https://empirebusiness.uazapi.com')}
+                label="Endereço do servidor UAZAPI"
+                value={ss.get('uazapi_server_url', '')}
                 onChange={(v) => ss.set('uazapi_server_url', v)}
-                placeholder="https://empirebusiness.uazapi.com"
+                placeholder="https://suaempresa.uazapi.com"
               />
+              <p className="-mt-2 text-xs text-muted-foreground">
+                Usado quando a aba Conexão das Automações não tem um endereço salvo. Precisa ser um endereço https da uazapi.com.
+              </p>
 
               <div className="space-y-1.5">
                 <FieldLabel hint="somente leitura">Webhook URL</FieldLabel>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     type="text"
-                    value="https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/uazapi-webhook"
+                    value={`${SUPABASE_URL}/functions/v1/uazapi-webhook`}
                     readOnly
-                    className="flex-1 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm text-foreground font-mono cursor-default"
+                    className="input mono min-w-0 flex-1 cursor-default text-[13px]"
                   />
                   <button
-                    onClick={() => copyToClipboard('https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/uazapi-webhook', 'webhook')}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm transition-colors',
-                      copied === 'webhook'
-                        ? 'bg-success/10 text-success border-success/30'
-                        : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
-                    )}
+                    onClick={() => copyToClipboard(`${SUPABASE_URL}/functions/v1/uazapi-webhook`, 'webhook')}
+                    className={cn('btn btn-secondary', copied === 'webhook' && 'text-success')}
                   >
                     {copied === 'webhook' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     {copied === 'webhook' ? 'Copiado' : 'Copiar'}
@@ -568,7 +541,7 @@ export function AdminPage() {
 
               <div className="flex justify-end pt-2">
                 <SaveButton
-                  onClick={() => saveSettings(['openrouter_api_key', 'uazapi_server_url'])}
+                  onClick={() => saveSettings(['uazapi_server_url'])}
                   saving={saving}
                   saved={ss.saved}
                 />
@@ -577,21 +550,26 @@ export function AdminPage() {
           )}
 
           {/* ── Permissões por app (Fase 2) ── */}
-          {tab === 'permissoes' && <PermissoesMatriz />}
+          {tab === 'permissoes' && (
+            <>
+              <PapeisResumo />
+              <PermissoesMatriz />
+            </>
+          )}
 
           {/* ── Sistema ── */}
           {tab === 'sistema' && (
             <SettingsBlock title="Sistema" description="Identidade do app e políticas de retenção. Afeta todos os usuários.">
               <InputField
                 label="Nome do aplicativo"
-                value={ss.get('app_name', 'OMNX Desk')}
+                value={ss.get('app_name', BRAND.appName)}
                 onChange={(v) => ss.set('app_name', v)}
-                placeholder="OMNX Desk"
+                placeholder={BRAND.appName}
               />
 
               <div className="space-y-1.5">
                 <FieldLabel hint="detectado automaticamente">Fuso horário</FieldLabel>
-                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm text-foreground">
+                <div className="rounded-md border border-stroke-subtle bg-muted px-3 py-2.5 text-sm text-foreground">
                   {Intl.DateTimeFormat().resolvedOptions().timeZone}
                 </div>
               </div>
@@ -601,7 +579,7 @@ export function AdminPage() {
                 <select
                   value={ss.get('data_retention_days', '365')}
                   onChange={(e) => ss.set('data_retention_days', e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                  className="select w-full"
                 >
                   <option value="90">90 dias</option>
                   <option value="180">180 dias</option>
@@ -623,6 +601,6 @@ export function AdminPage() {
 
         </div>
       </section>
-    </div>
+    </PageContainer>
   )
 }

@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import {
   StickyNote, Search, Pin, PinOff, Trash2, Copy, Bold, Italic, Code,
   List, Hash, Paperclip, X, ChevronDown, ChevronRight,
-  Download, Loader2, Send, Pencil, Check, User, Contact, AtSign,
+  Download, Loader2, Send, Check, User, Contact, AtSign,
   Maximize2, Minimize2, Bell, BellOff, ArrowUpDown, Files,
   Palette,
 } from 'lucide-react'
 import { cn, formatPhone } from '@/lib/utils'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuth } from '@/contexts/AuthContext'
 import { useIsMobile } from '@/hooks/useMediaQuery'
 import { useUsers } from '@/hooks/useUsers'
@@ -21,6 +22,7 @@ import {
   uploadNoteMedia,
   type PersonalNote,
 } from '@/hooks/usePersonalNotes'
+import { BRAND } from '@/config/brand'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -45,10 +47,10 @@ const COLOR_DOT: Record<string, string> = {
 }
 
 const TAG_COLORS = [
-  'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-  'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
-  'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
-  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+  'bg-info-light text-info',
+  'bg-success-light text-success',
+  'bg-iris-light text-iris-fg',
+  'bg-warning-light text-warning',
   'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300',
   'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
   'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
@@ -134,7 +136,6 @@ function renderMarkdown(
   const lines = content.split('\n')
   const result: React.ReactNode[] = []
   let listItems: React.ReactNode[] = []
-  let listStartIdx = 0
 
   const flushList = () => {
     if (listItems.length > 0) {
@@ -187,8 +188,8 @@ function renderMarkdown(
           <button key={k} onClick={() => onMentionClick(first.extra as 'user' | 'contact', first.inner)}
             className={cn('inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[12px] font-semibold transition-colors',
               isUser
-                ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 hover:bg-violet-200'
-                : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200',
+                ? 'bg-primary-light text-link hover:bg-primary-200'
+                : 'bg-success-light text-success hover:opacity-80',
             )}>
             {isUser ? <User className="h-3 w-3" /> : <Contact className="h-3 w-3" />}
             @{first.inner}
@@ -248,7 +249,6 @@ function renderMarkdown(
         </div>
       )
     } else if (line.startsWith('- ')) {
-      listStartIdx = lineIdx
       listItems.push(
         <li key={`li-${lineIdx}`} className="flex items-start gap-1.5 text-sm">
           <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
@@ -314,7 +314,7 @@ function MentionPicker({
   if (allItems.length === 0) return null
 
   return (
-    <div className="absolute bottom-full mb-2 left-0 right-0 z-50 rounded-xl border border-border bg-card shadow-xl overflow-hidden max-h-64 overflow-y-auto">
+    <div className="absolute bottom-full mb-2 left-0 right-0 z-50 rounded-xl bg-popover shadow-pop ring-hairline overflow-hidden max-h-64 overflow-y-auto animate-fade-in-up">
       {filteredUsers.length > 0 && (
         <div>
           <div className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border bg-muted/40">
@@ -325,9 +325,9 @@ function MentionPicker({
             return (
               <button key={u.id} onClick={() => onSelect(u.nome ?? '', 'user', u.id)}
                 className={cn('w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors',
-                  idx === activeIndex ? 'bg-violet-50 dark:bg-violet-900/30' : 'hover:bg-muted')}>
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-violet-100 dark:bg-violet-900/50 shrink-0">
-                  <User className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+                  idx === activeIndex ? 'bg-primary-light' : 'hover:bg-accent')}>
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-light shrink-0">
+                  <User className="h-3.5 w-3.5 text-link" />
                 </span>
                 <span className="font-medium">{u.nome}</span>
                 <span className="ml-auto text-[11px] text-muted-foreground capitalize">{u.perfil}</span>
@@ -346,9 +346,9 @@ function MentionPicker({
             return (
               <button key={c.id} onClick={() => onSelect(c.nome ?? '', 'contact', c.id)}
                 className={cn('w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors',
-                  idx === activeIndex ? 'bg-emerald-50 dark:bg-emerald-900/30' : 'hover:bg-muted')}>
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50 shrink-0">
-                  <Contact className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  idx === activeIndex ? 'bg-success-light' : 'hover:bg-accent')}>
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success-light shrink-0">
+                  <Contact className="h-3.5 w-3.5 text-success" />
                 </span>
                 <span className="font-medium">{c.nome}</span>
                 {c.numero_whatsapp && <span className="ml-auto text-[11px] text-muted-foreground">{formatPhone(c.numero_whatsapp)}</span>}
@@ -367,7 +367,6 @@ function FullscreenEditor({
   note,
   onSave,
   onClose,
-  onMentionClick,
 }: {
   note: PersonalNote
   onSave: (title: string | null, content: string) => void
@@ -407,18 +406,20 @@ function FullscreenEditor({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className={cn('w-full max-w-2xl h-[80vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden', colorInfo.card)}>
+    // Celular: tela inteira (o teclado não esconde o campo). Computador: janela de 80% da altura visível (dvh).
+    <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-[var(--scrim)] animate-fade-in sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-label="Editar anotação">
+      <div className={cn('flex w-full flex-col overflow-hidden h-dvh pb-[env(safe-area-inset-bottom)] sm:pb-0 sm:h-[80dvh] sm:max-h-[calc(100dvh-2rem)] sm:max-w-2xl sm:rounded-xl sm:shadow-modal sm:ring-hairline animate-modal-in', colorInfo.card)}>
         {/* Header */}
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
+        <div className="safe-area-top flex items-center gap-2 px-3 sm:px-4 py-2 border-b border-border shrink-0">
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="Título (opcional)"
-            className="flex-1 bg-transparent text-base font-semibold text-foreground placeholder:text-muted-foreground outline-none"
+            aria-label="Título da anotação"
+            className="min-h-10 min-w-0 flex-1 bg-transparent text-[17px] font-[650] text-foreground placeholder:text-fg-placeholder outline-none"
           />
-          <button onClick={onClose} className="rounded-md p-1.5 text-muted-foreground hover:bg-muted transition-colors">
-            <Minimize2 className="h-4 w-4" />
+          <button type="button" onClick={onClose} className="btn btn-ghost btn-icon" aria-label="Fechar editor" title="Fechar">
+            <Minimize2 aria-hidden />
           </button>
         </div>
         {/* Editor */}
@@ -443,20 +444,22 @@ function FullscreenEditor({
                 }
               }
             }}
-            className="w-full h-full resize-none bg-transparent px-5 py-4 text-sm text-foreground placeholder:text-muted-foreground outline-none"
-            placeholder="Escreva aqui... (@ para mencionar, **negrito**, *itálico*, `código`, - lista, - [ ] checklist)"
+            aria-label="Texto da anotação"
+            className="w-full h-full resize-none bg-transparent px-4 sm:px-5 py-4 text-base sm:text-sm leading-relaxed text-foreground placeholder:text-fg-placeholder outline-none"
+            placeholder="Escreva aqui… (@ para mencionar, **negrito**, *itálico*, - lista, - [ ] checklist)"
           />
         </div>
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border shrink-0">
-          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground px-3 py-1.5 rounded transition-colors">
+        <div className="flex items-center justify-end gap-2 px-3 sm:px-4 py-2.5 border-t border-border shrink-0 max-sm:[&>*]:flex-1">
+          <button type="button" onClick={onClose} className="btn btn-secondary">
             Cancelar
           </button>
           <button
+            type="button"
             onClick={() => { onSave(title.trim() || null, content.trim()); onClose() }}
-            className="flex items-center gap-1.5 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-1.5 rounded-lg transition-colors"
+            className="btn btn-primary"
           >
-            <Check className="h-3.5 w-3.5" />
+            <Check aria-hidden />
             Salvar
           </button>
         </div>
@@ -473,7 +476,6 @@ function NoteCard({
   onDelete,
   onCopy,
   onDuplicate,
-  onSave,
   onColorChange,
   onReminderChange,
   onMentionClick,
@@ -503,15 +505,15 @@ function NoteCard({
       className={cn(
         'group relative rounded-xl border border-border shadow-sm transition-shadow hover:shadow-md',
         colorInfo.card,
-        note.pinned && 'ring-1 ring-amber-300 dark:ring-amber-700',
+        note.pinned && 'ring-1 ring-note-border',
       )}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => { setShowActions(false); setShowColorPicker(false); setShowReminderInput(false) }}
     >
       {/* Pin badge */}
       {note.pinned && (
-        <div className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/50 z-10">
-          <Pin className="h-2.5 w-2.5 text-amber-600 dark:text-amber-400" />
+        <div className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-note ring-1 ring-note-border z-10">
+          <Pin className="h-2.5 w-2.5 text-note-fg" />
         </div>
       )}
 
@@ -556,7 +558,7 @@ function NoteCard({
           <div className={cn('mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
             reminderPast
               ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-              : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+              : 'bg-info-light text-info',
           )}>
             <Bell className="h-3 w-3" />
             {formatReminderLabel(note.reminder_at)}
@@ -602,7 +604,7 @@ function NoteCard({
           <button onClick={() => { setShowReminderInput(v => !v); setShowColorPicker(false) }} title="Lembrete"
             className={cn('rounded p-1 transition-colors',
               note.reminder_at
-                ? 'text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30'
+                ? 'text-link hover:bg-primary-light'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
             <Bell className="h-3.5 w-3.5" />
           </button>
@@ -705,7 +707,7 @@ export default function ChatAnotacoesPage() {
       if (diff > 0 && diff < 60000) {
         const timeout = setTimeout(() => {
           if (Notification.permission === 'granted') {
-            new Notification('🔔 Lembrete — OMNX Desk', {
+            new Notification(`🔔 Lembrete — ${BRAND.appName}`, {
               body: note.title ?? note.content.slice(0, 80),
             })
           }
@@ -759,8 +761,9 @@ export default function ChatAnotacoesPage() {
   }, [showTagInput])
 
   const handleMentionClick = useCallback((type: 'user' | 'contact', name: string) => {
-    if (type === 'user') navigate('/chat/equipe')
-    else navigate(`/chat?cliente=${encodeURIComponent(name)}`)
+    // Pessoa da equipe não tem tela própria: a menção fica só como destaque.
+    if (type === 'user') return
+    navigate(`/conversas?cliente=${encodeURIComponent(name)}`)
   }, [navigate])
 
   const handleDraftChange = useCallback((value: string, cursorPos?: number) => {
@@ -905,51 +908,55 @@ export default function ChatAnotacoesPage() {
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Header */}
-      <div className="shrink-0 border-b border-border bg-card px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
-            <StickyNote className="h-4 w-4 text-primary" />
-          </div>
+      <div className="shrink-0 border-b border-border bg-card px-4 py-2.5 sm:px-6 md:px-8">
+        <div className="flex items-center gap-3 min-h-11">
           <div className="flex-1 min-w-0">
             {showSearch ? (
-              <div className="flex items-center gap-2">
-                <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
-                  placeholder="Buscar por título ou conteúdo..."
-                  className="flex-1 bg-muted rounded-md px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground outline-none border border-border focus:border-primary/50" />
-                <button onClick={() => { setShowSearch(false); setSearch('') }}
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-                  <X className="h-4 w-4" />
+              <div className="flex items-center gap-2 animate-fade-in">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                  <input autoFocus value={search} onChange={e => setSearch(e.target.value)}
+                    type="search"
+                    aria-label="Buscar anotações"
+                    placeholder="Buscar por título ou conteúdo…"
+                    className="input !pl-9" />
+                </div>
+                <button type="button" onClick={() => { setShowSearch(false); setSearch('') }}
+                  className="btn btn-ghost btn-icon" aria-label="Fechar busca">
+                  <X aria-hidden />
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-base font-semibold text-foreground">Minhas Anotações</h1>
-                  {notes.length > 0 && <p className="text-xs text-muted-foreground">{notes.length} anotaç{notes.length === 1 ? 'ão' : 'ões'}</p>}
+              <div className="flex items-center gap-1">
+                <div className="flex min-w-0 flex-1 items-baseline gap-2">
+                  <h1 className="m-0 truncate font-display text-[22px] sm:text-[24px] font-[750] leading-tight tracking-[-0.016em] [font-stretch:108%] text-foreground">Minhas anotações</h1>
+                  {notes.length > 0 && <span className="count" aria-label={`${notes.length} anotações`}>{notes.length}</span>}
                 </div>
                 {/* Sort */}
                 <div className="relative">
-                  <button onClick={() => setShowSortMenu(v => !v)}
-                    className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-                    <ArrowUpDown className="h-3.5 w-3.5" />
+                  <button type="button" onClick={() => setShowSortMenu(v => !v)}
+                    aria-expanded={showSortMenu}
+                    aria-label={`Ordenar: ${SORT_LABELS[sortBy]}`}
+                    className="btn btn-ghost max-sm:w-11 max-sm:px-0">
+                    <ArrowUpDown aria-hidden />
                     <span className="hidden sm:inline">{SORT_LABELS[sortBy]}</span>
                   </button>
                   {showSortMenu && (
-                    <div className="absolute right-0 top-full mt-1 z-20 rounded-lg border border-border bg-card shadow-lg overflow-hidden min-w-[150px]">
+                    <div className="absolute right-0 top-full mt-1 z-20 rounded-xl bg-popover shadow-pop ring-hairline overflow-hidden w-[min(200px,calc(100vw-2rem))] py-1 animate-fade-in-up">
                       {(Object.keys(SORT_LABELS) as SortOption[]).map(opt => (
-                        <button key={opt} onClick={() => { setSortBy(opt); setShowSortMenu(false) }}
-                          className={cn('w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors hover:bg-muted',
-                            sortBy === opt && 'text-primary font-medium')}>
-                          {sortBy === opt && <Check className="h-3.5 w-3.5" />}
+                        <button type="button" key={opt} onClick={() => { setSortBy(opt); setShowSortMenu(false) }}
+                          className={cn('w-full flex min-h-11 sm:min-h-9 items-center gap-2 px-3 py-2 text-sm text-left transition-colors duration-fast hover:bg-accent',
+                            sortBy === opt && 'text-link font-medium')}>
+                          {sortBy === opt && <Check className="h-3.5 w-3.5" aria-hidden />}
                           <span className={sortBy === opt ? '' : 'ml-5'}>{SORT_LABELS[opt]}</span>
                         </button>
                       ))}
                     </div>
                   )}
                 </div>
-                <button onClick={() => setShowSearch(true)}
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-                  <Search className="h-4 w-4" />
+                <button type="button" onClick={() => setShowSearch(true)}
+                  className="btn btn-ghost btn-icon" aria-label="Buscar anotações" title="Buscar">
+                  <Search aria-hidden />
                 </button>
               </div>
             )}
@@ -958,10 +965,10 @@ export default function ChatAnotacoesPage() {
 
         {/* Tag filter */}
         {allTags.length > 0 && (
-          <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            <button onClick={() => setActiveTag(undefined)}
-              className={cn('shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors',
-                !activeTag ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80')}>
+          <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide" role="group" aria-label="Filtrar por etiqueta">
+            <button type="button" onClick={() => setActiveTag(undefined)}
+              aria-pressed={!activeTag}
+              className="chip shrink-0 focus-ds">
               Todas
             </button>
             {allTags.map(tag => (
@@ -978,30 +985,37 @@ export default function ChatAnotacoesPage() {
       {/* Notes feed */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="grid gap-3 px-4 py-4 sm:px-6 md:grid-cols-2 md:px-8" aria-busy="true" aria-label="Carregando anotações">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="grid gap-2 rounded-xl bg-card ring-hairline p-4">
+                <div className="sk h-4 w-1/2" />
+                <div className="sk h-3 w-full" />
+                <div className="sk h-3 w-4/5" />
+              </div>
+            ))}
           </div>
         ) : notes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted mb-4">
-              <StickyNote className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <p className="text-base font-medium text-foreground mb-1">
-              {search || activeTag ? 'Nenhuma anotação encontrada' : 'Nenhuma anotação ainda'}
-            </p>
-            <p className="text-sm text-muted-foreground max-w-xs">
-              {search || activeTag ? 'Tente ajustar sua busca ou filtro.' : 'Suas anotações aparecem aqui. Escreva algo abaixo para começar.'}
-            </p>
+          <div className="px-4 py-6 sm:px-6 md:px-8">
+            <EmptyState
+              icon={StickyNote}
+              title={search || activeTag ? 'Nenhuma anotação encontrada' : 'Nenhuma anotação ainda'}
+              description={search || activeTag ? 'Tente outra palavra ou tire o filtro de etiqueta.' : 'Suas anotações aparecem aqui. Escreva algo no campo abaixo para começar.'}
+              action={search || activeTag ? (
+                <button type="button" className="btn btn-secondary" onClick={() => { setSearch(''); setActiveTag(undefined) }}>Limpar busca</button>
+              ) : undefined}
+            />
           </div>
         ) : (
-          <div className="px-4 py-4 space-y-4 pb-4">
+          <div className="px-4 py-4 sm:px-6 md:px-8 space-y-6 pb-4">
             {pinned.length > 0 && (
               <div>
-                <button onClick={() => setPinnedOpen(v => !v)}
-                  className="flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-3 hover:opacity-80 transition-opacity">
-                  {pinnedOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                  <Pin className="h-3 w-3" />
-                  Fixadas ({pinned.length})
+                <button type="button" onClick={() => setPinnedOpen(v => !v)}
+                  aria-expanded={pinnedOpen}
+                  className="t-h6 flex min-h-8 items-center gap-2 !text-note-fg mb-2 rounded-sm hover:opacity-80 transition-opacity duration-fast focus-ds">
+                  {pinnedOpen ? <ChevronDown className="h-3.5 w-3.5" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden />}
+                  <Pin className="h-3 w-3" aria-hidden />
+                  Fixadas
+                  <span className="count">{pinned.length}</span>
                 </button>
                 {pinnedOpen && (
                   <div className={cn('space-y-3', !isMobile && 'grid grid-cols-2 gap-3 space-y-0')}>
@@ -1025,7 +1039,7 @@ export default function ChatAnotacoesPage() {
             )}
             {groups.map(group => (
               <div key={group.label}>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">{group.label}</p>
+                <p className="t-h6 mb-2">{group.label}</p>
                 <div className={cn('space-y-3', !isMobile && 'grid grid-cols-2 gap-3 space-y-0')}>
                   {group.notes.map(note => (
                     <NoteCard key={note.id} note={note}
@@ -1049,7 +1063,7 @@ export default function ChatAnotacoesPage() {
       </div>
 
       {/* Compose area */}
-      <div className="shrink-0 border-t border-border bg-card px-4 pt-3 pb-4">
+      <div className="shrink-0 border-t border-border bg-card px-4 sm:px-6 md:px-8 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:pb-4">
         {/* Color bar */}
         {showColorBar && (
           <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border">
@@ -1065,10 +1079,11 @@ export default function ChatAnotacoesPage() {
         {/* Reminder bar */}
         {showReminderInput && (
           <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border">
-            <Bell className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+            <Bell className="h-3.5 w-3.5 text-link shrink-0" aria-hidden />
             <input type="datetime-local" value={draftReminder}
               onChange={e => setDraftReminder(e.target.value)}
-              className="flex-1 rounded-md border border-border bg-muted px-2 py-1 text-xs outline-none focus:border-primary/50" />
+              aria-label="Data e hora do lembrete"
+              className="input !h-8 min-w-0 flex-1 !text-[13px] max-sm:!h-10 max-sm:!text-base" />
             {draftReminder && (
               <button onClick={() => setDraftReminder('')} className="text-muted-foreground hover:text-foreground transition-colors">
                 <X className="h-3.5 w-3.5" />
@@ -1082,30 +1097,32 @@ export default function ChatAnotacoesPage() {
           value={draftTitle}
           onChange={e => setDraftTitle(e.target.value)}
           placeholder="Título (opcional)"
-          className="w-full bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none mb-1.5 border-b border-transparent focus:border-border transition-colors pb-1"
+          aria-label="Título da nova anotação"
+          className="w-full bg-transparent text-base sm:text-sm font-medium text-foreground placeholder:text-fg-placeholder outline-none mb-1.5 border-b border-transparent focus:border-border transition-colors duration-fast pb-1"
         />
 
-        {/* Toolbar */}
-        <div className="flex items-center gap-1 mb-2">
-          <button onClick={() => applyFormat('**')} title="Negrito" className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><Bold className="h-3.5 w-3.5" /></button>
-          <button onClick={() => applyFormat('*')} title="Itálico" className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><Italic className="h-3.5 w-3.5" /></button>
-          <button onClick={() => applyFormat('`')} title="Código" className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><Code className="h-3.5 w-3.5" /></button>
-          <button onClick={() => applyFormat('- ', false)} title="Lista" className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><List className="h-3.5 w-3.5" /></button>
-          <button onClick={() => applyFormat('- [ ] ', false)} title="Checklist"
-            className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-            <Check className="h-3.5 w-3.5" />
+        {/* Toolbar — rola de lado se não couber no celular */}
+        <div className="flex items-center gap-0.5 mb-2 overflow-x-auto scrollbar-hide">
+          <button type="button" onClick={() => applyFormat('**')} title="Negrito" aria-label="Negrito" className="btn btn-ghost btn-icon btn-sm shrink-0"><Bold aria-hidden /></button>
+          <button type="button" onClick={() => applyFormat('*')} title="Itálico" aria-label="Itálico" className="btn btn-ghost btn-icon btn-sm shrink-0"><Italic aria-hidden /></button>
+          <button type="button" onClick={() => applyFormat('`')} title="Código" aria-label="Código" className="btn btn-ghost btn-icon btn-sm shrink-0"><Code aria-hidden /></button>
+          <button type="button" onClick={() => applyFormat('- ', false)} title="Lista" aria-label="Lista" className="btn btn-ghost btn-icon btn-sm shrink-0"><List aria-hidden /></button>
+          <button type="button" onClick={() => applyFormat('- [ ] ', false)} title="Lista de tarefas" aria-label="Lista de tarefas"
+            className="btn btn-ghost btn-icon btn-sm shrink-0">
+            <Check aria-hidden />
           </button>
 
-          <div className="w-px h-4 bg-border mx-1" />
+          <div className="w-px h-4 bg-border mx-1 shrink-0" aria-hidden />
 
           {/* Tag */}
-          <div className="relative">
-            <button onClick={() => setShowTagInput(v => !v)} title="Tag" className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"><Hash className="h-3.5 w-3.5" /></button>
+          <div className="relative shrink-0">
+            <button type="button" onClick={() => setShowTagInput(v => !v)} title="Etiqueta" aria-label="Etiqueta" aria-expanded={showTagInput} className="btn btn-ghost btn-icon btn-sm"><Hash aria-hidden /></button>
             {showTagInput && (
-              <div className="absolute bottom-full left-0 mb-2 z-10 bg-card border border-border rounded-lg shadow-md p-2 min-w-[180px]">
+              <div className="absolute bottom-full left-0 mb-2 z-10 rounded-xl bg-popover shadow-pop ring-hairline p-2 w-[min(220px,calc(100vw-2rem))] animate-fade-in-up">
                 <input ref={tagInputRef} value={tagInput} onChange={e => setTagInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTag(tagInput) } if (e.key === 'Escape') setShowTagInput(false) }}
-                  placeholder="nome da tag..." className="w-full rounded-md bg-muted px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground outline-none" />
+                  aria-label="Nome da etiqueta"
+                  placeholder="nome da etiqueta…" className="input !h-8 !text-[13px] max-sm:!h-10 max-sm:!text-base" />
                 {allTags.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1">
                     {allTags.filter(t => !draftTags.includes(t)).slice(0, 8).map(tag => (
@@ -1118,27 +1135,27 @@ export default function ChatAnotacoesPage() {
           </div>
 
           {/* Color */}
-          <button onClick={() => { setShowColorBar(v => !v); setShowReminderInput(false) }} title="Cor"
-            className={cn('rounded p-1.5 transition-colors', showColorBar || draftColor !== 'default' ? 'text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
-            <Palette className="h-3.5 w-3.5" />
+          <button type="button" onClick={() => { setShowColorBar(v => !v); setShowReminderInput(false) }} title="Cor" aria-label="Cor" aria-pressed={showColorBar}
+            className={cn('btn btn-ghost btn-icon btn-sm shrink-0', (showColorBar || draftColor !== 'default') && '!text-link')}>
+            <Palette aria-hidden />
           </button>
 
           {/* Reminder */}
-          <button onClick={() => { setShowReminderInput(v => !v); setShowColorBar(false) }} title="Lembrete"
-            className={cn('rounded p-1.5 transition-colors', showReminderInput || draftReminder ? 'text-blue-500' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
-            <Bell className="h-3.5 w-3.5" />
+          <button type="button" onClick={() => { setShowReminderInput(v => !v); setShowColorBar(false) }} title="Lembrete" aria-label="Lembrete" aria-pressed={showReminderInput}
+            className={cn('btn btn-ghost btn-icon btn-sm shrink-0', (showReminderInput || draftReminder) && '!text-link')}>
+            <Bell aria-hidden />
           </button>
 
           {/* Attach */}
-          <button onClick={() => fileInputRef.current?.click()} title="Anexar" disabled={uploading}
-            className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+          <button type="button" onClick={() => fileInputRef.current?.click()} title="Anexar arquivo" aria-label="Anexar arquivo" disabled={uploading}
+            className="btn btn-ghost btn-icon btn-sm shrink-0">
+            {uploading ? <Loader2 className="animate-spin" aria-hidden /> : <Paperclip aria-hidden />}
           </button>
           <input ref={fileInputRef} type="file" accept="image/*,.pdf,.docx,.xlsx,.zip" className="hidden" onChange={handleFileUpload} />
 
-          <div className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground">
-            <AtSign className="h-3 w-3" />
-            <span className="hidden sm:inline">mencionar</span>
+          <div className="ml-auto flex shrink-0 items-center gap-1 pl-2 text-[12px] text-muted-foreground">
+            <AtSign className="h-3 w-3" aria-hidden />
+            <span className="hidden sm:inline">use @ para mencionar</span>
           </div>
         </div>
 
@@ -1164,21 +1181,23 @@ export default function ChatAnotacoesPage() {
             value={draft}
             onChange={e => handleDraftChange(e.target.value, e.target.selectionStart ?? undefined)}
             onKeyDown={handleKeyDown}
-            placeholder="Escreva uma anotação... (@ mencionar, - [ ] checklist, Enter para enviar)"
+            placeholder="Escreva uma anotação… (Enter para salvar)"
+            aria-label="Nova anotação"
             rows={2}
             className={cn(
-              'flex-1 resize-none rounded-lg border border-border px-3 py-2.5',
-              'text-sm text-foreground placeholder:text-muted-foreground',
-              'outline-none focus:border-primary/50 transition-colors scrollbar-hide overflow-hidden',
+              'min-w-0 flex-1 resize-none rounded-md border border-input px-3 py-2.5',
+              'text-base sm:text-sm text-foreground placeholder:text-fg-placeholder',
+              'outline-none transition-[border-color,box-shadow] duration-fast focus:border-ring focus:shadow-[0_0_0_3px_var(--primary-glow)] scrollbar-hide overflow-hidden',
               noteCardColor(draftColor).card,
             )}
             style={{ minHeight: '48px', maxHeight: '192px' }}
           />
-          <button onClick={handleSend}
+          <button type="button" onClick={handleSend}
             disabled={(!draft.trim() && draftTags.length === 0) || addNote.isPending}
-            className={cn('shrink-0 flex items-center justify-center h-10 w-10 rounded-lg transition-colors',
-              draft.trim() || draftTags.length > 0 ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
-            {addNote.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            aria-label="Salvar anotação"
+            title="Salvar anotação"
+            className="btn btn-primary btn-icon shrink-0">
+            {addNote.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
           </button>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   User,
   Palette,
@@ -12,7 +13,7 @@ import {
   Lock,
   AlertCircle,
 } from 'lucide-react'
-import { Smartphone, Download, CheckCircle, PlusSquare, ArrowUpFromLine, BellRing, Plug, Building2 } from 'lucide-react'
+import { Smartphone, Download, CheckCircle, PlusSquare, ArrowUpFromLine, BellRing, Plug, Building2, ShieldCheck, DatabaseBackup } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePermissoes } from '@/hooks/usePermissoes'
 import { usePWAInstall } from '@/hooks/usePWAInstall'
@@ -20,32 +21,45 @@ import { usePushNotifications } from '@/hooks/usePushNotifications'
 import { useTheme } from '@/hooks/useTheme'
 import { supabase } from '@/lib/supabase'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { AbasRolaveis } from '@/components/ui/AbasRolaveis'
 import { BrandSection } from '@/components/configuracoes/BrandSection'
 import { IntegracoesSection } from '@/components/configuracoes/IntegracoesSection'
 import { RamoEmpresaSection } from '@/components/configuracoes/RamoEmpresaSection'
+import { ExportarDadosSection } from '@/components/configuracoes/ExportarDadosSection'
+import { AvisoVersaoNova } from '@/components/configuracoes/AvisoVersaoNova'
+import { useIsMasterAdmin } from '@/hooks/useProvisionTenant'
+import { VerificacaoDuasEtapas } from '@/components/seguranca/VerificacaoDuasEtapas'
+import { useLicenca } from '@/hooks/useLicenca'
 import { cn } from '@/lib/utils'
+import { BRAND } from '@/config/brand'
 
 // ─── Section types ───────────────────────────────────────────────────────────
 
-type Section = 'perfil' | 'aparencia' | 'marca' | 'ramo' | 'integracoes' | 'mobile' | 'notificacoes'
+type Section = 'perfil' | 'aparencia' | 'marca' | 'ramo' | 'integracoes' | 'mobile' | 'notificacoes' | 'duas-etapas' | 'dados'
 
 interface NavItem {
   id: Section
   label: string
   icon: React.ComponentType<{ className?: string }>
   adminOnly?: boolean
+  /** Some com a licença negada (credenciais de integração ficam travadas). */
+  usaLicenca?: boolean
 }
 
 const navItems: NavItem[] = [
   { id: 'perfil', label: 'Perfil', icon: User },
-  { id: 'aparencia', label: 'Aparencia', icon: Palette },
+  { id: 'aparencia', label: 'Aparência', icon: Palette },
   { id: 'marca', label: 'Marca', icon: Palette },
   // Ramo é dado da empresa (como a marca), não preferência de um app —
   // por isso saiu da configuração do Atendimento e veio para cá.
   { id: 'ramo', label: 'Ramo da empresa', icon: Building2, adminOnly: true },
-  { id: 'integracoes', label: 'Integracoes', icon: Plug, adminOnly: true },
-  { id: 'mobile', label: 'Versao Mobile', icon: Smartphone },
-  { id: 'notificacoes', label: 'Notificacoes', icon: Bell },
+  { id: 'integracoes', label: 'Integrações', icon: Plug, adminOnly: true, usaLicenca: true },
+  { id: 'mobile', label: 'Versão Mobile', icon: Smartphone },
+  { id: 'notificacoes', label: 'Notificações', icon: Bell },
+  { id: 'duas-etapas', label: 'Verificação em duas etapas', icon: ShieldCheck },
+  // Sempre aberta, inclusive com a licença negada (contrato da licença §4).
+  { id: 'dados', label: 'Exportar dados', icon: DatabaseBackup, adminOnly: true },
 ]
 
 const PERFIL_LABEL: Record<string, string> = {
@@ -72,7 +86,7 @@ function SectionCard({
     <div className="glass-card space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-6">
       <div className="flex items-center gap-3">
         <Icon className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+        <h2 className="t-h3 text-foreground">{title}</h2>
       </div>
       {children}
     </div>
@@ -93,7 +107,7 @@ function Toggle({
       onClick={onChange}
       disabled={disabled}
       className={cn(
-        'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed',
+        'focus-ds relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-fast before:absolute before:-inset-2.5 before:content-[\'\'] disabled:opacity-50 disabled:cursor-not-allowed',
         checked ? 'bg-primary' : 'bg-muted'
       )}
       role="switch"
@@ -101,7 +115,7 @@ function Toggle({
     >
       <span
         className={cn(
-          'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition duration-200',
+          'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-pop ring-0 transition duration-200',
           checked ? 'translate-x-5' : 'translate-x-0'
         )}
       />
@@ -119,10 +133,10 @@ function SettingRow({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border p-4">
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-stroke-subtle p-4">
       <div className="space-y-0.5 pr-4">
         <p className="text-sm font-medium text-foreground">{label}</p>
-        {desc && <p className="text-xs text-muted-foreground">{desc}</p>}
+        {desc && <p className="text-[13px] text-muted-foreground">{desc}</p>}
       </div>
       <div className="shrink-0">{children}</div>
     </div>
@@ -131,7 +145,7 @@ function SettingRow({
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+    <label className="text-[12.5px] font-semibold text-fg-2">
       {children}
     </label>
   )
@@ -146,14 +160,10 @@ interface NotifPrefItem {
 }
 
 const NOTIF_PREFS: NotifPrefItem[] = [
-  { key: 'notif_entregas', label: 'Novas entregas', desc: 'Quando uma entrega for criada no sistema' },
-  { key: 'notif_aprovacoes', label: 'Aprovacoes pendentes', desc: 'Quando uma entrega aguardar aprovacao' },
-  { key: 'notif_comentarios', label: 'Comentarios', desc: 'Quando alguem comentar em uma entrega sua' },
-  { key: 'notif_chat', label: 'Mensagens de chat', desc: 'Quando receber novas mensagens no chat' },
-  { key: 'notif_nps', label: 'Respostas NPS', desc: 'Quando um cliente responder uma pesquisa NPS' },
-  { key: 'notif_cobranca', label: 'Respostas de cobranca', desc: 'Quando um cliente responder uma cobranca' },
-  { key: 'notif_sla', label: 'Violacoes de SLA', desc: 'Quando um SLA for violado' },
-  { key: 'notif_relatorios', label: 'Relatorios semanais', desc: 'Resumo semanal da operacao por e-mail' },
+  { key: 'notif_chat', label: 'Mensagens das conversas', desc: 'Quando chegar mensagem nova em Conversas' },
+  { key: 'notif_cobranca', label: 'Respostas de cobrança', desc: 'Quando um cliente responder uma cobrança' },
+  { key: 'notif_sla', label: 'Prazo de resposta estourado', desc: 'Quando o tempo combinado para responder passar' },
+  { key: 'notif_relatorios', label: 'Relatórios semanais', desc: 'Resumo semanal da operação por e-mail' },
 ]
 
 type EmailFreq = 'imediato' | 'resumo_diario' | 'desativado'
@@ -261,7 +271,7 @@ function ProfileSection() {
       return
     }
     if (newPassword !== confirmPassword) {
-      setPwError('As senhas nao coincidem.')
+      setPwError('As senhas não coincidem.')
       return
     }
 
@@ -425,7 +435,7 @@ function ProfileSection() {
                   value={currentPassword}
                   onChange={(e) => { setCurrentPassword(e.target.value); setPwError(null) }}
                   placeholder="Digite sua senha atual"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-colors"
+                  className="input w-full pr-10"
                 />
                 <button
                   type="button"
@@ -445,8 +455,8 @@ function ProfileSection() {
                   type={showNewPw ? 'text' : 'password'}
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); setPwError(null) }}
-                  placeholder="Minimo 6 caracteres"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 transition-colors"
+                  placeholder="Mínimo 6 caracteres"
+                  className="input w-full pr-10"
                 />
                 <button
                   type="button"
@@ -483,7 +493,7 @@ function ProfileSection() {
                 </button>
               </div>
               {confirmPassword && confirmPassword !== newPassword && (
-                <p className="text-xs text-danger">As senhas nao coincidem</p>
+                <p className="text-xs text-danger">As senhas não coincidem</p>
               )}
             </div>
           </div>
@@ -549,7 +559,7 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
   }
 
   return (
-    <SectionCard icon={Smartphone} title="Versao Mobile">
+    <SectionCard icon={Smartphone} title="Versão Mobile">
       <div className="space-y-5">
         {/* Status banner */}
         {pwa.isInstalled ? (
@@ -559,18 +569,18 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
               <p className="text-sm font-medium text-foreground">App instalado!</p>
               <p className="text-xs text-muted-foreground">
                 {pwa.isStandalone
-                  ? 'Voce esta usando o OMNX Desk como aplicativo.'
-                  : 'O OMNX Desk esta instalado. Abra pelo icone na tela inicial.'}
+                  ? `Você está usando o ${BRAND.appName} como aplicativo.`
+                  : `O ${BRAND.appName} está instalado. Abra pelo ícone na tela inicial.`}
               </p>
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+          <div className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary-muted p-4">
             <Download className="h-5 w-5 text-primary shrink-0" />
             <div>
-              <p className="text-sm font-medium text-foreground">Instale o OMNX Desk no seu celular</p>
+              <p className="text-sm font-medium text-foreground">Instale o {BRAND.appName} no seu celular</p>
               <p className="text-xs text-muted-foreground">
-                Use como um app nativo — icone na tela inicial, tela cheia e notificacoes.
+                Use como um app nativo — ícone na tela inicial, tela cheia e notificações.
               </p>
             </div>
           </div>
@@ -581,7 +591,7 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
           <>
             <button
               onClick={handleInstallClick}
-              className="gradient-primary flex w-full items-center justify-center gap-3 rounded-xl px-6 py-4 text-base font-semibold text-primary-foreground shadow-lg hover:opacity-90 transition-opacity cursor-pointer"
+              className="btn btn-primary btn-lg w-full"
             >
               <Download className="h-5 w-5" />
               Instalar agora
@@ -591,7 +601,7 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
                 <AlertCircle className="h-4 w-4 text-warning shrink-0" />
                 <p className="text-xs text-muted-foreground">
                   {pwa.isIOS
-                    ? 'No iPhone, use o botao de compartilhar do Safari e toque em "Adicionar a Tela de Inicio".'
+                    ? 'No iPhone, use o botão de compartilhar do Safari e toque em "Adicionar à Tela de Início".'
                     : 'Use o menu do navegador (3 pontinhos) e toque em "Instalar aplicativo" ou "Adicionar a tela inicial".'}
                 </p>
               </div>
@@ -638,24 +648,24 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
               <div className="space-y-3">
                 <p className="text-sm font-medium text-foreground">Como instalar no Android:</p>
                 <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">1</div>
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary text-xs font-bold">1</div>
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-foreground">Abra no Google Chrome</p>
-                    <p className="text-xs text-muted-foreground">Acesse o OMNX Desk pelo navegador Chrome no seu celular</p>
+                    <p className="text-xs text-muted-foreground">Acesse o {BRAND.appName} pelo navegador Chrome no seu celular</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">2</div>
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary text-xs font-bold">2</div>
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-foreground">Toque no menu (3 pontinhos ⋮)</p>
                     <p className="text-xs text-muted-foreground">No canto superior direito do Chrome</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">3</div>
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary text-xs font-bold">3</div>
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-foreground">Toque em "Instalar aplicativo"</p>
-                    <p className="text-xs text-muted-foreground">Ou "Adicionar a tela inicial" dependendo da versao</p>
+                    <p className="text-xs text-muted-foreground">Ou "Adicionar à tela inicial", dependendo da versão</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg border border-border p-3">
@@ -664,10 +674,10 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-foreground">Pronto!</p>
-                    <p className="text-xs text-muted-foreground">O icone do OMNX Desk aparecera na sua tela inicial</p>
+                    <p className="text-xs text-muted-foreground">O ícone do {BRAND.appName} aparecerá na sua tela inicial</p>
                   </div>
                 </div>
-                <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+                <div className="rounded-lg border border-primary/20 bg-primary-muted px-4 py-3">
                   <p className="text-xs text-muted-foreground">
                     <strong className="text-foreground">Dica:</strong> Se o banner "Adicionar a tela inicial" aparecer automaticamente na parte inferior, basta tocar nele!
                   </p>
@@ -680,35 +690,35 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
               <div className="space-y-3">
                 <p className="text-sm font-medium text-foreground">Como instalar no iPhone / iPad:</p>
                 <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">1</div>
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary text-xs font-bold">1</div>
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-foreground">Abra no Safari</p>
-                    <p className="text-xs text-muted-foreground">Obrigatorio usar o Safari — Chrome e outros navegadores nao suportam instalacao no iOS</p>
+                    <p className="text-xs text-muted-foreground">É obrigatório usar o Safari — Chrome e outros navegadores não instalam apps no iOS</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">2</div>
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary text-xs font-bold">2</div>
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
                       Toque em <ArrowUpFromLine className="h-4 w-4 text-primary" /> Compartilhar
                     </p>
-                    <p className="text-xs text-muted-foreground">O botao fica na barra inferior do Safari (quadrado com seta para cima)</p>
+                    <p className="text-xs text-muted-foreground">O botão fica na barra inferior do Safari (quadrado com seta para cima)</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">3</div>
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary text-xs font-bold">3</div>
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                      Toque em <PlusSquare className="h-4 w-4 text-primary" /> Adicionar a Tela de Inicio
+                      Toque em <PlusSquare className="h-4 w-4 text-primary" /> Adicionar à Tela de Início
                     </p>
-                    <p className="text-xs text-muted-foreground">Role para baixo no menu se nao aparecer de primeira</p>
+                    <p className="text-xs text-muted-foreground">Role para baixo no menu se não aparecer de primeira</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg border border-border p-3">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-bold">4</div>
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary text-xs font-bold">4</div>
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-foreground">Confirme o nome e toque em "Adicionar"</p>
-                    <p className="text-xs text-muted-foreground">O nome ja vem preenchido como "OMNX Desk"</p>
+                    <p className="text-xs text-muted-foreground">O nome já vem preenchido como "{BRAND.appName}"</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 rounded-lg border border-border p-3">
@@ -717,12 +727,12 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
                   </div>
                   <div className="space-y-0.5">
                     <p className="text-sm font-medium text-foreground">Pronto!</p>
-                    <p className="text-xs text-muted-foreground">O icone do OMNX Desk aparecera na sua tela inicial. Abre em tela cheia!</p>
+                    <p className="text-xs text-muted-foreground">O ícone do {BRAND.appName} aparecerá na sua tela inicial. Abre em tela cheia!</p>
                   </div>
                 </div>
                 <div className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3">
                   <p className="text-xs text-warning">
-                    <strong>Importante:</strong> No iOS, apenas o Safari permite instalar apps na tela inicial. Se voce esta usando Chrome, Firefox ou outro navegador, copie o link e abra no Safari.
+                    <strong>Importante:</strong> No iOS, apenas o Safari permite instalar apps na tela inicial. Se você está usando Chrome, Firefox ou outro navegador, copie o link e abra no Safari.
                   </p>
                 </div>
               </div>
@@ -735,10 +745,10 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Vantagens do app</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {[
-              { label: 'Tela cheia', desc: 'Sem barra do navegador, experiencia imersiva' },
-              { label: 'Icone na home', desc: 'Acesso rapido com um toque' },
-              { label: 'Notificacoes push', desc: 'Receba alertas mesmo com app fechado' },
-              { label: 'Atualizacao automatica', desc: 'Sempre na versao mais recente' },
+              { label: 'Tela cheia', desc: 'Sem barra do navegador, em tela inteira' },
+              { label: 'Ícone na tela inicial', desc: 'Acesso rápido com um toque' },
+              { label: 'Avisos no celular', desc: 'Receba alertas mesmo com app fechado' },
+              { label: 'Atualização automática', desc: 'Sempre na versão mais recente' },
             ].map((feat) => (
               <div key={feat.label} className="flex items-start gap-2.5 rounded-lg border border-border/50 bg-muted/20 p-3">
                 <CheckCircle className="h-4 w-4 text-success shrink-0 mt-0.5" />
@@ -757,7 +767,7 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
             <div className="flex items-center gap-3">
               <BellRing className="h-5 w-5 text-primary" />
               <div className="flex-1">
-                <p className="text-sm font-medium text-foreground">Notificacoes Push</p>
+                <p className="text-sm font-medium text-foreground">Avisos no celular</p>
                 <p className="text-xs text-muted-foreground">
                   Receba alertas de novas mensagens mesmo com o app fechado
                 </p>
@@ -766,7 +776,7 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
                 <button
                   onClick={push.unsubscribe}
                   disabled={push.loading}
-                  className="rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors disabled:opacity-50"
+                  className="rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-danger-light hover:text-danger hover:border-danger/40 transition-colors disabled:opacity-50"
                 >
                   {push.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Desativar'}
                 </button>
@@ -774,7 +784,7 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
                 <button
                   onClick={push.subscribe}
                   disabled={push.loading}
-                  className="gradient-primary rounded-lg px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+                  className="btn btn-primary btn-sm"
                 >
                   {push.loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Ativar'}
                 </button>
@@ -783,14 +793,14 @@ function MobileInstallSection({ pwa }: { pwa: ReturnType<typeof usePWAInstall> }
             {push.isSubscribed && (
               <div className="flex items-center gap-2 rounded-lg border border-success/30 bg-success/5 px-3 py-2">
                 <CheckCircle className="h-4 w-4 text-success shrink-0" />
-                <p className="text-xs text-success">Notificacoes push ativas neste dispositivo</p>
+                <p className="text-xs text-success">Avisos ativos neste aparelho</p>
               </div>
             )}
             {push.permission === 'denied' && (
-              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
-                <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
-                <p className="text-xs text-destructive">
-                  Permissao bloqueada. Acesse as configuracoes do navegador para permitir notificacoes.
+              <div className="flex items-center gap-2 rounded-lg border border-danger/40 bg-danger-light px-3 py-2">
+                <AlertCircle className="h-4 w-4 text-danger shrink-0" />
+                <p className="text-xs text-danger">
+                  Permissão bloqueada. Abra as configurações do navegador para permitir notificações.
                 </p>
               </div>
             )}
@@ -806,9 +816,18 @@ export function ConfiguracoesPage() {
   const { can } = usePermissoes()
 
   const pwa = usePWAInstall()
-  const [section, setSection] = useState<Section>('perfil')
+  // `?secao=marca` abre direto na seção (o cartão "Marca, ramo e integrações" dos Ajustes usa isso).
+  const [searchParams] = useSearchParams()
+  const [section, setSection] = useState<Section>(() => {
+    const pedida = searchParams.get('secao')
+    return navItems.some((item) => item.id === pedida) ? (pedida as Section) : 'perfil'
+  })
 
-  const visibleNavItems = navItems.filter((item) => !item.adminOnly || can('configuracoes', 'admin'))
+  const licenca = useLicenca()
+  // Aviso de versão nova: só para quem administra a instalação (empresa principal).
+  const { isMaster, mfaPendente } = useIsMasterAdmin()
+  const visibleNavItems = navItems.filter((item) =>
+    (!item.adminOnly || can('configuracoes', 'admin')) && !(item.usaLicenca && licenca.nega))
 
   // Local notification preferences (stored in localStorage for now)
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(() => {
@@ -837,25 +856,34 @@ export function ConfiguracoesPage() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6 animate-fade-in">
+    <PageContainer>
       <PageHeader
-        title="Configuracoes"
-        description="Gerencie suas preferencias e configuracoes da conta."
+        title="Meu perfil"
+        description="Seus dados, aparência e avisos. Quem administra também vê aqui a marca, o ramo e as integrações da empresa."
       />
 
-      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 lg:gap-6">
-        {/* Sidebar */}
-        <aside className="w-full sm:w-52 shrink-0">
-          <nav className="glass-card flex sm:flex-col gap-1 sm:gap-0 sm:space-y-1 p-2 overflow-x-auto scrollbar-hide">
+      {can('configuracoes', 'admin') && (isMaster || mfaPendente) && <AvisoVersaoNova />}
+
+      {/* Celular e tablet pequeno: seções em abas roláveis */}
+      <AbasRolaveis
+        className="md:hidden"
+        rotulo="Seções de configurações"
+        itens={visibleNavItems.map((item) => ({ id: item.id, rotulo: item.label, icone: item.icon, ativo: section === item.id, onClick: () => setSection(item.id) }))}
+      />
+
+      <div className="flex flex-col gap-3 md:flex-row md:gap-6">
+        {/* Menu lateral (a partir de 768 px) */}
+        <aside className="hidden w-52 shrink-0 md:block">
+          <nav className="glass-card flex flex-col space-y-1 p-2">
             {visibleNavItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setSection(item.id)}
                 className={cn(
-                  'flex shrink-0 sm:w-full items-center gap-2 sm:gap-3 rounded-lg px-3 py-2.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap',
+                  'focus-ds flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-fast',
                   section === item.id
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                    ? 'bg-primary-muted text-primary'
+                    : 'text-muted-foreground hover:bg-bg-1 hover:text-foreground'
                 )}
               >
                 <item.icon className="h-4 w-4 shrink-0" />
@@ -866,13 +894,13 @@ export function ConfiguracoesPage() {
         </aside>
 
         {/* Content */}
-        <main className="min-w-0 flex-1 space-y-3 sm:space-y-4 lg:space-y-6">
+        <main className="min-w-0 flex-1 space-y-4 lg:space-y-6">
           {/* ── Perfil ── */}
           {section === 'perfil' && <ProfileSection />}
 
-          {/* ── Aparencia ── */}
+          {/* ── Aparência ── */}
           {section === 'aparencia' && (
-            <SectionCard icon={Palette} title="Aparencia">
+            <SectionCard icon={Palette} title="Aparência">
               <div className="space-y-4">
                 <SettingRow label="Modo escuro" desc="Alterna entre tema claro e escuro">
                   <Toggle checked={theme === 'dark'} onChange={toggleTheme} />
@@ -883,7 +911,7 @@ export function ConfiguracoesPage() {
                     className={cn(
                       'flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all',
                       theme === 'light'
-                        ? 'border-primary bg-primary/5'
+                        ? 'border-primary bg-primary-muted'
                         : 'border-border hover:border-border/80'
                     )}
                   >
@@ -895,7 +923,7 @@ export function ConfiguracoesPage() {
                     className={cn(
                       'flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all',
                       theme === 'dark'
-                        ? 'border-primary bg-primary/5'
+                        ? 'border-primary bg-primary-muted'
                         : 'border-border hover:border-border/80'
                     )}
                   >
@@ -917,36 +945,40 @@ export function ConfiguracoesPage() {
             </SectionCard>
           )}
 
-          {/* ── Integracoes ── */}
-          {section === 'integracoes' && <IntegracoesSection />}
+          {/* ── Integrações ── */}
+          {section === 'integracoes' && !licenca.nega && <IntegracoesSection />}
 
-          {/* ── Versao Mobile ── */}
+          {/* ── Verificação em duas etapas ── */}
+          {section === 'duas-etapas' && <VerificacaoDuasEtapas />}
+
+          {/* ── Exportar dados (sempre aberta) ── */}
+          {section === 'dados' && can('configuracoes', 'admin') && <ExportarDadosSection />}
+
+          {/* ── Versão Mobile ── */}
           {section === 'mobile' && (
             <MobileInstallSection pwa={pwa} />
           )}
 
           {/* ── Notificacoes ── */}
           {section === 'notificacoes' && (
-            <SectionCard icon={Bell} title="Notificacoes">
+            <SectionCard icon={Bell} title="Notificações">
               <div className="space-y-4">
                 {/* Email frequency */}
                 <div className="rounded-lg border border-border p-4 space-y-3">
                   <div className="space-y-0.5">
-                    <p className="text-sm font-medium text-foreground">Frequencia de e-mail</p>
+                    <p className="text-sm font-medium text-foreground">Frequência de e-mail</p>
                     <p className="text-xs text-muted-foreground">
-                      Como voce deseja receber notificacoes por e-mail
+                      Como você deseja receber notificações por e-mail
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {EMAIL_FREQ_OPTIONS.map((opt) => (
                       <button
                         key={opt.value}
                         onClick={() => handleEmailFreqChange(opt.value)}
                         className={cn(
-                          'rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
-                          emailFreq === opt.value
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                          'btn btn-sm',
+                          emailFreq === opt.value ? 'btn-primary' : 'btn-secondary'
                         )}
                       >
                         {opt.label}
@@ -957,8 +989,8 @@ export function ConfiguracoesPage() {
 
                 {/* Per-type toggles */}
                 <div className="space-y-1">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                    Tipos de notificacao
+                  <p className="text-eyebrow mb-2">
+                    Tipos de notificação
                   </p>
                   {NOTIF_PREFS.map((item) => (
                     <SettingRow key={item.key} label={item.label} desc={item.desc}>
@@ -972,7 +1004,7 @@ export function ConfiguracoesPage() {
 
                 <div className="rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
                   <p className="text-xs text-muted-foreground">
-                    As preferencias de notificacao sao salvas localmente. Integracao com backend em breve.
+                    As preferências de notificação são salvas neste aparelho.
                   </p>
                 </div>
               </div>
@@ -981,6 +1013,6 @@ export function ConfiguracoesPage() {
 
         </main>
       </div>
-    </div>
+    </PageContainer>
   )
 }

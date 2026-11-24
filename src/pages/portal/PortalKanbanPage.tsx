@@ -87,7 +87,7 @@ interface KanbanColumnProps {
   items: DeliveryWithDetails[]
 }
 
-function KanbanColumn({ status, label, items }: KanbanColumnProps) {
+function KanbanColumn({ label, items }: KanbanColumnProps) {
   return (
     <div className="flex w-72 shrink-0 flex-col gap-3">
       {/* Column header */}
@@ -166,7 +166,7 @@ export function PortalKanbanPage() {
     <div className="space-y-3 sm:space-y-4 lg:space-y-6 animate-fade-in">
       {/* Header */}
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Kanban de Entregas</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Quadro de entregas</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Arraste para visualizar • Clique em um cartão para ver detalhes
         </p>

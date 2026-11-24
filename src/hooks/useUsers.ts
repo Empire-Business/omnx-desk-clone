@@ -1,5 +1,9 @@
+import { tenantDaSessao } from '@/lib/authTenant'
+import { mensagemErroCriarUsuario } from '@/lib/adminUserError'
+import { useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { carregarResponsaveis, decidirResponsavel, podeRepetirPedidoResponsavel, type PedidoResponsavel, type TransporteResponsaveis } from '@/lib/responsaveisCliente'
 import type { User, UserProfile, ClientAssignment, UserInstanceAssignment, InstanceCategoria, ChatDepartmentRow } from '@/types/database'
 
 // ---------------------------------------------------------------------------
@@ -109,15 +113,7 @@ export function useCreateUser() {
       const { data, error } = await supabase.functions.invoke('admin-create-user', {
         body: input,
       })
-      if (error) {
-        const detail = (data as { error?: string; detail?: string } | null)?.detail
-          ?? (data as { error?: string } | null)?.error
-          ?? error.message
-        throw new Error(detail)
-      }
-      if (data?.error) {
-        throw new Error(data.detail ?? data.error)
-      }
+      if (error || data?.error) throw new Error(await mensagemErroCriarUsuario(error, data))
       return data as {
         id: string
         email: string
@@ -140,6 +136,7 @@ export function useAssignments() {
       const { data, error } = await supabase
         .from('client_assignments')
         .select('*, users(id, nome, perfil), clients(id, nome)')
+        .eq('ativo', true)
         .order('criado_em', { ascending: false })
       if (error) throw error
       return data as AssignmentWithRelations[]
@@ -147,44 +144,61 @@ export function useAssignments() {
   })
 }
 
-/** Mutation to create a client_assignment */
+/** Outros painéis usam o mesmo executor; a troca completa fica no cliente. */
 export function useCreateAssignment() {
   const queryClient = useQueryClient()
+  const pendentes = useRef(new Map<string, PedidoResponsavel>())
   return useMutation({
-    mutationFn: async (input: {
-      client_id: string
-      user_id: string
-      tipo: 'estrategista' | 'atendimento'
-      ativo?: boolean
-    }) => {
-      const { data, error } = await supabase
-        .from('client_assignments')
-        .insert({ ativo: true, ...input })
-        .select()
-        .single()
-      if (error) throw error
-      return data as ClientAssignment
+    mutationFn: async (input: { client_id: string; user_id: string; tipo: 'estrategista' | 'atendimento'; ativo?: boolean }) => {
+      if (input.ativo === false) throw new Error('Use Encerrar vínculo no cadastro do cliente.')
+      const chave = `${input.client_id}:${input.user_id}:${input.tipo}`
+      let pedido = pendentes.current.get(chave)
+      if (!pedido) {
+        const c = await carregarResponsaveis(supabase as unknown as TransporteResponsaveis, input.client_id)
+        pedido = { clientId: input.client_id, acao: 'adicionar', tipo: input.tipo, assignmentId: null,
+          userId: input.user_id, revisao: c.revisao, idempotencia: crypto.randomUUID(),
+          motivo: 'Pessoa adicionada pelo controle de acesso da equipe.' }
+        pendentes.current.set(chave, pedido)
+      }
+      try {
+        const r = await decidirResponsavel(supabase as unknown as TransporteResponsaveis, pedido)
+        pendentes.current.delete(chave)
+        return r
+      } catch (erro) {
+        if (!podeRepetirPedidoResponsavel(erro)) pendentes.current.delete(chave)
+        throw erro
+      }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userKeys.assignments() })
-    },
+    onSuccess: () => Promise.all(['users', 'clients', 'client-responsaveis', 'chat', 'automacoes-wa', 'dashboard-data'].map((chave) => queryClient.invalidateQueries({ queryKey: [chave] }))),
   })
 }
 
-/** Mutation to delete a client_assignment by id */
+/** Encerra membership atual com snapshot histórico, sem apagar a trilha. */
 export function useDeleteAssignment() {
   const queryClient = useQueryClient()
+  const pendentes = useRef(new Map<string, PedidoResponsavel>())
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('client_assignments')
-        .delete()
-        .eq('id', id)
-      if (error) throw error
+      let pedido = pendentes.current.get(id)
+      if (!pedido) {
+        const r = await supabase.from('client_assignments').select('client_id,tipo').eq('id', id).maybeSingle()
+        if (r.error || !r.data) throw new Error('O vínculo mudou. Atualize os dados antes de encerrar.')
+        const c = await carregarResponsaveis(supabase as unknown as TransporteResponsaveis, r.data.client_id)
+        pedido = { clientId: r.data.client_id, acao: 'encerrar', tipo: r.data.tipo as 'estrategista' | 'atendimento',
+          assignmentId: id, userId: null, revisao: c.revisao, idempotencia: crypto.randomUUID(),
+          motivo: 'Vínculo encerrado pelo controle de acesso da equipe.' }
+        pendentes.current.set(id, pedido)
+      }
+      try {
+        const r = await decidirResponsavel(supabase as unknown as TransporteResponsaveis, pedido)
+        pendentes.current.delete(id)
+        return r
+      } catch (erro) {
+        if (!podeRepetirPedidoResponsavel(erro)) pendentes.current.delete(id)
+        throw erro
+      }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: userKeys.assignments() })
-    },
+    onSuccess: () => Promise.all(['users', 'clients', 'client-responsaveis', 'chat', 'automacoes-wa', 'dashboard-data'].map((chave) => queryClient.invalidateQueries({ queryKey: [chave] }))),
   })
 }
 
@@ -221,24 +235,28 @@ export function useMyProfile() {
   return useQuery({
     queryKey: ['users', 'my-profile'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return null
-      const { data } = await supabase
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError) throw authError
+      if (!user) throw new Error('Sua sessão não está disponível. Entre novamente.')
+      const { data, error } = await supabase
         .from('users')
         .select('id, perfil')
         .eq('id', user.id)
         .single()
-      return data as { id: string; perfil: UserProfile } | null
+      if (error) throw error
+      return data as { id: string; perfil: UserProfile }
     },
   })
 }
 
 /** Get instance IDs the current user has access to (profile-aware) */
 export function useMyInstanceIds() {
-  const { data: profile } = useMyProfile()
+  const profileQuery = useMyProfile()
+  const profile = profileQuery.data
   return useQuery({
-    queryKey: ['users', 'my-instance-ids', profile?.perfil],
+    queryKey: ['users', 'my-instance-ids', profile?.id, profile?.perfil, profileQuery.isError],
     queryFn: async () => {
+      if (profileQuery.isError) throw profileQuery.error
       if (!profile) return []
 
       // admin see everything
@@ -261,24 +279,27 @@ export function useMyInstanceIds() {
         const instanceIds = new Set<string>()
 
         // From departments
-        const { data: deptAgents } = await supabase
+        const { data: deptAgents, error: deptError } = await supabase
           .from('chat_department_agents')
           .select('department_id')
           .eq('user_id', profile.id)
+        if (deptError) throw deptError
         if (deptAgents?.length) {
-          const deptIds = deptAgents.map(d => d.department_id)
-          const { data: deptInstances } = await supabase
+          const deptIds = deptAgents.flatMap(d => d.department_id === null ? [] : [d.department_id])
+          const { data: deptInstances, error: instancesError } = await supabase
             .from('department_instance_assignments')
             .select('instance_id')
             .in('department_id', deptIds)
+          if (instancesError) throw instancesError
           deptInstances?.forEach(d => instanceIds.add(d.instance_id))
         }
 
         // From direct assignments
-        const { data: directInstances } = await supabase
+        const { data: directInstances, error: directError } = await supabase
           .from('user_instance_assignments')
           .select('instance_id')
           .eq('user_id', profile.id)
+        if (directError) throw directError
         directInstances?.forEach(d => instanceIds.add(d.instance_id))
 
         return instanceIds.size > 0 ? Array.from(instanceIds) : []
@@ -292,7 +313,7 @@ export function useMyInstanceIds() {
       if (error) throw error
       return data.map(d => d.instance_id)
     },
-    enabled: Boolean(profile),
+    enabled: !profileQuery.isPending,
   })
 }
 
@@ -303,7 +324,7 @@ export function useCreateInstanceAssignment() {
     mutationFn: async (input: { user_id: string; instance_id: string }) => {
       const { data, error } = await supabase
         .from('user_instance_assignments')
-        .insert(input)
+        .insert({ ...(input), tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -334,6 +355,7 @@ export function useMyClientIds() {
           .from('client_assignments')
           .select('client_id')
           .eq('user_id', profile.id)
+          .eq('ativo', true)
         if (error) throw error
         return data.map(d => d.client_id)
       }
@@ -349,6 +371,7 @@ export function useMyClientIds() {
           .from('client_assignments')
           .select('client_id')
           .eq('user_id', profile.id)
+          .eq('ativo', true)
         if (error) throw error
         return data.map(d => d.client_id)
       }
@@ -387,7 +410,6 @@ export interface DepartmentWithManager extends ChatDepartmentRow {
 
 /** Fetch all departments with their gerente and members */
 export function useDepartmentsWithManagers() {
-  const { data: allUsers = [] } = useUsers()
   return useQuery({
     queryKey: ['departments', 'with-managers'],
     queryFn: async () => {

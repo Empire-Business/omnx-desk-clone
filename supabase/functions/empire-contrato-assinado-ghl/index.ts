@@ -5,6 +5,7 @@
 //
 // Regra de segurança: só move com match ÚNICO de oportunidade. Casos ambíguos
 // (0 ou >1 candidato) NÃO movem — registram o motivo em contratos.ghl_assinada_erro.
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { resolveEmpireBridge, empireHeaders } from '../_shared/empire-bridge.ts'
 
@@ -24,7 +25,7 @@ function json(body: unknown, status = 200) {
   })
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
 

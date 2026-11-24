@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Wallet, CalendarClock, Users, Receipt, ChevronRight, ChevronLeft, Search, Package, CalendarRange, Tag as TagIcon, X, CalendarDays } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { ContratosTabs } from '@/components/contratos/ContratosTabs'
 import { useAuth } from '@/contexts/AuthContext'
 import { usePermissoes } from '@/hooks/usePermissoes'
@@ -196,9 +197,9 @@ function FluxoFuturo() {
   )
 
   return (
-    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+    <PageContainer className="animate-fade-in">
       <PageHeader
-        title="Fluxo de recebíveis"
+        title="A receber"
         description="Parcelas futuras a receber, mês a mês. Só conta parcelas com vencimento a partir de hoje."
       />
       <ContratosTabs />
@@ -220,9 +221,9 @@ function FluxoFuturo() {
 
           {/* Tags */}
           <FilterChip
-            icon={<TagIcon className="h-3.5 w-3.5" />} label="Tags" active={filtros.tags.length > 0}
-            valueLabel={filtros.tags.length === 1 ? (allTags.find((t) => t.id === filtros.tags[0])?.nome ?? '1') : filtros.tags.length > 1 ? `${filtros.tags.length} tags` : undefined}
-            onClear={() => patch({ tags: [] })} panelClass="w-64"
+            icon={<TagIcon className="h-3.5 w-3.5" />} label="Etiquetas" active={filtros.tags.length > 0}
+            valueLabel={filtros.tags.length === 1 ? (allTags.find((t) => t.id === filtros.tags[0])?.nome ?? '1') : filtros.tags.length > 1 ? `${filtros.tags.length} etiquetas` : undefined}
+            onClear={() => patch({ tags: [] })} panelClass="w-64 max-w-[calc(100vw-2rem)]"
           >
             {() => (
               allTags.length === 0 ? (
@@ -250,7 +251,7 @@ function FluxoFuturo() {
           <FilterChip
             icon={<Users className="h-3.5 w-3.5" />} label="Estrategista" active={Boolean(filtros.estrategistaId)}
             valueLabel={estrategistas.find((c) => c.id === filtros.estrategistaId)?.nome}
-            onClear={() => patch({ estrategistaId: '' })} panelClass="w-60"
+            onClear={() => patch({ estrategistaId: '' })} panelClass="w-60 max-w-[calc(100vw-2rem)]"
           >
             {(close) => (
               <OptionPicker
@@ -265,7 +266,7 @@ function FluxoFuturo() {
           <FilterChip
             icon={<Package className="h-3.5 w-3.5" />} label="Produto" active={Boolean(filtros.produto)}
             valueLabel={filtros.produto || undefined}
-            onClear={() => patch({ produto: '' })} panelClass="w-60"
+            onClear={() => patch({ produto: '' })} panelClass="w-60 max-w-[calc(100vw-2rem)]"
           >
             {(close) => (
               <OptionPicker
@@ -280,7 +281,7 @@ function FluxoFuturo() {
           <FilterChip
             icon={<CalendarRange className="h-3.5 w-3.5" />} label="Período" active={Boolean(filtros.de || filtros.ate)}
             valueLabel={(filtros.de || filtros.ate) ? `${filtros.de || '…'} → ${filtros.ate || '…'}` : undefined}
-            onClear={() => patch({ de: '', ate: '' })} panelClass="w-64"
+            onClear={() => patch({ de: '', ate: '' })} panelClass="w-64 max-w-[calc(100vw-2rem)]"
           >
             {() => (
               <div className="grid grid-cols-2 gap-2">
@@ -335,9 +336,9 @@ function FluxoFuturo() {
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-bold text-foreground">Recebimentos do dia</h3>
                 {dia === hoje ? (
-                  <span className="rounded-full bg-primary/12 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">hoje</span>
+                  <span className="rounded-full bg-primary/12 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary">hoje</span>
                 ) : dia < hoje ? (
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">passado</span>
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">passado</span>
                 ) : null}
               </div>
               <p className="truncate text-xs capitalize text-muted-foreground">{rotuloDiaExtenso(dia)}</p>
@@ -378,7 +379,7 @@ function FluxoFuturo() {
         {/* Atalhos: próximos dias com recebimento */}
         {proximosDias.length > 0 && (
           <div className="border-b border-border/60 px-5 py-3">
-            <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Próximos dias com entrada</p>
+            <p className="mb-2 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Próximos dias com entrada</p>
             <div className="flex gap-2 overflow-x-auto pb-1">
               {proximosDias.map((d) => {
                 const on = d.data === dia
@@ -398,7 +399,7 @@ function FluxoFuturo() {
                     <span className={cn('mt-0.5 block text-sm font-bold tabular-nums', on ? 'text-primary' : 'text-foreground')}>
                       {fmtCompacto(d.valor)}
                     </span>
-                    <span className="mt-0.5 block text-[10px] tabular-nums text-muted-foreground">
+                    <span className="mt-0.5 block text-[11px] tabular-nums text-muted-foreground">
                       {d.parcelas} parcela{d.parcelas > 1 ? 's' : ''}
                     </span>
                   </button>
@@ -435,7 +436,7 @@ function FluxoFuturo() {
             {/* Faixa de total — o número que a pessoa veio buscar */}
             <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border/60 bg-primary/[0.04] px-5 py-4">
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Total do dia</p>
+                <p className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground">Total do dia</p>
                 <p className="mt-1 font-display text-3xl font-bold tracking-tight tabular-nums text-primary">{fmtBRL(totalDia)}</p>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -485,7 +486,7 @@ function FluxoFuturo() {
       {/* Gráfico */}
       <div className="glass-card p-5 space-y-4">
         <div className="flex items-baseline justify-between">
-          <h3 className="text-base font-bold text-foreground">Recebíveis por mês</h3>
+          <h3 className="text-base font-bold text-foreground">A receber por mês</h3>
           <span className="text-xs text-muted-foreground tabular-nums">{fmtCompacto(totalReceber)} no total</span>
         </div>
         {isLoading ? (
@@ -506,7 +507,7 @@ function FluxoFuturo() {
                   >
                     <span
                       className={cn(
-                        'mb-1 whitespace-nowrap text-[10px] font-semibold tabular-nums transition-opacity',
+                        'mb-1 whitespace-nowrap text-[11px] font-semibold tabular-nums transition-opacity',
                         pico ? 'text-primary opacity-100' : 'text-muted-foreground opacity-0 group-hover:opacity-100',
                       )}
                     >
@@ -527,7 +528,7 @@ function FluxoFuturo() {
               {meses.map((m) => (
                 <span
                   key={m.mes}
-                  className={cn('flex-1 text-center text-[10px]', m.valor === maxValor && m.valor > 0 ? 'font-semibold text-foreground' : 'text-muted-foreground')}
+                  className={cn('flex-1 text-center text-[11px]', m.valor === maxValor && m.valor > 0 ? 'font-semibold text-foreground' : 'text-muted-foreground')}
                 >
                   {m.label}
                 </span>
@@ -551,13 +552,13 @@ function FluxoFuturo() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-sm">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                  <th className="py-2.5 pl-5 pr-3 font-semibold">Mês</th>
-                  <th className="py-2.5 pr-3 text-center font-semibold">Parcelas</th>
-                  <th className="py-2.5 pr-3 text-center font-semibold">Clientes</th>
-                  <th className="py-2.5 pr-5 text-right font-semibold">A receber</th>
+                  <th className="py-2.5 pl-3 pr-3 font-semibold sm:pl-5">Mês</th>
+                  <th className="hidden py-2.5 pr-3 text-center font-semibold sm:table-cell">Parcelas</th>
+                  <th className="hidden py-2.5 pr-3 text-center font-semibold sm:table-cell">Clientes</th>
+                  <th className="py-2.5 pr-3 text-right font-semibold sm:pr-5">A receber</th>
                 </tr>
               </thead>
               <tbody>
@@ -574,17 +575,20 @@ function FluxoFuturo() {
                           aberto && 'bg-muted/40',
                         )}
                       >
-                        <td className="py-3 pl-5 pr-3">
-                          <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                        <td className="py-3 pl-3 pr-3 sm:pl-5">
+                          <span className="inline-flex flex-wrap items-center gap-1.5 font-medium text-foreground">
                             <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform', aberto && 'rotate-90')} />
                             {rotuloMes(m.mes)}
-                            {idx === 0 && <span className="rounded-full bg-primary/12 px-1.5 py-0.5 text-[10px] font-semibold text-primary">próximo</span>}
-                            {pico && idx !== 0 && <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold text-warning">pico</span>}
+                            {idx === 0 && <span className="rounded-full bg-primary/12 px-1.5 py-0.5 text-[11px] font-semibold text-primary">próximo</span>}
+                            {pico && idx !== 0 && <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[11px] font-semibold text-warning">pico</span>}
+                          </span>
+                          <span className="mt-0.5 block pl-5 text-xs text-muted-foreground sm:hidden">
+                            {m.parcelas} parcela{m.parcelas > 1 ? 's' : ''} · {m.contratos} cliente{m.contratos > 1 ? 's' : ''}
                           </span>
                         </td>
-                        <td className="py-3 pr-3 text-center tabular-nums text-muted-foreground">{m.parcelas}</td>
-                        <td className="py-3 pr-3 text-center tabular-nums text-muted-foreground">{m.contratos}</td>
-                        <td className="py-3 pr-5">
+                        <td className="hidden py-3 pr-3 text-center tabular-nums text-muted-foreground sm:table-cell">{m.parcelas}</td>
+                        <td className="hidden py-3 pr-3 text-center tabular-nums text-muted-foreground sm:table-cell">{m.contratos}</td>
+                        <td className="py-3 pr-3 sm:pr-5">
                           <div className="flex flex-col items-end gap-1">
                             <span className="font-semibold tabular-nums text-foreground">{fmtBRL(m.valor)}</span>
                             <span className="h-1 w-24 overflow-hidden rounded-full bg-primary/12">
@@ -595,7 +599,7 @@ function FluxoFuturo() {
                       </tr>
                       {aberto && (
                         <tr className="bg-muted/15">
-                          <td colSpan={4} className="px-3 py-2 sm:px-5">
+                          <td colSpan={4} className="px-2 py-2 sm:px-5">
                             <div className="flex flex-col gap-0.5">
                               {parcelasDoMes(m.mes).map((p, i) => {
                                 const c = contratoById.get(p.contratoId)
@@ -609,7 +613,7 @@ function FluxoFuturo() {
                                     <span className="shrink-0 rounded-md bg-background px-1.5 py-0.5 font-medium tabular-nums text-muted-foreground ring-1 ring-border">
                                       {p.data.slice(8, 10)}/{p.data.slice(5, 7)}
                                     </span>
-                                    <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white', avatarCor(nome))}>
+                                    <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white', avatarCor(nome))}>
                                       {inicial(nome)}
                                     </span>
                                     <span className="min-w-0 flex-1 truncate font-medium text-foreground">{nome}</span>
@@ -629,16 +633,16 @@ function FluxoFuturo() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/40">
-                  <td className="py-3 pl-5 pr-3 text-sm font-bold text-foreground">Total</td>
-                  <td className="py-3 pr-3 text-center text-sm font-semibold tabular-nums text-muted-foreground">{totalParcelas}</td>
-                  <td className="py-3 pr-3 text-center text-sm font-semibold tabular-nums text-muted-foreground">{clientesDistintos}</td>
-                  <td className="py-3 pr-5 text-right text-sm font-bold tabular-nums text-primary">{fmtBRL(totalReceber)}</td>
+                  <td className="py-3 pl-3 pr-3 text-sm font-bold text-foreground sm:pl-5">Total</td>
+                  <td className="hidden py-3 pr-3 text-center text-sm font-semibold tabular-nums text-muted-foreground sm:table-cell">{totalParcelas}</td>
+                  <td className="hidden py-3 pr-3 text-center text-sm font-semibold tabular-nums text-muted-foreground sm:table-cell">{clientesDistintos}</td>
+                  <td className="py-3 pr-3 text-right text-sm font-bold tabular-nums text-primary sm:pr-5">{fmtBRL(totalReceber)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   )
 }

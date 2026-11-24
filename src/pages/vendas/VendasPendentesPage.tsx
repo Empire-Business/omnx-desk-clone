@@ -2,12 +2,17 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MessageCircle, X, Copy, CheckCircle2, Archive, FileImage, FileText, ClipboardCheck, Pencil, Save, Plus, FileSignature, Users, ScanLine, Loader2 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { TabelaResponsiva } from '@/components/ui/TabelaResponsiva'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { SeloStatus, type TomStatus } from '@/components/ui/StatusBadge'
 import { ContratosTabs } from '@/components/contratos/ContratosTabs'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import {
   useVendasPendentes,
   useUpdateVendaPendente,
+  useAssinaturasPorVenda,
   getComprovanteUrl,
   type VendaPendente,
   type VendaPendenteEdicao,
@@ -165,12 +170,13 @@ function enderecoLegivel(v: VendaPendente): string {
   return estruturado || v.cliente_endereco || '—'
 }
 
-function statusBadge(s: VendaPendente['status']) {
+/** Rótulo e tom do selo (DS: cor + forma) de cada situação da venda. */
+function statusBadge(s: VendaPendente['status']): { label: string; tom: TomStatus } {
   switch (s) {
-    case 'pendente':       return { label: 'Pendente', cls: 'bg-warning text-warning-foreground' }
-    case 'em_atendimento': return { label: 'Em atendimento', cls: 'bg-info text-white' }
-    case 'concluida':      return { label: 'Concluída', cls: 'bg-success text-white' }
-    case 'descartada':     return { label: 'Descartada', cls: 'bg-muted text-muted-foreground' }
+    case 'pendente':       return { label: 'Pendente', tom: 'aberto' }
+    case 'em_atendimento': return { label: 'Em atendimento', tom: 'andamento' }
+    case 'concluida':      return { label: 'Concluída', tom: 'resolvido' }
+    case 'descartada':     return { label: 'Descartada', tom: 'neutro' }
   }
 }
 
@@ -181,6 +187,7 @@ export function VendasPendentesPage() {
   const [filtroStatus, setFiltroStatus] = useState<VendaPendente['status'] | 'all'>('all')
   const { data: todasVendas, isLoading, refetch: refetchVendas } = useVendasPendentes()
   const update = useUpdateVendaPendente()
+  const { data: assinaturas } = useAssinaturasPorVenda()
   const vendas = useMemo(() => {
     if (!todasVendas) return undefined
     return filtroStatus === 'all' ? todasVendas : todasVendas.filter((v) => v.status === filtroStatus)
@@ -259,23 +266,26 @@ export function VendasPendentesPage() {
 
   if (!podeAcessar) {
     return (
-      <div className="glass-card p-8 text-center text-sm text-muted-foreground">
-        Apenas o time de atendimento tem acesso a essa página.
-      </div>
+      <PageContainer>
+        <EmptyState
+          title="Sem acesso a esta tela"
+          description="Apenas o time de atendimento tem acesso a essa página."
+        />
+      </PageContainer>
     )
   }
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <PageContainer className="animate-fade-in">
       <PageHeader
-        title="Onboarding"
-        description="Vendas enviadas pelos closers para início do atendimento e onboarding do cliente."
+        title="Vendas novas"
+        description="Vendas que chegaram e precisam virar contrato e começar o atendimento."
       />
 
       <ContratosTabs />
 
-      <div className="glass-card p-5 space-y-4">
-        <div className="flex items-center gap-3 text-xs">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar por situação">
           {(['all', 'pendente', 'em_atendimento', 'concluida', 'descartada'] as const).map((s) => {
             const ativo = filtroStatus === s
             const label = s === 'all' ? 'Todas' : statusBadge(s).label
@@ -283,15 +293,17 @@ export function VendasPendentesPage() {
             return (
               <button
                 key={s}
+                type="button"
                 onClick={() => setFiltroStatus(s)}
-                className={`rounded-full px-3 py-1 transition-colors inline-flex items-center gap-1.5 ${ativo ? 'bg-primary text-primary-foreground' : 'border border-border hover:bg-muted'}`}
+                aria-pressed={ativo}
+                className="chip"
               >
                 {label}
-                <span className={`text-[10px] tabular-nums rounded-full px-1.5 py-0 ${ativo ? 'bg-white/20' : 'bg-muted text-muted-foreground'}`}>{count}</span>
+                <span className="tabular-nums opacity-70">{count}</span>
               </button>
             )
           })}
-          <span className="ml-auto text-muted-foreground">{vendas?.length ?? 0} venda(s)</span>
+          <span className="ml-auto text-xs text-muted-foreground">{vendas?.length ?? 0} venda(s)</span>
         </div>
 
         {(pendentesDeLeitura.length > 0 || backfill) && (
@@ -322,10 +334,7 @@ export function VendasPendentesPage() {
                 <span className="text-muted-foreground">
                   {pendentesDeLeitura.length} venda(s) com comprovante ainda sem identificador de pagamento.
                 </span>
-                <button
-                  onClick={rodarBackfill}
-                  className="ml-auto rounded-full bg-primary px-3 py-1 font-medium text-primary-foreground hover:opacity-90"
-                >
+                <button type="button" onClick={rodarBackfill} className="btn btn-primary btn-sm ml-auto">
                   Ler comprovantes com IA
                 </button>
               </>
@@ -334,99 +343,80 @@ export function VendasPendentesPage() {
         )}
 
         {isLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-14 shimmer rounded-lg" />)}
+          <div role="status" aria-label="Carregando vendas" className="space-y-2">
+            {Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk h-14 rounded-lg" />)}
           </div>
-        ) : !vendas || vendas.length === 0 ? (
-          <p className="py-12 text-center text-sm text-muted-foreground">Nada por aqui.</p>
         ) : (
-          <ul className="divide-y divide-border">
-            {vendas.map((v) => {
-              const total = v.pagamentos.reduce((acc, p) => acc + Number(p.valor || 0), 0)
-              const badge = statusBadge(v.status)
-              return (
-                <li
-                  key={v.id}
-                  onClick={() => abrirModal(v)}
-                  className="py-3 cursor-pointer hover:bg-muted/40 transition-colors px-2 -mx-2 rounded-lg"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{v.cliente_nome}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {v.produto_nome ?? '—'} · Closer: {v.closer_nome} · {fmtDate(v.criado_em)}
-                      </p>
-                      {/* Identificador de pagamento: é por ele que o financeiro acha o
-                          lançamento no extrato, então fica na linha, não escondido no modal. */}
-                      <p className="mt-0.5 flex items-center gap-1.5 text-xs truncate" title="Nome que aparece no extrato bancário">
-                        <ScanLine className={`h-3.5 w-3.5 shrink-0 ${v.identificador_pagamento ? 'text-primary' : 'text-warning'}`} />
-                        {v.identificador_pagamento
-                          ? <span className="font-medium text-foreground truncate">{v.identificador_pagamento}</span>
-                          : <span className="text-warning">sem identificador de pagamento</span>}
-                      </p>
-                    </div>
-                    <span className="text-sm font-semibold text-foreground tabular-nums">{fmtBRL(total)}</span>
-                    {v.ghl_pipeline_name && (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${
-                          isPipelineCorreto(v.ghl_pipeline_name)
-                            ? 'bg-success/10 text-success border-success/30'
-                            : 'bg-warning/10 text-warning border-warning/30'
-                        }`}
-                        title={
-                          isPipelineCorreto(v.ghl_pipeline_name)
-                            ? `Vinculado no pipeline ${v.ghl_pipeline_name}`
-                            : `Vinculado em "${v.ghl_pipeline_name}" — fora de ${PIPELINE_ESPERADO_LABEL}`
-                        }
-                      >
-                        {v.ghl_pipeline_name}
-                      </span>
-                    )}
-                    {/* O selo aparece em QUALQUER venda sem vínculo, não só na concluída:
-                        antes, uma venda em atendimento sem vínculo ficava sem aviso nenhum,
-                        e a ausência do selo passava a impressão de que estava vinculada. */}
-                    {!v.ghl_oportunidade_id && v.status !== 'descartada' && (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          v.status === 'concluida'
-                            ? 'bg-warning text-warning-foreground'
-                            : 'border border-warning/40 bg-warning/10 text-warning'
-                        }`}
-                        title={
-                          v.status === 'concluida'
-                            ? 'Concluída sem vínculo no CRM — não conta no faturamento'
-                            : 'Ainda não vinculada ao CRM — só entra no faturamento depois de concluir e vincular'
-                        }
-                      >
-                        sem vínculo
-                      </span>
-                    )}
-                    {v.pagador_diferente && (
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-2xs font-medium text-foreground"
-                        title={`Pagamento feito por outra pessoa${v.pagador_nome ? `: ${v.pagador_nome}` : ''}`}
-                      >
-                        <Users className="h-3 w-3" /> pago por terceiro
-                      </span>
-                    )}
-                    <BadgeEditado edicoes={v.historico_edicoes} />
+          <TabelaResponsiva
+            rotulo="Vendas novas"
+            linhas={vendas ?? []}
+            chave={(v) => v.id}
+            aoClicarLinha={abrirModal}
+            vazio={<EmptyState compact bare title="Nada por aqui" description="Nenhuma venda nesta situação." />}
+            colunas={[
+              {
+                id: 'cliente', titulo: 'Cliente', principal: true,
+                celula: (v) => (
+                  <div className="min-w-0 font-normal">
                     <button
-                      onClick={(e) => { e.stopPropagation(); setGerarPara(v) }}
-                      className="flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground hover:text-primary hover:border-primary/40 transition-colors"
-                      title="Gerar contrato em PDF a partir do modelo do produto"
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); abrirModal(v) }}
+                      className="max-w-full truncate text-left text-sm font-semibold text-foreground hover:text-primary"
                     >
-                      <FileSignature className="h-3.5 w-3.5" /> Gerar contrato
+                      {v.cliente_nome}
                     </button>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge.cls}`}>{badge.label}</span>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {v.produto_nome ?? '—'} · Closer: {v.closer_nome}
+                    </p>
+                    <DatasOnboarding entrou={v.criado_em} assinou={assinaturas?.[v.id] ?? null} />
+                    {/* Identificador de pagamento: é por ele que o financeiro acha o
+                        lançamento no extrato, então fica na linha, não escondido no modal. */}
+                    <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs" title="Nome que aparece no extrato bancário">
+                      <ScanLine className={`h-3.5 w-3.5 shrink-0 ${v.identificador_pagamento ? 'text-primary' : 'text-warning'}`} />
+                      {v.identificador_pagamento
+                        ? <span className="truncate font-medium text-foreground">{v.identificador_pagamento}</span>
+                        : <span className="text-warning">sem identificador de pagamento</span>}
+                    </p>
                   </div>
-                </li>
-              )
-            })}
-          </ul>
+                ),
+              },
+              {
+                id: 'valor', titulo: 'Valor', numerica: true,
+                celula: (v) => fmtBRL(v.pagamentos.reduce((acc, p) => acc + Number(p.valor || 0), 0)),
+              },
+              {
+                id: 'situacao', titulo: 'Situação',
+                celula: (v) => {
+                  const badge = statusBadge(v.status)
+                  return <SeloStatus tom={badge.tom} size="sm">{badge.label}</SeloStatus>
+                },
+              },
+              {
+                id: 'avisos', titulo: 'Avisos',
+                celula: (v) => <AvisosVenda venda={v} />,
+              },
+            ]}
+            acoes={(v) => (
+              <button
+                type="button"
+                onClick={() => setGerarPara(v)}
+                className="btn btn-secondary btn-sm"
+                title="Gerar contrato em PDF a partir do modelo do produto"
+              >
+                <FileSignature aria-hidden /> Gerar contrato
+              </button>
+            )}
+          />
         )}
       </div>
 
-      {selecionada && <VendaModal venda={selecionada} onClose={() => setSelecionada(null)} />}
+      {selecionada && (
+        <VendaModal
+          venda={selecionada}
+          dataAssinatura={assinaturas?.[selecionada.id] ?? null}
+          onClose={() => setSelecionada(null)}
+        />
+      )}
 
       {gerarPara && (
         <GerarContratoModal
@@ -437,8 +427,94 @@ export function VendasPendentesPage() {
           vendaPendenteId={gerarPara.id}
         />
       )}
+    </PageContainer>
+  )
+}
+
+/**
+ * Avisos da venda na lista: pipeline do CRM, falta de vínculo, pagamento por
+ * terceiro e edição manual. Cada um num selo do DS (cor + forma).
+ */
+function AvisosVenda({ venda: v }: { venda: VendaPendente }) {
+  const semVinculo = !v.ghl_oportunidade_id && v.status !== 'descartada'
+  const crm = estadoCrmOmnx(v)
+  const temAlgo = !!v.ghl_pipeline_name || semVinculo || v.pagador_diferente || (v.historico_edicoes?.length ?? 0) > 0
+    || v.origem === 'crm' || !!crm
+  if (!temAlgo) return <span className="text-muted-foreground">—</span>
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {v.origem === 'crm' && (
+        <SeloStatus size="sm" tom="andamento" title="Venda registrada no CRM OMNX e trazida para cá automaticamente">
+          Veio do CRM
+        </SeloStatus>
+      )}
+      {crm && (
+        <SeloStatus size="sm" tom={crm.tom} title={crm.dica}>
+          {crm.rotulo}
+        </SeloStatus>
+      )}
+      {v.ghl_pipeline_name && (
+        <SeloStatus
+          size="sm"
+          tom={isPipelineCorreto(v.ghl_pipeline_name) ? 'resolvido' : 'aguardando'}
+          title={
+            isPipelineCorreto(v.ghl_pipeline_name)
+              ? `Vinculado no pipeline ${v.ghl_pipeline_name}`
+              : `Vinculado em "${v.ghl_pipeline_name}" — fora de ${PIPELINE_ESPERADO_LABEL}`
+          }
+        >
+          {v.ghl_pipeline_name}
+        </SeloStatus>
+      )}
+      {/* O selo aparece em QUALQUER venda sem vínculo, não só na concluída:
+          antes, uma venda em atendimento sem vínculo ficava sem aviso nenhum,
+          e a ausência do selo passava a impressão de que estava vinculada. */}
+      {semVinculo && (
+        <SeloStatus
+          size="sm"
+          tom={v.status === 'concluida' ? 'atrasado' : 'aguardando'}
+          title={
+            v.status === 'concluida'
+              ? 'Concluída sem vínculo no CRM — não conta no faturamento'
+              : 'Ainda não vinculada ao CRM — só entra no faturamento depois de concluir e vincular'
+          }
+        >
+          sem vínculo
+        </SeloStatus>
+      )}
+      {v.pagador_diferente && (
+        <SeloStatus
+          size="sm"
+          tom="aguardando"
+          title={`Pagamento feito por outra pessoa${v.pagador_nome ? `: ${v.pagador_nome}` : ''}`}
+        >
+          pago por terceiro
+        </SeloStatus>
+      )}
+      <BadgeEditado edicoes={v.historico_edicoes} />
     </div>
   )
+}
+
+/**
+ * Estado da venda na ponte com o CRM OMNX (separado do vínculo GHL/Empire).
+ * null quando a venda nunca passou pela ponte (ponte desligada ou venda antiga).
+ */
+function estadoCrmOmnx(v: VendaPendente): { rotulo: string; tom: TomStatus; dica: string } | null {
+  const erro = v.crm_sincronizacao_erro
+  if (erro === 'cliente_nao_encontrado_no_crm') {
+    return { rotulo: 'cliente não encontrado no CRM', tom: 'aguardando', dica: 'O CRM OMNX não achou esse cliente pelo telefone ou e-mail — nada foi criado lá.' }
+  }
+  if (erro === 'cliente_ambiguo_no_crm') {
+    return { rotulo: 'cliente duplicado no CRM', tom: 'aguardando', dica: 'O CRM OMNX achou mais de um cliente com esse telefone ou e-mail — resolva lá e edite a venda para reenviar.' }
+  }
+  if (erro) {
+    return { rotulo: 'erro no CRM', tom: 'atrasado', dica: `O último envio ao CRM OMNX falhou: ${erro}` }
+  }
+  if (v.crm_sincronizado_em) {
+    return { rotulo: 'CRM sincronizado', tom: 'resolvido', dica: `Igual no CRM OMNX desde ${fmtDate(v.crm_sincronizado_em)}` }
+  }
+  return null
 }
 
 interface OppCandidata {
@@ -478,7 +554,11 @@ interface LeadCandidato {
   oportunidades: OppCandidata[]
 }
 
-function VendaModal({ venda, onClose }: { venda: VendaPendente; onClose: () => void }) {
+function VendaModal({ venda, dataAssinatura, onClose }: {
+  venda: VendaPendente
+  dataAssinatura: string | null
+  onClose: () => void
+}) {
   const update = useUpdateVendaPendente()
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -686,7 +766,7 @@ function VendaModal({ venda, onClose }: { venda: VendaPendente; onClose: () => v
       nome: form.cliente_nome,
       whatsapp: waNumero,
     })
-    navigate(`/chat?${params.toString()}`)
+    navigate(`/conversas?${params.toString()}`)
     onClose()
   }
 
@@ -953,25 +1033,34 @@ function VendaModal({ venda, onClose }: { venda: VendaPendente; onClose: () => v
   }
 
   const badge = statusBadge(venda.status)
+  const crmOmnx = estadoCrmOmnx(venda)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 backdrop-blur-sm p-4">
-      <div className="w-full max-w-3xl glass-card bg-card my-auto flex flex-col max-h-[92vh] overflow-hidden p-0">
+      <div className="w-full max-w-3xl glass-card bg-card my-auto flex flex-col max-h-[92dvh] overflow-hidden p-0">
         {/* Header fixo */}
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border shrink-0">
           <div className="min-w-0">
             <h3 className="text-base font-bold text-foreground truncate">{form.cliente_nome || venda.cliente_nome}</h3>
             <p className="text-xs text-muted-foreground flex flex-wrap items-center gap-1.5 mt-0.5">
-              <span>Enviada em {fmtDate(venda.criado_em)} ·</span>
-              <span className={`rounded-full px-2 py-0.5 text-xs ${badge.cls}`}>{badge.label}</span>
+              <SeloStatus tom={badge.tom} size="sm">{badge.label}</SeloStatus>
+              {venda.origem === 'crm' && (
+                <SeloStatus tom="andamento" size="sm" title="Venda registrada no CRM OMNX e trazida para cá automaticamente">
+                  Veio do CRM
+                </SeloStatus>
+              )}
+              {crmOmnx && (
+                <SeloStatus tom={crmOmnx.tom} size="sm" title={crmOmnx.dica}>{crmOmnx.rotulo}</SeloStatus>
+              )}
               <BadgeEditado edicoes={venda.historico_edicoes} />
             </p>
+            <DatasOnboarding entrou={venda.criado_em} assinou={dataAssinatura} />
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {!editando && (
               <button
                 onClick={() => setEditando(true)}
-                className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 h-8 text-xs font-medium text-foreground hover:bg-muted"
+                className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 h-11 text-xs font-medium text-foreground hover:bg-muted sm:h-8"
                 title="Editar dados da venda"
               >
                 <Pencil className="h-3.5 w-3.5" /> Editar
@@ -1007,7 +1096,7 @@ function VendaModal({ venda, onClose }: { venda: VendaPendente; onClose: () => v
                     type="button"
                     onClick={relerComprovante}
                     disabled={lendoComprovante || !temComprovanteLegivel}
-                    className="h-[34px] shrink-0 rounded-lg border border-border px-2.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50 inline-flex items-center gap-1.5"
+                    className="h-11 shrink-0 rounded-lg border border-border px-2.5 text-xs sm:h-[34px] font-medium text-foreground hover:bg-muted disabled:opacity-50 inline-flex items-center gap-1.5"
                     title={temComprovanteLegivel ? 'Ler o nome direto do comprovante' : 'Nenhum comprovante em imagem para ler (PDF e HEIC não dá)'}
                   >
                     {lendoComprovante
@@ -1258,37 +1347,22 @@ function VendaModal({ venda, onClose }: { venda: VendaPendente; onClose: () => v
         {venda.pagamentos.length > 0 && (
           <div className="space-y-2">
             <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Pagamentos</h4>
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border bg-muted/40 text-left text-muted-foreground">
-                    <th className="px-3 py-2 font-medium">Sinal</th>
-                    <th className="px-3 py-2 font-medium">Data</th>
-                    <th className="px-3 py-2 font-medium text-right">Valor</th>
-                    <th className="px-3 py-2 font-medium">Forma</th>
-                    <th className="px-3 py-2 font-medium">Plataforma</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {venda.pagamentos.map((p, i) => (
-                    <tr key={i}>
-                      <td className="px-3 py-2 text-muted-foreground">{p.sinal || '—'}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{fmtDataPagamento(p.data)}</td>
-                      <td className="px-3 py-2 text-right font-medium text-foreground tabular-nums">{fmtBRL(Number(p.valor))}</td>
-                      <td className="px-3 py-2">{p.forma || '—'}</td>
-                      <td className="px-3 py-2">{p.plataforma || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-border bg-muted/40">
-                    <td className="px-3 py-2 font-medium text-muted-foreground" colSpan={2}>Total</td>
-                    <td className="px-3 py-2 text-right font-bold text-foreground tabular-nums">{fmtBRL(totalPagamentos)}</td>
-                    <td className="px-3 py-2" colSpan={2}></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+            <TabelaResponsiva
+              rotulo="Pagamentos da venda"
+              linhas={venda.pagamentos.map((p, i) => ({ ...p, _i: i }))}
+              chave={(p) => String(p._i)}
+              colunas={[
+                { id: 'sinal', titulo: 'Sinal', principal: true, celula: (p) => p.sinal || '—' },
+                { id: 'data', titulo: 'Data', numerica: true, celula: (p) => fmtDataPagamento(p.data) },
+                { id: 'valor', titulo: 'Valor', numerica: true, celula: (p) => fmtBRL(Number(p.valor)) },
+                { id: 'forma', titulo: 'Forma', celula: (p) => p.forma || '—' },
+                { id: 'plataforma', titulo: 'Plataforma', celula: (p) => p.plataforma || '—' },
+              ]}
+            />
+            <p className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm">
+              <span className="font-medium text-muted-foreground">Total</span>
+              <span className="font-bold tabular-nums text-foreground">{fmtBRL(totalPagamentos)}</span>
+            </p>
           </div>
         )}
 
@@ -1548,8 +1622,9 @@ function BadgeEditado({ edicoes }: { edicoes: VendaPendenteEdicao[] | null | und
     <TooltipProvider delayDuration={150}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-2xs font-medium text-foreground cursor-help align-middle">
-            <Pencil className="h-3 w-3" /> editado
+          <span data-s="aguardando" className="st st-sm cursor-help align-middle" tabIndex={0}>
+            <i className="st-g" aria-hidden />
+            <span>editado</span>
           </span>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs p-0">
@@ -1574,6 +1649,23 @@ function BadgeEditado({ edicoes }: { edicoes: VendaPendenteEdicao[] | null | und
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  )
+}
+
+/**
+ * As duas datas que a equipe confundia: quando o lead entrou no onboarding e
+ * quando assinou o contrato (é a assinatura que deixa o contrato ativo).
+ */
+function DatasOnboarding({ entrou, assinou }: { entrou: string; assinou: string | null }) {
+  return (
+    <p className="mt-0.5 text-xs text-muted-foreground truncate">
+      Lead entrou: <span className="text-foreground">{new Date(entrou).toLocaleDateString('pt-BR')}</span>
+      {' · '}
+      Assinou:{' '}
+      {assinou
+        ? <span className="font-medium text-success">{fmtDataPagamento(assinou)}</span>
+        : <span className="text-warning">ainda não assinou</span>}
+    </p>
   )
 }
 

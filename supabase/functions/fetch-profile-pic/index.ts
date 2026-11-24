@@ -1,6 +1,7 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { tokenUazapi, urlUazapi } from '../_shared/uazapi-credenciais.ts'
 
-const UAZAPI_URL = 'https://empirebusiness.uazapi.com'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,7 +41,7 @@ async function persistPicToStorage(
   }
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -68,11 +69,29 @@ Deno.serve(async (req) => {
   // Limit batch size
   const batch = ids.slice(0, 50)
 
+  // Só contatos que o usuário enxerga pela RLS (empresa, cliente e grupo interno —
+  // restrito_admin só para admin/gerente). A leitura completa abaixo é service_role.
+  const jwt = authHeader.replace('Bearer ', '')
+  let permitidos = batch
+  if (jwt !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+    const usuario = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false },
+    })
+    const { data: visiveis } = await usuario.from('chat_contacts').select('id').in('id', batch)
+    permitidos = (visiveis ?? []).map((c: { id: string }) => c.id)
+    if (permitidos.length === 0) {
+      return new Response(JSON.stringify({ results: [], total: 0, updated: 0 }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
   // Fetch contacts with their instance info
   const { data: contacts, error } = await supabase
     .from('chat_contacts')
-    .select('id, numero_whatsapp, instance_id, foto_url, nome, whatsapp_instances(instance_id)')
-    .in('id', batch)
+    .select('id, numero_whatsapp, instance_id, foto_url, nome, whatsapp_instances(instance_id, tenant_id)')
+    .in('id', permitidos)
 
   if (error || !contacts) {
     return new Response(JSON.stringify({ error: 'Failed to fetch contacts' }), { status: 500, headers: corsHeaders })
@@ -81,13 +100,14 @@ Deno.serve(async (req) => {
   const results: { id: string; foto_url: string | null; nome: string | null; updated: boolean }[] = []
 
   for (const contact of contacts) {
-    const inst = contact.whatsapp_instances as { instance_id: string } | null
+    const inst = contact.whatsapp_instances as { instance_id: string; tenant_id?: string | null } | null
     if (!inst) {
       results.push({ id: contact.id, foto_url: contact.foto_url, nome: contact.nome, updated: false })
       continue
     }
 
-    const instanceToken = Deno.env.get(`UAZAPI_TOKEN_${inst.instance_id}`)
+    const instanceToken = await tokenUazapi(supabase, inst.instance_id, inst.tenant_id ?? null)
+    const UAZAPI_URL = await urlUazapi(supabase, inst.tenant_id ?? null)
     if (!instanceToken) {
       results.push({ id: contact.id, foto_url: contact.foto_url, nome: contact.nome, updated: false })
       continue

@@ -6,11 +6,15 @@ import {
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
+import type { LucideIcon } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { AbasRolaveis } from '@/components/ui/AbasRolaveis'
+import { TabelaResponsiva, type ColunaTabela } from '@/components/ui/TabelaResponsiva'
+import { SeloStatus, type TomStatus } from '@/components/ui/StatusBadge'
 import { useEntregas } from '@/hooks/useEntregas'
 import { useClientes } from '@/hooks/useClientes'
-import { useTrilhas } from '@/hooks/useTrilhas'
 import { supabase } from '@/lib/supabase'
 import type { DeliveryWithDetails } from '@/types/database'
 
@@ -37,7 +41,7 @@ function exportPdf() {
 
 type TabId = 'entregas' | 'performance' | 'saude' | 'nps' | 'avaliacoes' | 'trilhas'
 
-const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
+const TABS: { id: TabId; label: string; icon: LucideIcon }[] = [
   { id: 'entregas', label: 'Entregas por Cliente', icon: Package },
   { id: 'performance', label: 'Performance', icon: TrendingUp },
   { id: 'saude', label: 'Saúde da Carteira', icon: Heart },
@@ -57,13 +61,24 @@ const STATUS_LABELS: Record<string, string> = {
   publicado: 'Publicado',
 }
 
-const STATUS_BADGE: Record<string, string> = {
-  rascunho: 'bg-muted text-muted-foreground',
-  aguardando_aprovacao: 'bg-warning-light text-warning',
-  em_revisao: 'bg-info-light text-info',
-  aprovado: 'bg-success-light text-success',
-  reprovado: 'bg-danger-light text-danger',
-  publicado: 'bg-primary-muted text-primary',
+/** Tom do selo de status (DS: cor + forma), igual ao `StatusBadge` de entregas. */
+const STATUS_TOM: Record<string, TomStatus> = {
+  rascunho: 'neutro',
+  aguardando_aprovacao: 'aguardando',
+  em_revisao: 'andamento',
+  aprovado: 'resolvido',
+  reprovado: 'atrasado',
+  publicado: 'resolvido',
+}
+
+/**
+ * Faixa de um número (taxa, nota, média) num selo do DS: bom = "resolvido",
+ * médio = "aguardando", ruim = "atrasado". Mesmas faixas de cor de antes.
+ */
+function tomPorFaixa(valor: number, bom: number, medio: number, ruim: TomStatus = 'atrasado'): TomStatus {
+  if (valor >= bom) return 'resolvido'
+  if (valor >= medio) return 'aguardando'
+  return ruim
 }
 
 // ─── KPI Card ────────────────────────────────────────────────────────────────
@@ -84,13 +99,13 @@ const VARIANT_ICON_CLS: Record<string, string> = {
 
 function KpiCard({ label, value, icon: Icon, variant = 'default' }: KpiCardProps) {
   return (
-    <div className="glass-card p-5 flex items-center gap-4">
-      <div className={cn('rounded-xl p-3 shrink-0', VARIANT_ICON_CLS[variant])}>
-        <Icon className="h-6 w-6" />
+    <div className="glass-card flex items-center gap-4 p-4 sm:p-5">
+      <div className={cn('shrink-0 rounded-lg p-2.5', VARIANT_ICON_CLS[variant])}>
+        <Icon className="h-5 w-5" aria-hidden />
       </div>
       <div className="min-w-0">
-        <p className="font-display text-2xl font-bold text-foreground leading-tight">{value}</p>
-        <p className="font-mono text-[11px] tracking-wider uppercase text-muted-foreground mt-0.5">{label}</p>
+        <p className="t-h2 tabular-nums leading-tight text-foreground">{value}</p>
+        <p className="mt-0.5 text-[12.5px] text-muted-foreground">{label}</p>
       </div>
     </div>
   )
@@ -100,20 +115,13 @@ function KpiCard({ label, value, icon: Icon, variant = 'default' }: KpiCardProps
 
 function ExportBar({ onCsv, csvDisabled }: { onCsv: () => void; csvDisabled?: boolean }) {
   return (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={onCsv}
-        disabled={csvDisabled}
-        className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg border border-border bg-card px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-foreground hover:bg-muted transition-colors disabled:opacity-50"
-      >
-        <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+    <div className="flex items-center gap-2 print:hidden">
+      <button type="button" onClick={onCsv} disabled={csvDisabled} className="btn btn-secondary btn-sm">
+        <Download aria-hidden />
         <span className="hidden sm:inline">Exportar</span> CSV
       </button>
-      <button
-        onClick={exportPdf}
-        className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg border border-border bg-card px-2.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-foreground hover:bg-muted transition-colors"
-      >
-        <Printer className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+      <button type="button" onClick={exportPdf} className="btn btn-secondary btn-sm">
+        <Printer aria-hidden />
         <span className="hidden sm:inline">Exportar</span> PDF
       </button>
     </div>
@@ -124,50 +132,40 @@ function ExportBar({ onCsv, csvDisabled }: { onCsv: () => void; csvDisabled?: bo
 
 function Shimmer() {
   return (
-    <div className="space-y-4 animate-pulse">
+    <div role="status" aria-label="Carregando relatório" className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         {[1, 2, 3, 4].map(i => (
-          <div key={i} className="glass-card p-5 h-[88px] rounded-xl" />
+          <div key={i} className="sk h-[88px] rounded-lg" />
         ))}
       </div>
-      <div className="glass-card h-64 rounded-xl" />
+      <div className="sk h-64 rounded-lg" />
     </div>
   )
 }
 
-// ─── Table wrapper ───────────────────────────────────────────────────────────
+// ─── Tabela (design system) ──────────────────────────────────────────────────
 
-type HeaderDef = string | { label: string; className?: string }
-
-function DataTable({ headers, children, empty }: { headers: HeaderDef[]; children: React.ReactNode; empty?: boolean }) {
-  if (empty) {
-    return (
-      <EmptyState
-        icon={FileBarChart}
-        title="Sem dados"
-        description="Ainda não há dados suficientes para gerar este relatório."
-      />
-    )
-  }
+/** Tabela do relatório: vira cartões em largura estreita; vazia mostra o aviso. */
+function TabelaRelatorio<T>({ rotulo, colunas, linhas, chave }: {
+  rotulo: string
+  colunas: ColunaTabela<T>[]
+  linhas: T[]
+  chave: (linha: T) => string
+}) {
   return (
-    <div className="glass-card overflow-hidden overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border bg-muted/30">
-            {headers.map(h => {
-              const label = typeof h === 'string' ? h : h.label
-              const extra = typeof h === 'string' ? '' : (h.className ?? '')
-              return (
-                <th key={label} className={cn('px-3 sm:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap', extra)}>
-                  {label}
-                </th>
-              )
-            })}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">{children}</tbody>
-      </table>
-    </div>
+    <TabelaResponsiva
+      rotulo={rotulo}
+      colunas={colunas}
+      linhas={linhas}
+      chave={chave}
+      vazio={
+        <EmptyState
+          icon={FileBarChart}
+          title="Sem dados"
+          description="Ainda não há dados suficientes para gerar este relatório."
+        />
+      }
+    />
   )
 }
 
@@ -289,6 +287,7 @@ function TabEntregas({ entregas }: { entregas: DeliveryWithDetails[] }) {
   // group by client
   const rows = useMemo(() => {
     return entregas.map(e => ({
+      id: e.id,
       cliente: e.clients?.nome ?? '—',
       produto: e.deliverables?.products?.nome ?? '—',
       tipo: e.deliverables?.nome ?? '—',
@@ -299,9 +298,9 @@ function TabEntregas({ entregas }: { entregas: DeliveryWithDetails[] }) {
   }, [entregas])
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-        <h2 className="text-base font-semibold text-foreground">Entregas por Cliente</h2>
+    <section className="space-y-4 md:space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 className="t-h4 text-foreground">Entregas por Cliente</h2>
         <ExportBar
           csvDisabled={rows.length === 0}
           onCsv={() =>
@@ -321,23 +320,23 @@ function TabEntregas({ entregas }: { entregas: DeliveryWithDetails[] }) {
         <KpiCard label="Pendentes" value={stats.pendentes} icon={Clock} variant={stats.pendentes > 0 ? 'warning' : 'default'} />
       </div>
 
-      <DataTable headers={['Cliente', { label: 'Produto', className: 'hidden sm:table-cell' }, { label: 'Entregável', className: 'hidden md:table-cell' }, 'Status', 'Prazo', { label: 'Responsável', className: 'hidden lg:table-cell' }]} empty={rows.length === 0}>
-        {rows.map((r, i) => (
-          <tr key={i} className="hover:bg-muted/20 transition-colors">
-            <td className="px-3 sm:px-4 py-3 text-foreground font-medium">{r.cliente}</td>
-            <td className="hidden sm:table-cell px-3 sm:px-4 py-3 text-muted-foreground">{r.produto}</td>
-            <td className="hidden md:table-cell px-3 sm:px-4 py-3 text-muted-foreground">{r.tipo}</td>
-            <td className="px-3 sm:px-4 py-3">
-              <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', STATUS_BADGE[r.status] ?? 'bg-muted text-muted-foreground')}>
-                {STATUS_LABELS[r.status] ?? r.status}
-              </span>
-            </td>
-            <td className="px-3 sm:px-4 py-3 text-muted-foreground">{r.prazo}</td>
-            <td className="hidden lg:table-cell px-3 sm:px-4 py-3 text-muted-foreground">{r.responsavel}</td>
-          </tr>
-        ))}
-      </DataTable>
-    </div>
+      <TabelaRelatorio
+        rotulo="Entregas por cliente"
+        linhas={rows}
+        chave={(r) => r.id}
+        colunas={[
+          { id: 'cliente', titulo: 'Cliente', principal: true, celula: (r) => r.cliente },
+          { id: 'produto', titulo: 'Produto', celula: (r) => <span className="text-muted-foreground">{r.produto}</span> },
+          { id: 'tipo', titulo: 'Entregável', celula: (r) => <span className="text-muted-foreground">{r.tipo}</span> },
+          {
+            id: 'status', titulo: 'Status',
+            celula: (r) => <SeloStatus tom={STATUS_TOM[r.status] ?? 'neutro'} size="sm">{STATUS_LABELS[r.status] ?? r.status}</SeloStatus>,
+          },
+          { id: 'prazo', titulo: 'Prazo', numerica: true, celula: (r) => r.prazo },
+          { id: 'responsavel', titulo: 'Responsável', celula: (r) => <span className="text-muted-foreground">{r.responsavel}</span> },
+        ]}
+      />
+    </section>
   )
 }
 
@@ -371,9 +370,10 @@ function TabPerformance({ entregas, approvals }: { entregas: DeliveryWithDetails
       return new Date() > new Date(e.prazo)
     }).length
 
-    const rows = Array.from(byAgent.values())
-      .sort((a, b) => b.total - a.total)
-      .map(a => ({
+    const rows = Array.from(byAgent.entries())
+      .sort(([, a], [, b]) => b.total - a.total)
+      .map(([id, a]) => ({
+        id,
         nome: a.nome,
         total: a.total,
         aprovadas: a.aprovadas,
@@ -392,9 +392,9 @@ function TabPerformance({ entregas, approvals }: { entregas: DeliveryWithDetails
   }, [entregas, approvals])
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-        <h2 className="text-base font-semibold text-foreground">Performance por Estrategista</h2>
+    <section className="space-y-4 md:space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 className="t-h4 text-foreground">Performance por Estrategista</h2>
         <ExportBar
           csvDisabled={data.rows.length === 0}
           onCsv={() =>
@@ -414,24 +414,21 @@ function TabPerformance({ entregas, approvals }: { entregas: DeliveryWithDetails
         <KpiCard label="Entregas atrasadas" value={data.atrasadas} icon={AlertTriangle} variant={data.atrasadas > 0 ? 'danger' : 'default'} />
       </div>
 
-      <DataTable headers={['Estrategista', 'Total entregas', { label: 'Aprovadas', className: 'hidden md:table-cell' }, 'Taxa aprovação']} empty={data.rows.length === 0}>
-        {data.rows.map((r, i) => (
-          <tr key={i} className="hover:bg-muted/20 transition-colors">
-            <td className="px-3 sm:px-4 py-3 text-foreground font-medium">{r.nome}</td>
-            <td className="px-3 sm:px-4 py-3 text-muted-foreground">{r.total}</td>
-            <td className="hidden md:table-cell px-3 sm:px-4 py-3 text-muted-foreground">{r.aprovadas}</td>
-            <td className="px-3 sm:px-4 py-3">
-              <span className={cn(
-                'rounded-full px-2.5 py-0.5 text-xs font-medium',
-                r.taxa >= 80 ? 'bg-success-light text-success' : r.taxa >= 50 ? 'bg-warning-light text-warning' : 'bg-danger-light text-danger',
-              )}>
-                {r.taxa}%
-              </span>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
-    </div>
+      <TabelaRelatorio
+        rotulo="Performance por estrategista"
+        linhas={data.rows}
+        chave={(r) => r.id}
+        colunas={[
+          { id: 'nome', titulo: 'Estrategista', principal: true, celula: (r) => r.nome },
+          { id: 'total', titulo: 'Total entregas', numerica: true, celula: (r) => r.total },
+          { id: 'aprovadas', titulo: 'Aprovadas', numerica: true, celula: (r) => r.aprovadas },
+          {
+            id: 'taxa', titulo: 'Taxa aprovação', numerica: true,
+            celula: (r) => <SeloStatus tom={tomPorFaixa(r.taxa, 80, 50)} size="sm">{r.taxa}%</SeloStatus>,
+          },
+        ]}
+      />
+    </section>
   )
 }
 
@@ -481,7 +478,7 @@ function TabSaude({ entregas, npsResponses, clientes }: {
       if (atrasadas > 0 || (npsAvg !== null && npsAvg <= 6)) saude = 'risco'
       else if (pendentes > 3 || (npsAvg !== null && npsAvg <= 8)) saude = 'atencao'
 
-      return { nome: c.nome, pendentes, npsAvg, ultimaEntrega, saude, atrasadas }
+      return { id: c.id, nome: c.nome, pendentes, npsAvg, ultimaEntrega, saude, atrasadas }
     })
 
     const emRisco = rows.filter(r => r.saude === 'risco').length
@@ -495,10 +492,10 @@ function TabSaude({ entregas, npsResponses, clientes }: {
     }), totalAtivos: clientesAtivos.length, emRisco, npsMedio, totalAtrasadas }
   }, [entregas, npsResponses, clientes])
 
-  const SAUDE_BADGE: Record<string, string> = {
-    saudavel: 'bg-success-light text-success',
-    atencao: 'bg-warning-light text-warning',
-    risco: 'bg-danger-light text-danger',
+  const SAUDE_TOM: Record<string, TomStatus> = {
+    saudavel: 'resolvido',
+    atencao: 'aguardando',
+    risco: 'atrasado',
   }
   const SAUDE_LABEL: Record<string, string> = {
     saudavel: 'Saudável',
@@ -507,9 +504,9 @@ function TabSaude({ entregas, npsResponses, clientes }: {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-        <h2 className="text-base font-semibold text-foreground">Saúde da Carteira</h2>
+    <section className="space-y-4 md:space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 className="t-h4 text-foreground">Saúde da Carteira</h2>
         <ExportBar
           csvDisabled={data.rows.length === 0}
           onCsv={() =>
@@ -529,22 +526,22 @@ function TabSaude({ entregas, npsResponses, clientes }: {
         <KpiCard label="Entregas atrasadas" value={data.totalAtrasadas} icon={Clock} variant={data.totalAtrasadas > 0 ? 'danger' : 'default'} />
       </div>
 
-      <DataTable headers={['Cliente', { label: 'Pendentes', className: 'hidden sm:table-cell' }, 'NPS', { label: 'Última entrega', className: 'hidden md:table-cell' }, 'Saúde']} empty={data.rows.length === 0}>
-        {data.rows.map((r, i) => (
-          <tr key={i} className="hover:bg-muted/20 transition-colors">
-            <td className="px-3 sm:px-4 py-3 text-foreground font-medium">{r.nome}</td>
-            <td className="hidden sm:table-cell px-3 sm:px-4 py-3 text-muted-foreground">{r.pendentes}</td>
-            <td className="px-3 sm:px-4 py-3 text-muted-foreground">{r.npsAvg !== null ? r.npsAvg : '—'}</td>
-            <td className="hidden md:table-cell px-3 sm:px-4 py-3 text-muted-foreground">{r.ultimaEntrega ? new Date(r.ultimaEntrega).toLocaleDateString('pt-BR') : '—'}</td>
-            <td className="px-3 sm:px-4 py-3">
-              <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', SAUDE_BADGE[r.saude])}>
-                {SAUDE_LABEL[r.saude]}
-              </span>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
-    </div>
+      <TabelaRelatorio
+        rotulo="Saúde da carteira"
+        linhas={data.rows}
+        chave={(r) => r.id}
+        colunas={[
+          { id: 'nome', titulo: 'Cliente', principal: true, celula: (r) => r.nome },
+          { id: 'pendentes', titulo: 'Pendentes', numerica: true, celula: (r) => r.pendentes },
+          { id: 'nps', titulo: 'NPS', numerica: true, celula: (r) => (r.npsAvg !== null ? r.npsAvg : '—') },
+          {
+            id: 'ultima', titulo: 'Última entrega', numerica: true,
+            celula: (r) => (r.ultimaEntrega ? new Date(r.ultimaEntrega).toLocaleDateString('pt-BR') : '—'),
+          },
+          { id: 'saude', titulo: 'Saúde', celula: (r) => <SeloStatus tom={SAUDE_TOM[r.saude]} size="sm">{SAUDE_LABEL[r.saude]}</SeloStatus> },
+        ]}
+      />
+    </section>
   )
 }
 
@@ -563,6 +560,7 @@ function TabNps({ npsResponses }: { npsResponses: NpsResponseFull[] }) {
 
   const rows = useMemo(() => {
     return npsResponses.map(r => ({
+      id: r.id,
       cliente: r.nps_surveys?.clients?.nome ?? '—',
       nota: r.nota,
       comentario: r.comentario ?? '—',
@@ -573,9 +571,9 @@ function TabNps({ npsResponses }: { npsResponses: NpsResponseFull[] }) {
   const BAR_COLORS = { promotores: 'bg-success', neutros: 'bg-warning', detratores: 'bg-danger' }
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-        <h2 className="text-base font-semibold text-foreground">Relatório NPS</h2>
+    <section className="space-y-4 md:space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 className="t-h4 text-foreground">Relatório NPS</h2>
         <ExportBar
           csvDisabled={rows.length === 0}
           onCsv={() =>
@@ -635,24 +633,24 @@ function TabNps({ npsResponses }: { npsResponses: NpsResponseFull[] }) {
         </div>
       )}
 
-      <DataTable headers={['Cliente', 'Nota', { label: 'Comentário', className: 'hidden md:table-cell' }, 'Data']} empty={rows.length === 0}>
-        {rows.map((r, i) => (
-          <tr key={i} className="hover:bg-muted/20 transition-colors">
-            <td className="px-3 sm:px-4 py-3 text-foreground font-medium">{r.cliente}</td>
-            <td className="px-3 sm:px-4 py-3">
-              <span className={cn(
-                'rounded-full px-2.5 py-0.5 text-xs font-medium',
-                r.nota >= 9 ? 'bg-success-light text-success' : r.nota >= 7 ? 'bg-warning-light text-warning' : 'bg-danger-light text-danger',
-              )}>
-                {r.nota}
-              </span>
-            </td>
-            <td className="hidden md:table-cell px-3 sm:px-4 py-3 text-muted-foreground max-w-xs truncate">{r.comentario}</td>
-            <td className="px-3 sm:px-4 py-3 text-muted-foreground">{r.data}</td>
-          </tr>
-        ))}
-      </DataTable>
-    </div>
+      <TabelaRelatorio
+        rotulo="Respostas de NPS"
+        linhas={rows}
+        chave={(r) => r.id}
+        colunas={[
+          { id: 'cliente', titulo: 'Cliente', principal: true, celula: (r) => r.cliente },
+          {
+            id: 'nota', titulo: 'Nota', numerica: true,
+            celula: (r) => <SeloStatus tom={tomPorFaixa(r.nota, 9, 7)} size="sm">{r.nota}</SeloStatus>,
+          },
+          {
+            id: 'comentario', titulo: 'Comentário',
+            celula: (r) => <span className="line-clamp-2 break-words text-muted-foreground" title={r.comentario}>{r.comentario}</span>,
+          },
+          { id: 'data', titulo: 'Data', numerica: true, celula: (r) => r.data },
+        ]}
+      />
+    </section>
   )
 }
 
@@ -689,9 +687,9 @@ function TabAvaliacoes({ npsResponses, entregas }: { npsResponses: NpsResponseFu
     }
 
     const TIPO_LABELS: Record<string, string> = {
-      post_feed: 'Post Feed',
-      stories: 'Stories',
-      reels: 'Reels',
+      post_feed: 'Formato retirado',
+      stories: 'Formato retirado',
+      reels: 'Formato retirado',
       video: 'Vídeo',
       copy: 'Copy',
       arte: 'Arte',
@@ -706,6 +704,7 @@ function TabAvaliacoes({ npsResponses, entregas }: { npsResponses: NpsResponseFu
       const melhor = notas.length > 0 ? Math.max(...notas) : 0
       const pior = notas.length > 0 ? Math.min(...notas) : 0
       return {
+        id: tipo,
         tipo: TIPO_LABELS[tipo] ?? tipo,
         media,
         total: notas.length,
@@ -726,9 +725,9 @@ function TabAvaliacoes({ npsResponses, entregas }: { npsResponses: NpsResponseFu
   }, [npsResponses, entregas])
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-        <h2 className="text-base font-semibold text-foreground">Avaliações por Entregável</h2>
+    <section className="space-y-4 md:space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 className="t-h4 text-foreground">Avaliações por Entregável</h2>
         <ExportBar
           csvDisabled={data.rows.length === 0}
           onCsv={() =>
@@ -748,25 +747,22 @@ function TabAvaliacoes({ npsResponses, entregas }: { npsResponses: NpsResponseFu
         <KpiCard label="Abaixo de 3" value={`${data.abaixoDe3Pct}%`} icon={AlertTriangle} variant={data.abaixoDe3Pct > 10 ? 'danger' : 'default'} />
       </div>
 
-      <DataTable headers={['Tipo entregável', 'Média nota', { label: 'Total avaliações', className: 'hidden sm:table-cell' }, { label: 'Melhor nota', className: 'hidden md:table-cell' }, { label: 'Pior nota', className: 'hidden lg:table-cell' }]} empty={data.rows.length === 0}>
-        {data.rows.map((r, i) => (
-          <tr key={i} className="hover:bg-muted/20 transition-colors">
-            <td className="px-3 sm:px-4 py-3 text-foreground font-medium">{r.tipo}</td>
-            <td className="px-3 sm:px-4 py-3">
-              <span className={cn(
-                'rounded-full px-2.5 py-0.5 text-xs font-medium',
-                r.media >= 8 ? 'bg-success-light text-success' : r.media >= 6 ? 'bg-warning-light text-warning' : 'bg-danger-light text-danger',
-              )}>
-                {r.media}
-              </span>
-            </td>
-            <td className="hidden sm:table-cell px-3 sm:px-4 py-3 text-muted-foreground">{r.total}</td>
-            <td className="hidden md:table-cell px-3 sm:px-4 py-3 text-success">{r.melhor}</td>
-            <td className="hidden lg:table-cell px-3 sm:px-4 py-3 text-danger">{r.pior}</td>
-          </tr>
-        ))}
-      </DataTable>
-    </div>
+      <TabelaRelatorio
+        rotulo="Avaliações por entregável"
+        linhas={data.rows}
+        chave={(r) => r.id}
+        colunas={[
+          { id: 'tipo', titulo: 'Tipo entregável', principal: true, celula: (r) => r.tipo },
+          {
+            id: 'media', titulo: 'Média nota', numerica: true,
+            celula: (r) => <SeloStatus tom={tomPorFaixa(r.media, 8, 6)} size="sm">{r.media}</SeloStatus>,
+          },
+          { id: 'total', titulo: 'Total avaliações', numerica: true, celula: (r) => r.total },
+          { id: 'melhor', titulo: 'Melhor nota', numerica: true, celula: (r) => <span className="text-success">{r.melhor}</span> },
+          { id: 'pior', titulo: 'Pior nota', numerica: true, celula: (r) => <span className="text-danger">{r.pior}</span> },
+        ]}
+      />
+    </section>
   )
 }
 
@@ -803,6 +799,7 @@ function TabTrilhas({ paths, progress }: { paths: PathWithModulesAndLessons[]; p
         : 0
 
       return {
+        id: path.id,
         titulo: path.titulo,
         ativo: path.ativo,
         inscritos,
@@ -812,7 +809,6 @@ function TabTrilhas({ paths, progress }: { paths: PathWithModulesAndLessons[]; p
       }
     })
 
-    const totalConcluidos = rows.reduce((s, r) => s + r.concluidos, 0)
     const taxaGlobal = totalInscritos > 0 && rows.length > 0
       ? Math.round(rows.reduce((s, r) => s + r.taxaConclusao, 0) / rows.length)
       : 0
@@ -825,9 +821,9 @@ function TabTrilhas({ paths, progress }: { paths: PathWithModulesAndLessons[]; p
   }, [paths, progress])
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
-        <h2 className="text-base font-semibold text-foreground">Engajamento com Trilhas</h2>
+    <section className="space-y-4 md:space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 className="t-h4 text-foreground">Engajamento com Trilhas</h2>
         <ExportBar
           csvDisabled={data.rows.length === 0}
           onCsv={() =>
@@ -847,42 +843,43 @@ function TabTrilhas({ paths, progress }: { paths: PathWithModulesAndLessons[]; p
         <KpiCard label="Trilhas ativas" value={data.trilhasAtivas} icon={GraduationCap} />
       </div>
 
-      <DataTable headers={['Trilha', 'Inscritos', { label: 'Concluídos', className: 'hidden md:table-cell' }, 'Taxa conclusão', { label: 'Progresso médio', className: 'hidden lg:table-cell' }]} empty={data.rows.length === 0}>
-        {data.rows.map((r, i) => (
-          <tr key={i} className="hover:bg-muted/20 transition-colors">
-            <td className="px-3 sm:px-4 py-3 text-foreground font-medium">
-              <div className="flex items-center gap-2">
+      <TabelaRelatorio
+        rotulo="Engajamento com trilhas"
+        linhas={data.rows}
+        chave={(r) => r.id}
+        colunas={[
+          {
+            id: 'titulo', titulo: 'Trilha', principal: true,
+            celula: (r) => (
+              <span className="inline-flex flex-wrap items-center gap-2">
                 {r.titulo}
-                {!r.ativo && (
-                  <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">Inativa</span>
-                )}
-              </div>
-            </td>
-            <td className="px-3 sm:px-4 py-3 text-muted-foreground">{r.inscritos}</td>
-            <td className="hidden md:table-cell px-3 sm:px-4 py-3 text-muted-foreground">{r.concluidos}</td>
-            <td className="px-3 sm:px-4 py-3">
-              <span className={cn(
-                'rounded-full px-2.5 py-0.5 text-xs font-medium',
-                r.taxaConclusao >= 60 ? 'bg-success-light text-success' : r.taxaConclusao >= 30 ? 'bg-warning-light text-warning' : 'bg-muted text-muted-foreground',
-              )}>
-                {r.taxaConclusao}%
+                {!r.ativo && <SeloStatus tom="neutro" size="sm">Inativa</SeloStatus>}
               </span>
-            </td>
-            <td className="hidden lg:table-cell px-3 sm:px-4 py-3">
-              <div className="flex items-center gap-2">
-                <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+            ),
+          },
+          { id: 'inscritos', titulo: 'Inscritos', numerica: true, celula: (r) => r.inscritos },
+          { id: 'concluidos', titulo: 'Concluídos', numerica: true, celula: (r) => r.concluidos },
+          {
+            id: 'taxa', titulo: 'Taxa conclusão', numerica: true,
+            celula: (r) => <SeloStatus tom={tomPorFaixa(r.taxaConclusao, 60, 30, 'neutro')} size="sm">{r.taxaConclusao}%</SeloStatus>,
+          },
+          {
+            id: 'progresso', titulo: 'Progresso médio',
+            celula: (r) => (
+              <div className="flex min-w-[120px] items-center gap-2">
+                <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                   <div
                     className={cn('h-full rounded-full transition-all', r.progressoMedio >= 50 ? 'bg-success' : 'bg-warning')}
                     style={{ width: `${r.progressoMedio}%` }}
                   />
                 </div>
-                <span className="text-xs text-muted-foreground w-10 text-right">{r.progressoMedio}%</span>
+                <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{r.progressoMedio}%</span>
               </div>
-            </td>
-          </tr>
-        ))}
-      </DataTable>
-    </div>
+            ),
+          },
+        ]}
+      />
+    </section>
   )
 }
 
@@ -902,34 +899,25 @@ export default function RelatoriosPage() {
   const isLoading = loadingEntregas || loadingClientes || loadingNps || loadingApprovals || loadingTrilhas || loadingProgress
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6 animate-fade-in print:p-0">
+    <PageContainer className="animate-fade-in print:p-0">
       <PageHeader
         title="Relatórios"
         description="Analise o desempenho da agência com relatórios detalhados."
       />
 
       {/* Tab bar */}
-      <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-hide">
-        {TABS.map(tab => {
-          const Icon = tab.icon
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              title={tab.label}
-              className={cn(
-                'flex items-center gap-2 whitespace-nowrap rounded-lg px-3 sm:px-4 py-2.5 text-sm font-medium transition-colors',
-                activeTab === tab.id
-                  ? 'gradient-primary text-primary-foreground shadow-sm'
-                  : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="hidden sm:inline">{tab.label}</span>
-            </button>
-          )
-        })}
-      </div>
+      <AbasRolaveis
+        rotulo="Tipos de relatório"
+        variante="segmentado"
+        itens={TABS.map(tab => ({
+          id: tab.id,
+          rotulo: tab.label,
+          icone: tab.icon,
+          ativo: activeTab === tab.id,
+          dica: tab.label,
+          onClick: () => setActiveTab(tab.id),
+        }))}
+      />
 
       {/* Tab content */}
       {isLoading ? (
@@ -944,6 +932,6 @@ export default function RelatoriosPage() {
           {activeTab === 'trilhas' && <TabTrilhas paths={trilhasData} progress={progress} />}
         </>
       )}
-    </div>
+    </PageContainer>
   )
 }

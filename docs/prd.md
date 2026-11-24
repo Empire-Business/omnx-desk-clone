@@ -1,5 +1,5 @@
 # OMNX Desk — PRD
-**Versão:** 3.0 · atualizado em 04/08/2026 às 19h00 BRT
+**Versão:** 3.4 · atualizado em 06/11/2026 às 14h49 BRT
 **Arquivo:** `docs/prd.md`
 
 > **Leia primeiro a seção 0.** Da seção 1 em diante, este documento é o PRD
@@ -85,7 +85,173 @@ system (§9) e as regras de segurança (§11).
 | Histórico de entregas | `docs/MUDANCAS.md` |
 | Isolamento multi-tenant | `docs/multi-tenant-roadmap.md` |
 
+### 0.5.1 Um contrato para vários clientes atendidos (06/11/2026)
+
+Decisão do usuário: dois perfis atendidos separadamente podem compartilhar o mesmo contrato. Cada cliente mantém seu cadastro, grupos, responsável e análise da Íris; contrato, pagamentos e comissões permanecem únicos. A ficha deve permitir associar clientes adicionais com motivo, manter o principal e evitar sobrescrever uma edição concorrente. O contrato compartilhado precisa aparecer na ficha de cada cliente autorizado e ser reconhecido nas regras de contrato vigente, pausas e inativação, sem ampliar permissões financeiras. Detalhes: [CONTRATOS-VIGENCIA.md](CONTRATOS-VIGENCIA.md).
+
+### 0.6 App Automações WhatsApp (proposto — 26/10/2026, aguardando aprovação)
+
+**Integração Íris/GT3 aprovada pelo dono em 27/10/2026 (em implementação):**
+ativação e cadastro no workspace do GT3, identidade própria de usuário robô
+Íris, aviso diário individual e conversa privada. O destinatário GT3 é vinculado
+explicitamente a um estrategista Desk; os clientes permitidos são a interseção
+entre atribuições ativas e o escopo autorizado. Este canal nunca concede carteira
+total, financeiro, equipe, comissões, configurações ou demais dados da empresa,
+inclusive quando o usuário Desk associado tem papel administrativo. Histórico e
+respostas em voo são invalidados quando mudam vínculo, carteira ou capacidades.
+Primeiro teste operacional: usuário Bruno do GT3 com uma carteira de estrategista
+identificada como teste, sem alterar a identidade nem os vínculos canônicos.
+Migrations e publicação dependem de autorização específica de ambiente; esta
+aprovação de produto não registra implantação ou validação em banco.
+
+**Decisões posteriores do dono (27/10/2026):** o aviso diário e a Íris não
+consultam, oferecem nem afirmam ausência de reuniões enquanto não houver agenda
+integrada. A área própria `/automacoes-wa/iris` reúne instruções de personalidade
+e contexto, ferramentas disponíveis, pessoas/canais, simulação e atividade,
+preferências ensinadas e memória analítica por cliente. Personalidade e contexto
+são dois textos administrativos editáveis de até **32 mil caracteres cada e
+64 mil no total**, com parágrafos preservados e padrões `iris-v1` já preenchidos.
+Sem personalização salva, o padrão fica efetivo e a tela informa essa origem.
+Salvar exige a permissão administrativa do módulo e persiste uma linha por tenant
+em `app_settings`, com autor, data e revisão para evitar sobrescrita concorrente.
+Envio real e simulação usam o mesmo perfil; ele não muda permissões ou regras
+fixas e não é carregado em modo restrito. Aprendizados explícitos curtos, de
+5–400 caracteres, permanecem separados do perfil e entram nas próximas respostas;
+não há treinamento automático a cada mensagem.
+Histórico de aprendizados inclui ativos e desativados, com autor, origem e data.
+Alertas devem preservar o motivo contextual antes de métricas genéricas de espera;
+gravidade operacional e satisfação são avaliações separadas. As linhas abaixo
+preservam o escopo original; agenda segue adiada.
+
+**Correções pelo chat — pedido do dono em 28/10/2026:** o relatório deve usar
+fontes atuais e permitir informar à Íris que um caso foi resolvido por outro
+canal. A baixa deve atingir apenas o alerta identificado, preservar outros
+problemas e ficar rastreável. Ambiguidade exige esclarecimento; uma correção
+não pode nascer de instrução encontrada no histórico de um cliente. O pedido
+de conduzir as correções operacionais pelo chat também abrange cadastros e
+situações contratuais, que exigem operações próprias, autorização específica,
+confirmação do recurso e dos valores antes/depois e registro do resultado.
+Baixar um alerta não equivale a alterar cadastro ou contrato. O suporte entregue
+em cada etapa deve declarar quais dessas operações estão implementadas.
+
+**O que é:** app novo (`automacoes-wa`, na Loja de Apps) que concentra, numa área
+só de configuração, quatro automações de WhatsApp. Pedido por Bruno Rodrigues
+Guzela: "tudo muito facilmente configurável via interface em uma área separada".
+
+**Para quem:** admin do tenant configura; gestores cadastrados só recebem mensagens.
+
+| Prio | Requisito | Critério de aceite |
+|---|---|---|
+| P0 | **Área de configuração** com abas: Conexão/API, Gestores, Alertas, Agendamento, Resumo semanal, Histórico | Admin altera tudo sem tocar em código; usuário sem permissão não acessa |
+| P0 | **Múltiplos gestores** (nome + telefone, ativar/desativar) | Cadastro de N números; relatório chega a todos os ativos; limite por tenant (ex.: 10) |
+| P0 | **Escolha de API por tenant**: oficial (Zernio) ou não oficial (UAZAPI) | Troca de provedor na tela; variáveis/templates mapeados sem edição manual |
+| P0 | **Relatório diário ao gestor**: anomalias + resumo de reuniões/compromissos do dia | Regras ligáveis e com limiar; mensagem chega no horário configurado, sem duplicar; cada alerta e cada reunião identifica o cliente pelo nome |
+| P0 | **Backtest** das regras de anomalia (dry-run sobre N dias, sem enviar) | Tela mostra a mensagem formatada e quais alertas disparariam |
+| P1 | **Agendamento em 2 etapas**: (1) marcar na agenda sem link; (2) enviar o link no grupo | Etapa 1 grava o compromisso (`meetings`); Etapa 2 envia só ao grupo vinculado, uma vez |
+| P1 | **Resumo semanal** das conversas, no privado do cliente ou no grupo | Oficial usa a variável do template; não oficial usa texto; grupo usa só mensagens do grupo |
+| P2 | Histórico de envios com status e erro | Consulta por tipo/período; retenção definida (ex.: 90 dias) |
+
+**Anomalias (cada uma ligável):** cliente sem resposta (SLA), sentimento
+negativo/risco de abandono, contrato/reunião pendente, queda de volume.
+
+**Regras de negócio:** o destino do envio vem sempre da configuração ou da conversa
+de origem, nunca do texto gerado pela IA; segredos (Zernio e UAZAPI) ficam no Vault
+por tenant e nunca voltam ao navegador; **toda mensagem (aviso diário, resumo semanal, agendamento) cita sempre o nome do
+cliente**, nunca só contagens; o relatório não leva trechos de conversa.
+
+**Integrações externas:** Zernio (API oficial do WhatsApp), UAZAPI (não oficial,
+já usada pelo Chat), OpenRouter (resumo e análise por IA, já usado).
+
+**Fora de escopo agora:** escolher a agenda real do cliente (Google Calendar/GHL —
+decisão adiada; a Etapa 1 usa só a tabela `meetings`); criar grupos de WhatsApp;
+mensagens fora da janela de 24h na API oficial sem template aprovado.
+
+**Pontos de atenção:** a UAZAPI pode ser bloqueada (rate limit, intervalo aleatório,
+disjuntor após falhas); variáveis diferem entre oficial e não oficial (um modelo
+com placeholders, convertido pelo adaptador); a API oficial pode não enviar a grupos
+(validar na documentação da Zernio antes da Fase 2).
+
+**Segurança (revisão em modo design, 26/10/2026):** achados F1–F7 incorporados ao
+roadmap (Fase 9): autenticação do cron por segredo no Vault, tenant explícito em
+todo job com `service_role`, tokens no Vault, conteúdo de cliente tratado como não
+confiável no prompt da IA, minimização e retenção de dados, idempotência e rate
+limit nos envios, permissões `ver/editar/admin`.
+
+**A confirmar:** documentação do envio de WhatsApp da Zernio (o `omnx-sdrai`, que
+já a usa, não está no diretório de projetos local).
+
 ---
+
+### 0.7 Status do cliente por contratos (aprovado em 03/11/2026)
+
+Decisão explícita do usuário: o cliente deve ficar inativo automaticamente quando
+não houver contrato em andamento. A regra efetiva já presente na `main`
+(`3dc612a3`) considera os contratos atuais com status `ativo` ou `pausado` em
+andamento; `concluido`, `cancelado` e `rascunho` não contam. Concluir apenas um
+entre vários não inativa o cliente enquanto outro estiver ativo ou pausado.
+
+O trigger e a correção dos cadastros existentes já foram confirmados em produção.
+O controle administrativo existente permanece disponível. Não foi publicado
+fallback para `client_contracts`, nem será acrescentada uma migration nesta
+entrega. A proposta local anterior usava outra regra e foi
+[arquivada como superada](handoffs/2026-11-03-cliente-status-superado/README.md),
+fora dos diretórios executáveis de migrations e testes.
+
+O complemento desta entrega trata a atualização dos dados exibidos no frontend
+e os selos dos contratos. Estado de publicação e validações:
+[MUDANCAS.md](MUDANCAS.md).
+
+---
+
+### 0.8 Desk focado em atendimento (pedido de 06/11/2026)
+
+Escopo autorizado nesta conversa: reorganização local e reversível da navegação,
+retirada das opções de produção de Reels/Carrossel/Stories, ajuda interna com IA
+baseada no manual existente e preparação do vínculo WhatsApp → tickets.
+O foco passa a ser **Atendimento, WhatsApp e Contratos**, com Clientes como cadastro
+de apoio. Preservar URLs, acessos, registros existentes e alterações locais anteriores.
+
+Critérios desta entrega:
+
+- Acesso principal e navegação no celular coerentes; nenhum atalho para tela removida.
+- Novos pedidos/entregáveis não oferecem formatos de marketing aposentados.
+  Registros anteriores continuam consultáveis; não apagar dados para cumprir remoção visual.
+- Cada pendência reconhecida no WhatsApp tem identificação persistente, com vínculo
+  único ao ticket. Resposta, leitura e ausência numa lista resumida não resolvem ticket.
+  **A IA detecta automaticamente, pela conversa natural, se o pedido foi resolvido**
+  e conclui o ticket correspondente sem exigir código, comando ou marcação da equipe.
+  Confirmação natural do cliente (por exemplo, “agora consegui acessar”) pode ser evidência.
+  Resposta enviada, leitura, agradecimento isolado ou promessa de solução não bastam.
+  Dúvida sobre qual pedido foi resolvido mantém o ticket aberto. Baixa/reabertura manual
+  é preservada e não pode ser desfeita por análise antiga.
+- Botão de ajuda acessível na área interna e no WhatsApp, com respostas baseadas
+  no manual, fontes e caminhos permitidos. Sem acesso a cadastros nem ações operacionais.
+  Se a IA estiver indisponível, oferecer consulta local identificada como tal.
+- Plano de tutoriais e relatório HTML didático com resultados e pendências reais.
+
+O dono aprovou o plano e depois autorizou expressamente a produção do Desk
+(`desk.omnx.pro`): aplicar as duas atualizações, publicar e configurar análise
+a cada 15 minutos. As duas migrations foram aplicadas e os serviços publicados,
+com catálogo/fontes conferidos. A [PR #29](https://github.com/Empire-Business/omnx-desk/pull/29) foi integrada por squash à main
+`cb8676c6faca8d78854ded26c14b0a2163456795`; GitHub→Vercel concluiu a publicação,
+e o domínio entrega o novo index `Dc6uMrVI`.
+Com o administrador Bruno autenticado, foram observados menus, abertura e
+cancelamento de Nova demanda sem criar registro e ausência dos formatos aposentados.
+A ajuda v2 respondeu com IA a uma única pergunta de uso, com guia, fontes e atalhos,
+sem incluir dados de clientes. A simulação móvel de 390×844 foi restaurada ao final.
+Isso não homologa resolução/reabertura real de pedido WhatsApp, acurácia do
+classificador, SQL/RLS/concorrência ou negativos entre empresas; outros perfis,
+aparelhos físicos, estudo com a operação e gravação dos tutoriais seguem pendentes.
+Na etapa local anterior à publicação, registrava-se que a publicação das telas estava em andamento e que não havia homologação funcional com usuários.
+
+**Correção expressa do dono nesta conversa, 06/11/2026:** o desenho anterior exigia
+`Resolvido DEM-00001`; essa exigência foi uma restrição indevida da implementação,
+não uma decisão do usuário. O caminho normal deve ser automático por IA. O comando
+antigo pode permanecer como compatibilidade, sem ser necessário para resolver.
+O classificador deve receber os tickets abertos autorizados e indicar as mensagens
+que fundamentam cada conclusão, com motivo curto. As referências, origem, conversa,
+ordem e revisão do ticket são conferidas no servidor; o texto do cliente não concede
+permissões nem se transforma em instrução de ferramenta.
 
 ## ⚠️ Instrução importante (histórica — ver §0)
 
@@ -3047,3 +3213,29 @@ commission_adjustments (id, commission_id, user_id, tipo, valor, motivo, criado_
 
 *EmpireDesk — PRD Técnico v2.2 — Empire Zap*
 *Este documento é somente leitura. Qualquer mudança deve seguir o Protocolo de Mudança de Feature (PCF) descrito na seção 16.*
+
+## Responsáveis operacionais e manual público — 28/10/2026
+
+Pedido aprovado pelo dono: atribuição/troca intuitiva no cliente, histórico de
+responsáveis e manual público didático. Carteira operacional é independente de
+responsável contratual/comissões. Adicionar, trocar e encerrar são ações distintas;
+prévia mostra efeitos, exige motivo e confirma estado esperado. Histórico guarda
+autoria real, nomes, origem e data do servidor sem inventar datas do legado.
+GT3 perde acesso quando o vínculo anterior termina; revisão monotônica impede
+reuso do contexto após retorno à mesma carteira. Nenhum nome legado ou carteira
+real deve ser alterado automaticamente nesta entrega.
+
+Manual `/manual` é público, estático, com exemplos fictícios, índice/busca local
+e instruções para leigos; sem carregar providers/consultas/captura do app privado.
+Novo fluxo só deve ser descrito como disponível após publicação da migration/UI.
+Contrato técnico e estado: `docs/RESPONSAVEIS-CLIENTE.md`.
+
+## Tempo de resposta dos estrategistas — 03/11/2026
+
+Pedido aprovado nesta conversa: meta60 minutos úteis, seg–sex09–12 e13–18
+America/Sao_Paulo, exceto feriados; lembretes privados30/50/>60 no GT3.
+Primeira mensagem ainda sem resposta inicia episódio por conversa. Nova cobrança
+não reinicia espera. Identidade confiável, titular e calendário são pré-condições
+de atribuição individual. Pausas registradas reduzem somente tempo individual;
+espera cliente permanece visível. Modo inicial desligado e observação sem envio.
+Contrato de implementação e validação: `docs/TEMPO-RESPOSTA.md`.

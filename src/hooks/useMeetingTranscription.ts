@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTracks } from '@livekit/components-react'
 import { Track } from 'livekit-client'
 import { supabase } from '@/lib/supabase'
+import { RECURSOS } from '@/config/recursos'
 
 export interface TranscriptEntry {
   id: string
@@ -29,7 +30,8 @@ export function useMeetingTranscription({ meetingId, enabled }: Options) {
   const finalsRef = useRef<TranscriptEntry[]>([])
 
   useEffect(() => {
-    if (!enabled || !meetingId) return
+    // Transcrição ao vivo depende da função soniox-token (src/config/recursos.ts).
+    if (!enabled || !meetingId || !RECURSOS.reuniaoVideo) return
 
     let cancelled = false
 

@@ -2,6 +2,8 @@ import type { UserProfile } from './database'
 
 export interface AuthUser {
   id: string
+  /** Empresa confirmada no cadastro, nunca obtida de user_metadata. */
+  tenant_id: string
   email: string
   nome: string
   perfil: UserProfile

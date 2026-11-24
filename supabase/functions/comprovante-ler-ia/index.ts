@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { travaDeLicenca } from '../_shared/htai-licenca.ts'
 
 /**
  * Leitura do comprovante de pagamento por IA com visão.
@@ -100,6 +101,9 @@ interface Comprovante {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS })
+  // Licença HTAI (desligada sem HTAI_ENTITLEMENTS_MODE; ver docs/LICENCA-HTAI.md)
+  const licencaNegada = await travaDeLicenca(CORS)
+  if (licencaNegada) return licencaNegada
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
 
   try {

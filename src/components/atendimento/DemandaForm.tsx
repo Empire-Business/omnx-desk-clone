@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useId, useState } from 'react'
 import { Modal } from '@/components/ui/Modal'
+import { SelectDs } from '@/components/atendimento/TicketUi'
 import { useClientes } from '@/hooks/useClientes'
 import { useUsers } from '@/hooks/useUsers'
+import { tiposSelecionaveisAtendimento } from '@/lib/formatosAtendimento'
 import {
   useAtendimentoTipos,
   useAtendimentoEtapas,
@@ -10,6 +11,7 @@ import {
   useSegmentoAtendimento,
   type Prioridade,
 } from '@/hooks/useAtendimento'
+import { primeiraEtapaAberta } from '@/lib/ticketStatus'
 
 const PRIORIDADES: Array<{ valor: Prioridade; label: string }> = [
   { valor: 'baixa', label: 'Baixa' },
@@ -18,14 +20,14 @@ const PRIORIDADES: Array<{ valor: Prioridade; label: string }> = [
   { valor: 'urgente', label: 'Urgente' },
 ]
 
-const campo =
-  'w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none'
-const rotulo = 'mb-1 block text-xs font-medium text-muted-foreground'
+/** Campo do DS; 16 px no celular para o iPhone não dar zoom ao tocar. */
+const campo = 'input text-base sm:text-sm'
 
 /**
- * Criação de demanda. Pede o mínimo para a demanda existir (o que é, para quem)
- * e deixa o resto para a tela de detalhe — cobrar 10 campos de quem está no meio
+ * Criação de ticket à mão. Pede o mínimo para o ticket existir (o que é, para
+ * quem) e deixa o resto para a ficha — cobrar 10 campos de quem está no meio
  * de um atendimento é o caminho mais curto para ninguém registrar nada.
+ * Tickets do WhatsApp nascem sozinhos; este formulário é para o que chega por fora.
  */
 export function DemandaForm({
   open,
@@ -44,6 +46,8 @@ export function DemandaForm({
   const { data: etapas } = useAtendimentoEtapas()
   const criar = useCriarDemanda()
   const { segmento } = useSegmentoAtendimento()
+  // O botão "Criar ticket" fica no rodapé fixo do modal, fora do <form>.
+  const idFormulario = useId()
 
   const [titulo, setTitulo] = useState('')
   const [clienteId, setClienteId] = useState('')
@@ -54,7 +58,8 @@ export function DemandaForm({
   const [descricao, setDescricao] = useState('')
   const [erro, setErro] = useState<string | null>(null)
 
-  const primeiraEtapa = etapas?.[0]?.id
+  // Mesma regra do servidor: nasce na primeira etapa não final pela ordem.
+  const primeiraEtapa = primeiraEtapaAberta(etapas ?? [])?.id
 
   const limpar = () => {
     setTitulo('')
@@ -88,7 +93,7 @@ export function DemandaForm({
       onCriada?.(nova.id)
     } catch (err) {
       setErro(
-        err instanceof Error ? err.message : `Não foi possível criar a ${segmento.rotuloItem}.`,
+        err instanceof Error ? err.message : 'Não foi possível criar o ticket.',
       )
     }
   }
@@ -97,60 +102,64 @@ export function DemandaForm({
     <Modal
       open={open}
       onClose={onClose}
-      title={segmento.acaoNovo}
+      title="Novo ticket"
       description={`Registre o que o ${segmento.rotuloCliente} pediu. Os detalhes podem ser completados depois.`}
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn btn-secondary">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form={idFormulario}
+            disabled={criar.isPending || !titulo.trim()}
+            className="btn btn-primary"
+          >
+            {criar.isPending && <span className="btn-spin" aria-hidden />}
+            Criar ticket
+          </button>
+        </>
+      }
     >
-      <form onSubmit={salvar} className="space-y-4">
-        <div>
-          <label className={rotulo} htmlFor="demanda-titulo">
-            O que precisa ser feito
-          </label>
+      <form id={idFormulario} onSubmit={salvar} className="grid gap-4">
+        <div className="field">
+          <label htmlFor="demanda-titulo">O que precisa ser feito</label>
           <input
             id="demanda-titulo"
             className={campo}
             value={titulo}
             onChange={(e) => setTitulo(e.target.value)}
-            placeholder="Ex.: 4 reels sobre o lançamento de abril"
+            placeholder="Ex.: Confirmar o acesso e retornar ao cliente"
             required
             autoFocus
           />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className={rotulo} htmlFor="demanda-cliente">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="field">
+            <label htmlFor="demanda-cliente">
               {segmento.rotuloCliente.charAt(0).toUpperCase() + segmento.rotuloCliente.slice(1)}
             </label>
-            <select
-              id="demanda-cliente"
-              className={campo}
-              value={clienteId}
-              onChange={(e) => setClienteId(e.target.value)}
-            >
+            <SelectDs id="demanda-cliente" value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
               <option value="">Selecione…</option>
               {(clientes ?? []).map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}</option>
               ))}
-            </select>
+            </SelectDs>
           </div>
 
-          <div>
-            <label className={rotulo} htmlFor="demanda-tipo">Tipo</label>
-            <select
-              id="demanda-tipo"
-              className={campo}
-              value={tipoId}
-              onChange={(e) => setTipoId(e.target.value)}
-            >
+          <div className="field">
+            <label htmlFor="demanda-tipo">Tipo</label>
+            <SelectDs id="demanda-tipo" value={tipoId} onChange={(e) => setTipoId(e.target.value)}>
               <option value="">Selecione…</option>
-              {(tipos ?? []).filter((t) => t.ativo).map((t) => (
+              {tiposSelecionaveisAtendimento(tipos ?? []).map((t) => (
                 <option key={t.id} value={t.id}>{t.nome}</option>
               ))}
-            </select>
+            </SelectDs>
           </div>
 
-          <div>
-            <label className={rotulo} htmlFor="demanda-prazo">Prazo</label>
+          <div className="field">
+            <label htmlFor="demanda-prazo">Prazo</label>
             <input
               id="demanda-prazo"
               type="date"
@@ -160,69 +169,47 @@ export function DemandaForm({
             />
           </div>
 
-          <div>
-            <label className={rotulo} htmlFor="demanda-prioridade">Prioridade</label>
-            <select
+          <div className="field">
+            <label htmlFor="demanda-prioridade">Prioridade</label>
+            <SelectDs
               id="demanda-prioridade"
-              className={campo}
               value={prioridade}
               onChange={(e) => setPrioridade(e.target.value as Prioridade)}
             >
               {PRIORIDADES.map((p) => (
                 <option key={p.valor} value={p.valor}>{p.label}</option>
               ))}
-            </select>
+            </SelectDs>
           </div>
 
-          <div className="sm:col-span-2">
-            <label className={rotulo} htmlFor="demanda-responsavel">Responsável</label>
-            <select
-              id="demanda-responsavel"
-              className={campo}
-              value={responsavelId}
-              onChange={(e) => setResponsavelId(e.target.value)}
-            >
+          <div className="field sm:col-span-2">
+            <label htmlFor="demanda-responsavel">Responsável</label>
+            <SelectDs id="demanda-responsavel" value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)}>
               <option value="">Definir depois</option>
               {(usuarios ?? []).filter((u) => u.ativo).map((u) => (
                 <option key={u.id} value={u.id}>{u.nome}</option>
               ))}
-            </select>
+            </SelectDs>
           </div>
         </div>
 
-        <div>
-          <label className={rotulo} htmlFor="demanda-descricao">Detalhes (opcional)</label>
+        <div className="field">
+          <label htmlFor="demanda-descricao">
+            Detalhes <span className="font-normal text-muted-foreground">(opcional)</span>
+          </label>
           <textarea
             id="demanda-descricao"
-            className={campo}
+            className="textarea text-base sm:text-sm"
             rows={3}
             value={descricao}
             onChange={(e) => setDescricao(e.target.value)}
-            placeholder="Referências, tom de voz, o que o cliente falou…"
+            placeholder="O que o cliente falou, combinados, observações…"
           />
         </div>
 
         {erro && (
-          <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{erro}</p>
+          <p role="alert" className="m-0 rounded-md bg-danger-light px-3 py-2 text-sm text-danger">{erro}</p>
         )}
-
-        <div className="flex justify-end gap-2 pt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={criar.isPending || !titulo.trim()}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
-          >
-            {criar.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            {segmento.acaoNovo}
-          </button>
-        </div>
       </form>
     </Modal>
   )

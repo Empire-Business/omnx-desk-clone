@@ -49,12 +49,12 @@ export function GerenciarColunasModal({ open, onClose }: { open: boolean; onClos
   }
 
   async function excluir(c: KanbanColuna) {
-    if (!confirm(`Excluir a coluna "${c.titulo}"? Os contratos com status "${c.status_chave}" deixam de aparecer no kanban (mas não são apagados).`)) return
+    if (!confirm(`Excluir a coluna "${c.titulo}"? Os contratos com status "${c.status_chave}" deixam de aparecer no quadro (mas não são apagados).`)) return
     await deleteMut.mutateAsync(c.id)
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Gerenciar colunas do kanban" description="Adicione, edite, reordene ou remova as colunas. Cada coluna corresponde a um status de contrato." size="lg">
+    <Modal open={open} onClose={onClose} title="Gerenciar colunas do quadro" description="Adicione, edite, reordene ou remova as colunas. Cada coluna corresponde a um status de contrato." size="lg">
       <div className="space-y-4">
         {/* Lista de colunas existentes */}
         <div className="space-y-2">
@@ -104,7 +104,7 @@ export function GerenciarColunasModal({ open, onClose }: { open: boolean; onClos
         <div className="rounded-lg border border-dashed border-border p-3">
           <p className="mb-2 text-xs font-medium text-muted-foreground">Nova coluna</p>
           <div className="flex flex-wrap items-center gap-2">
-            <input value={novoTitulo} onChange={(e) => setNovoTitulo(e.target.value)} placeholder="Título (ex: Onboarding)" className={cn(inp, 'w-40')} />
+            <input value={novoTitulo} onChange={(e) => setNovoTitulo(e.target.value)} placeholder="Título (ex.: Boas-vindas)" className={cn(inp, 'w-40')} />
             <input value={novaChave} onChange={(e) => setNovaChave(e.target.value)} placeholder="STATUS (ex: NÃO INICIADO)" className={cn(inp, 'flex-1 font-mono text-xs')} />
             <select value={novaCor} onChange={(e) => setNovaCor(e.target.value)} className={cn(inp, 'w-28')}>
               {CORES_COLUNA.map((cor) => <option key={cor.valor} value={cor.valor}>{cor.label}</option>)}

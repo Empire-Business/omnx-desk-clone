@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { RECURSOS } from '@/config/recursos'
 
 // Espelha o estado normalizado das entregas vindas do projeto cami-plataforma-lb (content_cards).
 // A edge function `cami-deliveries` ainda não existe — quando for implementada, este hook
@@ -70,9 +71,10 @@ export const CAMI_STATUS_TONE: Record<CamiDeliveryStatus, string> = {
 
 /** Indica se a integração com cami-plataforma-lb está ativa. */
 export function isCamiIntegrationReady(): boolean {
-  // Ativa quando a edge function `cami-deliveries` estiver deployada e os secrets
-  // CAMI_SUPABASE_URL e CAMI_SERVICE_ROLE_KEY estiverem configurados no painel.
-  return true
+  // Ligada por VITE_CAMI_ENTREGAS (padrão ligado = empresa). A instalação do zero
+  // desliga: a função `cami-deliveries` usa content_cards e get_auth_user_emails,
+  // que não existem em migração nenhuma, e fica fora do pacote instalável.
+  return RECURSOS.entregasCami
 }
 
 interface CamiDeliveriesResponse {

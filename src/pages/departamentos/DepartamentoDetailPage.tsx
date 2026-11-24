@@ -1,7 +1,9 @@
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { useState } from 'react'
 import {
-  ArrowLeft, Building2, Users, MessageSquare, Clock, TrendingUp,
+  Building2, Users, MessageSquare, Clock, TrendingUp,
   Timer, Crown, Circle, ChevronRight, CheckCircle2,
   User, Star, FileCheck, DollarSign, BarChart3,
   UserX, ShieldAlert, ThumbsUp, Plus, Trash2, X, Sparkles, Loader2, Send,
@@ -36,7 +38,7 @@ const PERFIL_LABEL: Record<string, string> = {
   atendimento: 'Atendimento', estrategista: 'Estrategista', cliente: 'Cliente',
 }
 
-const STATUS_CONFIG = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   aberta:         { label: 'Aberta',         color: 'text-muted-foreground', bg: 'bg-muted' },
   em_atendimento: { label: 'Em atendimento', color: 'text-info',             bg: 'bg-info-light' },
   aguardando:     { label: 'Aguardando',     color: 'text-warning',          bg: 'bg-warning-light' },
@@ -67,12 +69,12 @@ function StatCard({
   accent?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
 }) {
   const colors = {
-    primary: 'text-primary bg-primary/10', success: 'text-success bg-success-light',
+    primary: 'text-primary bg-primary-muted', success: 'text-success bg-success-light',
     warning: 'text-warning bg-warning-light', danger: 'text-danger bg-danger/10',
     info: 'text-info bg-info-light',
   }
   return (
-    <div className="rounded-xl border border-border bg-card p-4 flex items-start gap-4">
+    <div className="rounded-lg border border-border bg-card p-4 flex items-start gap-4">
       <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', accent ? colors[accent] : 'text-muted-foreground bg-muted')}>
         <Icon className="h-5 w-5" />
       </div>
@@ -94,7 +96,7 @@ function Section({ title, icon: Icon, iconColor, count, action, children }: {
   action?: React.ReactNode; children: React.ReactNode
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card overflow-hidden">
+    <div className="rounded-lg border border-border bg-card overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
           <Icon className={cn('h-4 w-4', iconColor ?? 'text-muted-foreground')} />
@@ -144,7 +146,7 @@ function MembersTable({
       action={canManage && !adding ? (
         <button
           onClick={() => setAdding(true)}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary-muted transition-colors"
         >
           <Plus className="h-3 w-3" /> Adicionar
         </button>
@@ -202,7 +204,7 @@ function MembersTable({
         </div>
       ) : (
         <div className="divide-y divide-border">
-          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          <div className="grid grid-cols-[1fr_auto_auto] sm:grid-cols-[1fr_auto_auto_auto] gap-1 sm:gap-2 px-2 sm:px-4 py-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
             <span>Membro</span>
             <span className="text-right w-12 sm:w-16">Msgs hoje</span>
             <span className="hidden sm:block text-right w-16">Semana</span>
@@ -211,10 +213,10 @@ function MembersTable({
           {members.map(m => {
             const rowId = getAgentRowId(m.user_id)
             return (
-              <div key={m.user_id} className="grid grid-cols-[1fr_auto_auto_auto] gap-1 sm:gap-2 items-center px-2 sm:px-4 py-3 hover:bg-muted/40 transition-colors group">
+              <div key={m.user_id} className="grid grid-cols-[1fr_auto_auto] sm:grid-cols-[1fr_auto_auto_auto] gap-1 sm:gap-2 items-center px-2 sm:px-4 py-3 hover:bg-muted/40 transition-colors group">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="relative shrink-0">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary/20 to-accent/20 text-xs font-bold text-primary uppercase">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-muted text-xs font-bold text-primary uppercase">
                       {m.user_nome.split(' ').slice(0, 2).map(n => n[0]).join('')}
                     </div>
                     <span className={cn('absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-card', m.msgs_hoje > 0 ? 'bg-success' : 'bg-muted-foreground/40')} />
@@ -271,7 +273,7 @@ function SummarizeButton({ convId }: { convId: string }) {
         })
       }}
       disabled={summarize.isPending}
-      className="flex items-center gap-1 text-[10px] text-primary hover:underline mt-0.5 disabled:opacity-50"
+      className="flex items-center gap-1 text-[12px] text-primary hover:underline mt-0.5 disabled:opacity-50"
     >
       {summarize.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
       {summarize.isPending ? 'Gerando...' : 'Resumo IA'}
@@ -301,7 +303,7 @@ function SuporteDashboard({ deptId, totalAtivas, activeConvs, lConvs }: { deptId
         <StatCard icon={CheckCircle2}  label="Encerradas hoje"   value={closedToday}        accent="success" />
       </div>
       {csatAvg !== null && csatAvg !== undefined && (
-        <div className="rounded-xl border border-border bg-card px-4 py-3 flex items-center gap-4">
+        <div className="rounded-lg border border-border bg-card px-4 py-3 flex items-center gap-4">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10">
             <Star className="h-5 w-5 text-warning" />
           </div>
@@ -321,14 +323,14 @@ function SuporteDashboard({ deptId, totalAtivas, activeConvs, lConvs }: { deptId
                 <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center gap-2">
                   <User className="h-3.5 w-3.5 text-primary" />
                   <span className="text-xs font-semibold text-foreground">{agentName}</span>
-                  <span className="text-[10px] text-muted-foreground">({convs.length})</span>
+                  <span className="text-[12px] text-muted-foreground">({convs.length})</span>
                 </div>
                 {convs.map(conv => {
                   const contact = conv.chat_contacts
                   const status = STATUS_CONFIG[conv.status] ?? STATUS_CONFIG.aberta
                   return (
                     <div key={conv.id} className="px-4 py-3 hover:bg-muted/40 transition-colors">
-                      <Link to={`/chat?conv=${conv.id}`} className="flex items-center gap-3">
+                      <Link to={`/conversas?conv=${conv.id}`} className="flex items-center gap-3">
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-info/10 text-info text-xs font-bold">
                           {(contact?.nome ?? formatPhone(contact?.numero_whatsapp) ?? '?').slice(0, 2).toUpperCase()}
                         </div>
@@ -336,7 +338,7 @@ function SuporteDashboard({ deptId, totalAtivas, activeConvs, lConvs }: { deptId
                           <p className="text-sm font-medium truncate">{contact?.nome ?? formatPhone(contact?.numero_whatsapp)}</p>
                           <p className="text-xs text-muted-foreground flex items-center gap-1">
                             <Clock className="h-3 w-3" />{fmt(conv.atualizado_em)}
-                            <span className={cn('ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium', status.bg, status.color)}>{status.label}</span>
+                            <span className={cn('ml-1 rounded-full px-1.5 py-0.5 text-[12px] font-medium', status.bg, status.color)}>{status.label}</span>
                           </p>
                         </div>
                         <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0" />
@@ -360,7 +362,7 @@ function SuporteDashboard({ deptId, totalAtivas, activeConvs, lConvs }: { deptId
             <div className="divide-y divide-border max-h-96 overflow-y-auto">
               {queue.map(conv => (
                 <div key={conv.id} className="px-4 py-3 hover:bg-muted/40 transition-colors">
-                  <Link to={`/chat?conv=${conv.id}`} className="flex items-center gap-3">
+                  <Link to={`/conversas?conv=${conv.id}`} className="flex items-center gap-3">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning/10 text-warning text-xs font-bold">
                       {(conv.chat_contacts?.nome ?? formatPhone(conv.chat_contacts?.numero_whatsapp) ?? '?').slice(0, 2).toUpperCase()}
                     </div>
@@ -383,15 +385,15 @@ function SuporteDashboard({ deptId, totalAtivas, activeConvs, lConvs }: { deptId
           {lSla ? <Spinner /> : slaViol.length === 0 ? <Empty icon={CheckCircle2} text="Nenhum SLA violado" /> : (
             <div className="divide-y divide-border max-h-72 overflow-y-auto">
               {slaViol.map(conv => (
-                <Link key={conv.id} to={`/chat?conv=${conv.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
+                <Link key={conv.id} to={`/conversas?conv=${conv.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/10 text-danger text-xs font-bold">
                     {(conv.chat_contacts?.nome ?? formatPhone(conv.chat_contacts?.numero_whatsapp) ?? '?').slice(0, 2).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{conv.chat_contacts?.nome ?? formatPhone(conv.chat_contacts?.numero_whatsapp)}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      {conv.sla_primeira_resposta_violado && <span className="text-[10px] rounded-full bg-danger/10 text-danger px-1.5 py-0.5">1ª resposta</span>}
-                      {conv.sla_resolucao_violado         && <span className="text-[10px] rounded-full bg-danger/10 text-danger px-1.5 py-0.5">Resolução</span>}
+                      {conv.sla_primeira_resposta_violado && <span className="text-[12px] rounded-full bg-danger/10 text-danger px-1.5 py-0.5">1ª resposta</span>}
+                      {conv.sla_resolucao_violado         && <span className="text-[12px] rounded-full bg-danger/10 text-danger px-1.5 py-0.5">Resolução</span>}
                       <span className="text-xs text-muted-foreground">{conv.users?.nome ?? 'Sem agente'}</span>
                     </div>
                   </div>
@@ -436,7 +438,7 @@ function EstrategistaDashboard({ members }: { members: DeptMemberMetric[] }) {
               {byUser.filter(b => b.clients.length > 0).map(({ member, clients }) => (
                 <div key={member.user_id} className="px-4 py-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary uppercase">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-muted text-[12px] font-bold text-primary uppercase">
                       {member.user_nome.split(' ').slice(0, 2).map(n => n[0]).join('')}
                     </div>
                     <span className="text-sm font-medium">{member.user_nome}</span>
@@ -445,7 +447,7 @@ function EstrategistaDashboard({ members }: { members: DeptMemberMetric[] }) {
                   <div className="flex flex-wrap gap-1.5 pl-8">
                     {clients.map(a => (
                       <Link key={a.id} to={`/clientes/${a.client_id}`}
-                        className="rounded-full bg-muted hover:bg-primary/10 hover:text-primary px-2 py-0.5 text-xs text-muted-foreground transition-colors">
+                        className="rounded-full bg-muted hover:bg-primary-muted hover:text-primary px-2 py-0.5 text-xs text-muted-foreground transition-colors">
                         {a.clients?.nome ?? '—'}
                       </Link>
                     ))}
@@ -459,7 +461,7 @@ function EstrategistaDashboard({ members }: { members: DeptMemberMetric[] }) {
           {lPending ? <Spinner /> : pending.length === 0 ? <Empty icon={CheckCircle2} text="Nenhuma entrega pendente" /> : (
             <div className="divide-y divide-border max-h-80 overflow-y-auto">
               {pending.map(d => (
-                <Link key={d.id} to={`/entregas/${d.id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
+                <div key={d.id} className="flex items-start gap-3 px-4 py-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-warning/10 mt-0.5">
                     <FileCheck className="h-4 w-4 text-warning" />
                   </div>
@@ -468,8 +470,7 @@ function EstrategistaDashboard({ members }: { members: DeptMemberMetric[] }) {
                     <p className="text-xs text-muted-foreground">{d.clients?.nome ?? '—'} · {d.users?.nome ?? '—'}</p>
                     {d.prazo && <p className="text-xs text-danger mt-0.5">Prazo: {new Date(d.prazo).toLocaleDateString('pt-BR')}</p>}
                   </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 shrink-0 mt-2" />
-                </Link>
+                </div>
               ))}
             </div>
           )}
@@ -610,36 +611,25 @@ export default function DepartamentoDetailPage() {
   const canManage = isAdmin || isGerenteOfDept
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-      {/* Header */}
-      <div className="flex items-start gap-3 sm:gap-4">
-        <button onClick={() => navigate('/departamentos')}
-          className="mt-0.5 shrink-0 rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
-          <ArrowLeft className="h-4 w-4" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-              <Building2 className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl font-bold text-foreground">{dept?.nome ?? '...'}</h1>
-              {gerentesMembro.length > 0 && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Crown className="h-3 w-3 text-warning" />
-                  {gerentesMembro.map(m => m.user_nome).join(', ')}
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 ml-12">
-            <span className={cn('flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium', dept?.ativo ? 'bg-success-light text-success' : 'bg-muted text-muted-foreground')}>
-              <Circle className="h-2 w-2 fill-current" /> {dept?.ativo ? 'Ativo' : 'Inativo'}
+    <PageContainer>
+      <div className="space-y-3">
+        <PageHeader
+          title={dept?.nome ?? '...'}
+          backTo="/departamentos"
+          description={gerentesMembro.length > 0 ? (
+            <span className="inline-flex items-center gap-1">
+              <Crown className="h-3.5 w-3.5 text-warning" aria-hidden />
+              {gerentesMembro.map(m => m.user_nome).join(', ')}
             </span>
-            {dept?.distribuicao && <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground capitalize">{dept.distribuicao.replace('_', ' ')}</span>}
-            {dept?.sla_primeira_resposta_minutos && <span className="rounded-full bg-info-light px-2 py-0.5 text-xs text-info">SLA resposta: {dept.sla_primeira_resposta_minutos}min</span>}
-            {dept?.sla_resolucao_horas && <span className="rounded-full bg-warning-light px-2 py-0.5 text-xs text-warning">SLA resolução: {dept.sla_resolucao_horas}h</span>}
-          </div>
+          ) : undefined}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={cn('tag', dept?.ativo ? 'tag-success' : '')}>
+            <Circle className="h-2 w-2 fill-current" aria-hidden /> {dept?.ativo ? 'Ativo' : 'Inativo'}
+          </span>
+          {dept?.distribuicao && <span className="tag capitalize">{dept.distribuicao.replace('_', ' ')}</span>}
+          {dept?.sla_primeira_resposta_minutos && <span className="tag tag-info">SLA resposta: {dept.sla_primeira_resposta_minutos}min</span>}
+          {dept?.sla_resolucao_horas && <span className="tag tag-warning">SLA resolução: {dept.sla_resolucao_horas}h</span>}
         </div>
       </div>
 
@@ -675,14 +665,14 @@ export default function DepartamentoDetailPage() {
                       const contact = (conv as never as { chat_contacts: { nome: string | null; numero_whatsapp: string } }).chat_contacts
                       const agente  = (conv as never as { users: { nome: string } | null }).users
                       return (
-                        <Link key={conv.id} to={`/chat?conv=${conv.id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
+                        <Link key={conv.id} to={`/conversas?conv=${conv.id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/40 transition-colors">
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground uppercase mt-0.5">
                             {(contact?.nome ?? formatPhone(contact?.numero_whatsapp) ?? '?').slice(0, 2)}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-1 mb-0.5">
                               <p className="text-sm font-medium truncate">{contact?.nome ?? formatPhone(contact?.numero_whatsapp)}</p>
-                              <span className={cn('shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium', status.bg, status.color)}>{status.label}</span>
+                              <span className={cn('shrink-0 rounded-full px-1.5 py-0.5 text-[12px] font-medium', status.bg, status.color)}>{status.label}</span>
                             </div>
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
                               <User className="h-3 w-3" />{agente?.nome ?? 'Sem agente'}
@@ -696,7 +686,7 @@ export default function DepartamentoDetailPage() {
                     })}
                   </div>
                   <div className="border-t border-border px-4 py-2.5">
-                    <Link to="/chat" className="text-xs text-primary hover:underline flex items-center gap-1">Ver todas no chat <ChevronRight className="h-3 w-3" /></Link>
+                    <Link to="/conversas" className="text-xs text-primary hover:underline flex items-center gap-1">Ver todas em Conversas <ChevronRight className="h-3 w-3" /></Link>
                   </div>
                 </>
               )}
@@ -705,6 +695,6 @@ export default function DepartamentoDetailPage() {
         )}
       </div>
 
-    </div>
+    </PageContainer>
   )
 }

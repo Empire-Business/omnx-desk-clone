@@ -1,0 +1,8 @@
+{
+  "policyname": "chat_messages_access",
+  "permissive": "PERMISSIVE",
+  "roles": "{public}",
+  "cmd": "ALL",
+  "qual": "(EXISTS ( SELECT 1\n   FROM chat_conversations cv\n  WHERE ((cv.id = chat_messages.conversation_id) AND user_can_access_instance(cv.instance_id) AND user_can_access_client(get_contact_client_id(cv.contact_id)))))",
+  "with_check": null
+}

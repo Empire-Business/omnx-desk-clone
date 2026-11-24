@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Plug, Eye, EyeOff, Loader2, Check, CheckCircle2, XCircle, AlertCircle, Trash2 } from 'lucide-react'
 import { useEmpireIntegracao } from '@/hooks/useEmpireIntegracao'
-import { useAuth } from '@/contexts/AuthContext'
+import { CrmOmnxIntegracaoCard } from './CrmOmnxIntegracaoCard'
 import { usePermissoes } from '@/hooks/usePermissoes'
 import { cn } from '@/lib/utils'
 
@@ -13,7 +13,6 @@ const DEFAULT_BASE_URL = 'https://qzesffnkqgelmtfblzkr.supabase.co/functions/v1'
  * O secret nunca volta ao browser — vai direto para o cofre (Vault) via RPC.
  */
 export function IntegracoesSection() {
-  const { user } = useAuth()
   const { can } = usePermissoes()
   const isAdmin = can('configuracoes', 'admin')
   const { status, loading, saving, testing, salvar, testar, revogar } = useEmpireIntegracao()
@@ -176,6 +175,9 @@ export function IntegracoesSection() {
           </p>
         )}
       </div>
+
+      {/* Card CRM OMNX (ponte de vendas nos dois sentidos) */}
+      <CrmOmnxIntegracaoCard />
     </div>
   )
 }

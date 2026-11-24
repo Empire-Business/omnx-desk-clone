@@ -1,0 +1,1 @@
+{"imports":{"https://esm.sh/@supabase/supabase-js@2":"./mock-supabase.ts","https://deno.land/std@0.208.0/http/server.ts":"./mock-serve.ts"}}

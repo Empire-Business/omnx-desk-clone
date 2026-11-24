@@ -1,3 +1,4 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -28,7 +29,7 @@ async function signPayload(secret: string, payload: string): Promise<string> {
 
 // ─── Dispatch event to all matching webhooks ─────────────────────────────────
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS })
   }

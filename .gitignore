@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 .env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 *.env
@@ -52,3 +54,9 @@ __pycache__/
 
 # Arquivos do OCR: copiados do node_modules e baixados na build (ver scripts/prepare-tesseract-assets.mjs)
 public/tesseract/
+.vercel
+
+# Morfo: sites de referência baixados (terceiros, só estudo)
+.morfo/referencias/sites/
+.claude/worktrees/
+.morfo/qa/prints/

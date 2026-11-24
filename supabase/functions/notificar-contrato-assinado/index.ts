@@ -1,3 +1,4 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -5,7 +6,12 @@ const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const resendApiKey = Deno.env.get('RESEND_API_KEY')
 
 // Para quem vai a notificação de contrato assinado.
-const DEST_EMAIL = Deno.env.get('NOTIFICA_CONTRATO_EMAIL') ?? 'bruno@aliancadealtovalor.com.br'
+const PRIMARY_DEST_EMAIL = Deno.env.get('NOTIFICA_CONTRATO_EMAIL')?.trim() || 'bruno@aliancadealtovalor.com.br'
+const MASTER_CONTRACT_RECIPIENTS = [
+  PRIMARY_DEST_EMAIL,
+  'highticket@marvee.com.br',
+  'exosconsultoria@marvee.com.br',
+]
 
 // Buckets onde ficam os comprovantes (venda) e anexos (contrato).
 const BUCKET_VENDAS = 'vendas-comprovantes'
@@ -73,7 +79,7 @@ function montarEndereco(v: Record<string, unknown>, fallback: string | null): st
 
 // ─── Função principal ────────────────────────────────────────────────────────
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS })
   }
@@ -84,21 +90,11 @@ Deno.serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseKey)
 
   try {
-    // Duas formas de autorização:
-    //  (a) chamada interna do banco (trigger) → header x-notify-secret válido;
-    //  (b) chamada do front → usuário autenticado (a anon key pública não basta).
+    // Apenas a chamada interna do banco (trigger), autenticada pelo segredo.
     const notifySecret = req.headers.get('x-notify-secret')
-    let autorizado = false
-    if (notifySecret) {
-      const { data: ok } = await supabase.rpc('notify_secret_matches', { candidate: notifySecret })
-      autorizado = ok === true
-    }
-    if (!autorizado) {
-      const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-      if (!token) return json({ error: 'Unauthorized' }, 401)
-      const { data: { user }, error: authErr } = await supabase.auth.getUser(token)
-      if (authErr || !user) return json({ error: 'Unauthorized' }, 401)
-    }
+    if (!notifySecret) return json({ error: 'Unauthorized' }, 401)
+    const { data: notifySecretOk } = await supabase.rpc('notify_secret_matches', { candidate: notifySecret })
+    if (notifySecretOk !== true) return json({ error: 'Unauthorized' }, 401)
 
     const { contrato_id } = await req.json()
     if (!contrato_id) return json({ error: 'contrato_id é obrigatório' }, 400)
@@ -122,6 +118,18 @@ Deno.serve(async (req) => {
       .eq('id', contrato_id)
       .single()
     if (cErr || !contrato) return json({ error: `Contrato não encontrado: ${cErr?.message}` }, 404)
+
+    // Esses destinatários pertencem somente à operação principal. Outros
+    // tenants não podem ter seus contratos encaminhados para essa lista.
+    const { data: tenant, error: tenantErr } = await supabase
+      .from('tenants')
+      .select('is_master')
+      .eq('id', contrato.tenant_id)
+      .maybeSingle()
+    if (tenantErr) return json({ error: `Empresa não encontrada: ${tenantErr.message}` }, 500)
+    if (!tenant?.is_master) {
+      return json({ success: true, skipped: true, motivo: 'tenant não configurado para esta notificação' })
+    }
 
     // 2) Venda ligada pelo WhatsApp (dados ricos: pagamentos, endereço, comprovantes)
     let venda: Record<string, unknown> | null = null
@@ -195,38 +203,44 @@ Deno.serve(async (req) => {
 
     // 6) Registra na fila e envia direto via Resend (com anexos)
     const assunto = `Contrato assinado: ${nome}`
-    const { data: queued } = await supabase
+    const destinatarios = [...new Set(MASTER_CONTRACT_RECIPIENTS.map((email) => email.toLowerCase()))]
+    const { data: queued, error: queueErr } = await supabase
       .from('email_queue')
-      .insert({
-        destinatario_email: DEST_EMAIL,
+      .insert(destinatarios.map((destinatario_email) => ({
+        destinatario_email,
         assunto,
         corpo_html: html,
         tipo: 'contrato_assinado',
         referencia_tipo: 'contrato',
         referencia_id: contrato_id,
         status: 'pendente',
-      })
-      .select('id')
-      .single()
+      })))
+      .select('id, destinatario_email')
+    if (queueErr) return json({ error: 'Falha ao registrar os e-mails na fila', detail: queueErr.message }, 500)
 
-    const envio = await enviarResend({ to: DEST_EMAIL, subject: assunto, html, attachments })
+    const queuedByRecipient = new Map((queued ?? []).map((item) => [item.destinatario_email, item.id]))
+    const envios = await Promise.all(destinatarios.map(async (to) => {
+      const envio = await enviarResend({ to, subject: assunto, html, attachments })
+      const queuedId = queuedByRecipient.get(to)
+      if (queuedId) {
+        await supabase
+          .from('email_queue')
+          .update(
+            envio.success
+              ? { status: 'enviado', enviado_em: new Date().toISOString(), tentativas: 1 }
+              : { status: 'erro', erro: envio.error, tentativas: 1 },
+          )
+          .eq('id', queuedId)
+      }
+      return envio
+    }))
 
-    if (queued?.id) {
-      await supabase
-        .from('email_queue')
-        .update(
-          envio.success
-            ? { status: 'enviado', enviado_em: new Date().toISOString(), tentativas: 1 }
-            : { status: 'erro', erro: envio.error, tentativas: 1 },
-        )
-        .eq('id', queued.id)
+    const falhas = envios.filter((envio) => !envio.success)
+    if (falhas.length > 0) {
+      return json({ error: 'Falha no envio para um ou mais destinatários', falhas: falhas.length }, 502)
     }
 
-    if (!envio.success) {
-      return json({ error: 'Falha no envio', detail: envio.error, queued_id: queued?.id }, 500)
-    }
-
-    return json({ success: true, cliente: nome, anexos: attachments.length, queued_id: queued?.id })
+    return json({ success: true, cliente: nome, anexos: attachments.length, destinatarios: destinatarios.length })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Erro desconhecido'
     return json({ error: message }, 500)

@@ -162,7 +162,7 @@
 
 <header>
   <span class="logo">omnx-desk</span>
-  <span class="version-badge">UML 04/08/2026</span>
+  <span class="version-badge">UML 12/09/2026</span>
   <span style="flex:1"></span>
   <span style="color:var(--text-secondary);font-size:13px">Diagramas do Sistema</span>
 </header>
@@ -175,6 +175,7 @@
   <button class="tab" data-panel="d3">3.5. Domínio Atendimento (app Social Media — Fase 4)</button>
   <button class="tab" data-panel="d4">Ciclo de vida da demanda</button>
   <button class="tab" data-panel="d5">5. Fluxo dos apps (modularização)</button>
+  <button class="tab" data-panel="d6">6. SSO Empire OS</button>
 </div>
 
 <div class="content">
@@ -386,12 +387,51 @@ flowchart TD
       </div>
     </div>
   </div>
+  <div class="panel" id="panel-d6">
+    <h2>6. SSO de entrada pelo Empire OS</h2>
+    <div class="mermaid-wrapper">
+      <div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant E as Empire OS
+    participant P as provision-tenant
+    participant D as tenants e usuarios
+    participant A as Supabase Auth
+    actor O as Dono
+    E->>P: Chave escopada + external_id + owner.email
+    P->>P: Validar chave antes do payload
+    P->>D: Reconciliar tenant, usuário e vínculo admin
+    P-->>E: tenant_id + app_url
+    E-->>O: Abrir login com empire_sso=1
+    O->>A: Entrar com Empire OS (OIDC + PKCE)
+    A->>E: Autorizar com a sessão/senha do Empire OS
+    E-->>A: identity verificada + workspace_id
+    A-->>O: Sessão no tenant reconciliado do Desk
+      </div>
+    </div>
+  </div>
 </div>
 
 <footer>
-  omnx-desk — UML Visual &middot; Renderizado com Mermaid.js &middot; 04/08/2026 BRT &middot; fonte: docs/UML.md
+  omnx-desk — UML Visual &middot; Renderizado com Mermaid.js &middot; 12/09/2026 BRT &middot; fonte: docs/UML.md
 </footer>
 
+<section class="section"><h2>Ativação SaaS sequencial de membro</h2><div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  actor O as Owner no Empire
+  actor M as Membro no Empire
+  participant E as provision-saas
+  participant P as provision-tenant Desk
+  participant D as Banco Desk
+  O->>E: Ativar plataforma
+  E->>P: provision_tenant + external_ref
+  P->>D: Criar tenant + admin
+  M->>E: Ativar meu acesso
+  E->>E: Exigir parent ready no workspace
+  E->>P: provision_member + mesmo external_ref
+  P->>D: Reconciliar user como atendimento no tenant existente
+  P-->>E: mesmo tenant_id + user_id
+</pre></div></section>
 <script>
   mermaid.initialize({
     startOnLoad: true,

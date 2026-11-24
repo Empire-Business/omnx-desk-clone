@@ -1,3 +1,5 @@
+import type { Json } from '@/integrations/supabase/types'
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -66,9 +68,10 @@ export function useLogAudit() {
       acao: string
       entidade: string
       entidade_id?: string
-      detalhes?: Record<string, unknown>
+      detalhes?: { [key: string]: Json | undefined }
     }) => {
       const { error } = await supabase.from('audit_logs').insert({
+        tenant_id: await tenantDaSessao(),
         user_id: user?.id ?? null,
         user_nome: user?.nome ?? null,
         user_perfil: user?.perfil ?? null,

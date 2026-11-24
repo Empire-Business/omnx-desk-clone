@@ -1,11 +1,10 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { LifeBuoy, Bug, CheckCircle2, Loader2, Paperclip, X, Camera } from 'lucide-react'
+import { Bug, CheckCircle2, Loader2, Paperclip, X, Camera } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { useAuth } from '@/contexts/AuthContext'
 import { cn } from '@/lib/utils'
 import { capturarContexto } from '@/lib/reporte-contexto'
-import { capturarTela } from '@/lib/reporte-captura'
 import { lerBufferConsole, lerBufferRede } from '@/lib/reporte-buffers'
 import {
   useCriarReporte,
@@ -35,71 +34,12 @@ const CATEGORIAS: { value: ReporteCategoria; label: string }[] = [
 const inputCls =
   'w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30'
 
-/** Botão flutuante + modal para reportar um problema de qualquer tela. */
-export function ReportarProblema() {
-  const [open, setOpen] = useState(false)
-  const [capturando, setCapturando] = useState(false)
-  const [print, setPrint] = useState<File | null>(null)
-  const botaoRef = useRef<HTMLButtonElement>(null)
-
-  /**
-   * A foto é tirada ANTES de abrir o modal — depois, a tela com o problema
-   * estaria coberta pelo formulário e o print sairia inútil. O próprio botão
-   * fica de fora da imagem.
-   */
-  const abrir = async () => {
-    setCapturando(true)
-    try {
-      setPrint(await capturarTela([botaoRef.current]))
-    } finally {
-      setCapturando(false)
-      setOpen(true)
-    }
-  }
-
-  const fechar = () => {
-    setOpen(false)
-    setPrint(null)
-  }
-
-  return (
-    <>
-      <button
-        ref={botaoRef}
-        type="button"
-        onClick={abrir}
-        disabled={capturando}
-        title="Reportar um problema"
-        aria-label="Reportar um problema"
-        className={cn(
-          'group fixed z-40 bottom-[calc(7rem+env(safe-area-inset-bottom))] right-4 sm:bottom-28 sm:right-5',
-          'inline-flex h-12 items-center rounded-full pl-[13px] pr-[13px]',
-          'bg-blue-600 text-white shadow-lg shadow-blue-600/30',
-          'hover:bg-blue-700 hover:pr-5 transition-all duration-300 ease-out',
-        )}
-      >
-        {capturando ? (
-          <Loader2 className="h-[22px] w-[22px] shrink-0 animate-spin" />
-        ) : (
-          <LifeBuoy className="h-[22px] w-[22px] shrink-0" />
-        )}
-        {/* O nome cresce do container ao passar o mouse (desktop) */}
-        <span
-          className={cn(
-            'hidden sm:block max-w-0 overflow-hidden whitespace-nowrap text-sm font-medium',
-            'transition-all duration-300 ease-out group-hover:max-w-[170px] group-hover:ml-2',
-          )}
-        >
-          Reportar problema
-        </span>
-      </button>
-
-      {open && <ReportarModal onClose={fechar} printInicial={print} />}
-    </>
-  )
-}
-
-function ReportarModal({
+/**
+ * Janela de "Reportar um problema". Quem abre é o ponto de ajuda único
+ * (`components/ajuda/PontoDeAjuda`), que tira a foto da tela ANTES de abrir —
+ * depois, a tela com o problema estaria coberta pelo formulário.
+ */
+export function ReportarModal({
   onClose,
   printInicial,
 }: {

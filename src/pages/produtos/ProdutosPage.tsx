@@ -1,9 +1,45 @@
 import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Package } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Package, Search } from 'lucide-react'
 import { useProdutos } from '@/hooks/useProdutos'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { TabelaResponsiva, type ColunaTabela } from '@/components/ui/TabelaResponsiva'
+
+type ProdutoLinha = NonNullable<ReturnType<typeof useProdutos>['data']>[number]
+
+const colunas: ColunaTabela<ProdutoLinha>[] = [
+  {
+    id: 'produto',
+    titulo: 'Produto',
+    principal: true,
+    celula: (p) => (
+      <div className="min-w-0">
+        <Link to={`/produtos/${p.id}`} className="rounded-sm font-semibold text-foreground hover:text-link">
+          {p.nome}
+        </Link>
+        {p.descricao && <p className="mt-0.5 truncate text-xs text-muted-foreground">{p.descricao}</p>}
+      </div>
+    ),
+  },
+  {
+    id: 'cliente',
+    titulo: 'Cliente',
+    rotuloCartao: 'Cliente',
+    celula: (p) => <span className="text-muted-foreground">{p.clients?.nome ?? '—'}</span>,
+  },
+  {
+    id: 'status',
+    titulo: 'Status',
+    rotuloCartao: 'Situação',
+    celula: (p) => (
+      <span className={`tag ${p.ativo ? 'text-success' : 'text-muted-foreground'}`}>
+        {p.ativo ? 'Ativo' : 'Inativo'}
+      </span>
+    ),
+  },
+]
 
 export function ProdutosPage() {
   const [search, setSearch] = useState('')
@@ -17,46 +53,44 @@ export function ProdutosPage() {
   }, [products, search])
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6">
-      <PageHeader title="Produtos" description="Todos os produtos por cliente" />
-      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar produtos..."
-        className="max-w-sm w-full rounded-lg border border-input bg-card px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring" />
+    <PageContainer>
+      <PageHeader
+        title="Produtos"
+        description="Todos os produtos por cliente"
+        count={products ? filtered.length : undefined}
+      />
+
+      <div className="relative w-full sm:max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+        <input
+          type="search"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Buscar produtos..."
+          aria-label="Buscar produtos"
+          className="input pl-9"
+        />
+      </div>
 
       {isLoading ? (
-        <div className="glass-card divide-y divide-border">
-          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-14 shimmer" />)}
+        <div className="grid gap-2" aria-busy="true" aria-label="Carregando produtos">
+          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="sk h-14" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <EmptyState icon={Package} title="Nenhum produto encontrado" description="Adicione produtos a partir da página de clientes." />
+        <EmptyState
+          icon={Package}
+          title="Nenhum produto encontrado"
+          description="Adicione produtos a partir da página de clientes."
+        />
       ) : (
-        <div className="glass-card overflow-hidden overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Produto</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Cliente</th>
-                <th className="hidden px-4 py-3 text-left text-xs font-medium text-muted-foreground sm:table-cell">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {filtered.map(p => (
-                <tr key={p.id} onClick={() => navigate(`/produtos/${p.id}`)} className="cursor-pointer hover:bg-muted/50 transition-colors">
-                  <td className="px-4 py-3">
-                    <p className="text-sm font-medium text-foreground">{p.nome}</p>
-                    {p.descricao && <p className="text-xs text-muted-foreground truncate max-w-xs">{p.descricao}</p>}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{p.clients?.nome ?? '—'}</td>
-                  <td className="hidden px-4 py-3 sm:table-cell">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${p.ativo ? 'bg-success-light text-success' : 'bg-muted text-muted-foreground'}`}>
-                      {p.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <TabelaResponsiva
+          rotulo="Lista de produtos"
+          linhas={filtered}
+          chave={(p) => p.id}
+          colunas={colunas}
+          aoClicarLinha={(p) => navigate(`/produtos/${p.id}`)}
+        />
       )}
-    </div>
+    </PageContainer>
   )
 }

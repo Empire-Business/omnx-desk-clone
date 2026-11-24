@@ -2,13 +2,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { regraPermiteAcao } from '@/lib/permissoes'
+import { tenantDaSessao } from '@/lib/authTenant'
 
 /**
  * Permissões por app (Fase 2 do roadmap de modularização).
  *
  * Substitui, aos poucos, o gate espalhado por `users.perfil` / `acesso_contratos`.
- * A migração é ADITIVA: enquanto uma tela não migrou, ela continua lendo o perfil
- * direto — e este hook mantém o comportamento antigo como rede de segurança.
+ * As telas que usam este hook seguem a matriz: ausência de regra nega acesso.
+ * Admin e a liberação individual de contratos são exceções explícitas.
  *
  * Um "recurso" pode ser um app (`chat`, `contratos`) ou uma sub-área
  * (`contratos.onboarding`). A ação é `ver`, `editar` ou `admin`, em escada:
@@ -22,27 +24,10 @@ interface RegraPermissao {
   acao: AcaoPermissao
 }
 
-/**
- * Recursos novos que convivem com o gate legado até a migration
- * `20260806130000` estar aplicada em todos os tenants. Ver `can()`.
- */
-const RECURSOS_EM_TRANSICAO = new Set([
-  'clientes.carteira',
-  'chat.carteira',
-  'clientes.atribuir',
-])
-
-/** Escada de ações: a chave cobre tudo que está na lista. */
-const COBERTURA: Record<AcaoPermissao, AcaoPermissao[]> = {
-  admin: ['admin', 'editar', 'ver'],
-  editar: ['editar', 'ver'],
-  ver: ['ver'],
-}
-
 export function usePermissoesRegras() {
   const { user } = useAuth()
   return useQuery({
-    queryKey: ['permissoes-app', user?.perfil ?? 'anon'],
+    queryKey: ['permissoes-app', user?.id ?? 'anon', user?.perfil ?? 'anon'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('permissoes_app')
@@ -63,8 +48,8 @@ export function usePermissoesRegras() {
  * - **admin sempre pode.** É o fail-safe que impede um seed errado trancar o dono.
  * - **`acesso_contratos` continua valendo.** É uma liberação por PESSOA, não por
  *   perfil, então não cabe na tabela — quem tinha o bool não pode perder acesso.
- * - **Enquanto as regras carregam, cai no gate legado**, para a tela não piscar
- *   "sem acesso" e depois liberar.
+ * - Regras ausentes ou com falha não concedem acesso. `carregando` permite
+ *   que o consumidor apresente a espera sem oferecer ações ainda não autorizadas.
  */
 export function usePermissoes() {
   const { user } = useAuth()
@@ -82,22 +67,11 @@ export function usePermissoes() {
         return true
       }
 
-      // Sem resposta ainda (ou falha de rede): mantém o comportamento antigo.
-      if (isLoading || isError || !regras) return gateLegado(user.perfil, recurso, acao)
+      if (isLoading || isError || !regras) return false
 
-      const aceitas = COBERTURA[acao]
       const naMatriz = regras.some(
-        (r) => (r.recurso === recurso || r.recurso === '*') && aceitas.includes(r.acao),
+        (r) => (r.recurso === recurso || r.recurso === '*') && regraPermiteAcao(r.acao, acao),
       )
-
-      // Recursos criados em 06/08/2026 que ainda podem não existir na matriz de
-      // um tenant (migration não aplicada, tenant provisionado antes do seed
-      // novo). Enquanto isso, valem os dois em OR — senão o front subiria antes
-      // do banco e o gerente perderia a visão da carteira sem aviso. Sai daqui
-      // quando `20260806130000` estiver aplicada em todos os tenants.
-      if (!naMatriz && RECURSOS_EM_TRANSICAO.has(recurso)) {
-        return gateLegado(user.perfil, recurso, acao)
-      }
 
       return naMatriz
     },
@@ -123,22 +97,23 @@ export const PERFIS_EDITAVEIS = [
 /** Recursos que a matriz expõe, com rótulo amigável. */
 export const RECURSOS = [
   { chave: 'dashboard', label: 'Dashboard' },
-  { chave: 'chat', label: 'Chat' },
-  { chave: 'atendimento', label: 'Atendimento' },
+  { chave: 'chat', label: 'Conversas' },
+  { chave: 'atendimento', label: 'Tickets' },
+  { chave: 'automacoes-wa', label: 'Íris' },
   { chave: 'contratos', label: 'Contratos' },
-  { chave: 'contratos.onboarding', label: 'Contratos — Onboarding' },
+  { chave: 'contratos.onboarding', label: 'Contratos — Vendas novas' },
   { chave: 'cobranca', label: 'Cobrança' },
   { chave: 'clientes', label: 'Clientes' },
   // Estes dois não são "abre a tela?", e sim "enxerga o de todo mundo?".
   // Antes viviam como `admin || gerente` no código; viraram regra editável.
   { chave: 'clientes.carteira', label: 'Clientes — ver a carteira inteira' },
   { chave: 'clientes.atribuir', label: 'Clientes — atribuir responsável' },
-  { chave: 'chat.carteira', label: 'Chat — ver todas as conversas' },
+  { chave: 'chat.carteira', label: 'Conversas — ver todas as conversas' },
   { chave: 'colaboradores', label: 'Colaboradores' },
   { chave: 'departamentos', label: 'Departamentos' },
   { chave: 'configuracoes', label: 'Configurações da conta' },
-  { chave: 'apps', label: 'Loja de Apps' },
-  { chave: 'reportes', label: 'Triagem de reportes' },
+  { chave: 'apps', label: 'Módulos ligados' },
+  { chave: 'reportes', label: 'Problemas relatados' },
   { chave: 'auditoria', label: 'Auditoria' },
   { chave: 'disparo', label: 'Disparo por tag (CRM)' },
   { chave: 'portal', label: 'Portal do cliente' },
@@ -167,9 +142,11 @@ export function useDefinirPermissao() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: { perfil: string; recurso: string; acao: AcaoPermissao | null }) => {
+      const tenantId = await tenantDaSessao()
       const { error: errDel } = await supabase
         .from('permissoes_app')
         .delete()
+        .eq('tenant_id', tenantId)
         .eq('perfil', input.perfil)
         .eq('recurso', input.recurso)
       if (errDel) throw errDel
@@ -177,39 +154,10 @@ export function useDefinirPermissao() {
       if (input.acao) {
         const { error } = await supabase
           .from('permissoes_app')
-          .insert({ perfil: input.perfil, recurso: input.recurso, acao: input.acao })
+          .insert({ tenant_id: tenantId, perfil: input.perfil, recurso: input.recurso, acao: input.acao })
         if (error) throw error
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['permissoes-app'] }),
   })
-}
-
-/**
- * Gate anterior à Fase 2, mantido como fallback. Espelha o que `AppSidebar` e
- * `ContratosTabs` faziam antes — some quando a última tela migrar.
- */
-function gateLegado(perfil: string, recurso: string, acao: AcaoPermissao): boolean {
-  if (perfil === 'admin') return true
-  // Fora do admin, nada era 'admin' antes (Produtos, Tags, Apps, Reportes).
-  if (acao === 'admin') return false
-  if (recurso.startsWith('contratos')) {
-    if (perfil === 'gerente') return true
-    // atendimento via só a aba Onboarding.
-    return perfil === 'atendimento' && recurso === 'contratos.onboarding'
-  }
-  if (recurso === 'portal') return perfil === 'cliente'
-  // Carteira inteira e atribuição de responsável eram `admin || gerente`. Sem
-  // este recorte, o fallback ("qualquer um menos cliente") entregaria a carteira
-  // de todo mundo ao estrategista nos segundos em que as regras carregam — um
-  // vazamento de dados por causa de uma rede lenta.
-  if (recurso === 'clientes.carteira') {
-    // `atendimento` já via a lista inteira de clientes (useClientes).
-    return perfil === 'gerente' || perfil === 'atendimento'
-  }
-  if (recurso === 'clientes.atribuir' || recurso === 'chat.carteira') {
-    return perfil === 'gerente'
-  }
-  // Demais telas do núcleo eram visíveis a qualquer usuário logado.
-  return perfil !== 'cliente'
 }

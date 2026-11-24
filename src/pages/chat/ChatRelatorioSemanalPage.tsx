@@ -285,7 +285,9 @@ function useUnifiedWeeklyReports(semanaInicio: string, week: WeekRange) {
               .select('conversation_id, nota')
               .in('conversation_id', convIds.slice(i, i + 200))
               .not('nota', 'is', null)
-            for (const c of csatData ?? []) csatMap[c.conversation_id] = c.nota
+            for (const c of csatData ?? []) {
+              if (c.conversation_id && c.nota !== null) csatMap[c.conversation_id] = c.nota
+            }
           }
         }
 
@@ -294,8 +296,8 @@ function useUnifiedWeeklyReports(semanaInicio: string, week: WeekRange) {
         const rawMap: Record<string, Record<string, Raw>> = {}
 
         for (const conv of convs ?? []) {
-          const contact = (conv as any).chat_contacts
-          if (!contact) continue
+          const contact = conv.chat_contacts
+          if (!contact || !conv.agente_id) continue
           const estId = conv.agente_id
           const contactId = contact.id
           if (!rawMap[estId]) rawMap[estId] = {}
@@ -385,8 +387,9 @@ function useHistoricalAvgScore(currentWeekStart: string) {
       const weekContactMap: Record<string, Record<string, { pos: number; neu: number; neg: number; sla: number; total: number }>> = {}
 
       for (const c of convs) {
-        const contact = (c as any).chat_contacts
-        if (!contact) continue
+        const contact = c.chat_contacts
+        if (!contact || !c.agente_id) continue
+        if (!c.criado_em) continue
         const d = new Date(c.criado_em)
         const thursday = new Date(d)
         thursday.setUTCDate(d.getUTCDate() + (4 - (d.getUTCDay() || 7)))
@@ -484,15 +487,17 @@ function usePeriodReports(start: string | null, end: string | null, active: bool
             const { data: csatData } = await supabase
               .from('chat_csat').select('conversation_id, nota')
               .in('conversation_id', convIds.slice(i, i + 200)).not('nota', 'is', null)
-            for (const c of csatData ?? []) csatMap[c.conversation_id] = c.nota
+            for (const c of csatData ?? []) {
+              if (c.conversation_id && c.nota !== null) csatMap[c.conversation_id] = c.nota
+            }
           }
         }
 
         type Raw = Omit<ContactMetrics, 'score'>
         const rawMap: Record<string, Record<string, Raw>> = {}
         for (const conv of convs ?? []) {
-          const contact = (conv as any).chat_contacts
-          if (!contact) continue
+          const contact = conv.chat_contacts
+          if (!contact || !conv.agente_id) continue
           const estId = conv.agente_id; const contactId = contact.id
           if (!rawMap[estId]) rawMap[estId] = {}
           if (!rawMap[estId][contactId]) rawMap[estId][contactId] = { totalConversas: 0, conversasEncerradas: 0, sentimentoPositivo: 0, sentimentoNeutro: 0, sentimentoNegativo: 0, csatMedia: 0, csatTotal: 0, slaViolado: 0, tmaMinutos: null }
@@ -563,7 +568,7 @@ function KpiCard({ label, value, icon: Icon, variant = 'default', sublabel }: {
       <div className="min-w-0">
         <p className="font-display text-2xl font-bold text-foreground leading-tight">{value}</p>
         <p className="font-mono text-[11px] tracking-wider uppercase text-muted-foreground mt-0.5">{label}</p>
-        {sublabel && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{sublabel}</p>}
+        {sublabel && <p className="text-[11px] text-muted-foreground/70 mt-0.5">{sublabel}</p>}
       </div>
     </div>
   )
@@ -579,7 +584,7 @@ function SentimentBar({ positivo, neutro, negativo }: { positivo: number; neutro
         {neutro > 0 && <div className="bg-amber-400 h-full" style={{ width: `${(neutro / total) * 100}%` }} />}
         {negativo > 0 && <div className="bg-danger h-full" style={{ width: `${(negativo / total) * 100}%` }} />}
       </div>
-      <div className="flex items-center gap-1.5 shrink-0 text-[10px] font-medium">
+      <div className="flex items-center gap-1.5 shrink-0 text-[11px] font-medium">
         <span className="text-success">{positivo}</span>
         <span className="text-amber-500">{neutro}</span>
         <span className="text-danger">{negativo}</span>
@@ -662,7 +667,7 @@ function TriBadge({ label, value, invert = false }: { label: string; value: Nive
   if (!style) return null
   return (
     <div className="flex flex-col items-start gap-0.5">
-      <span className="text-[9px] uppercase font-mono tracking-wider text-muted-foreground">{label}</span>
+      <span className="text-[11px] uppercase font-mono tracking-wider text-muted-foreground">{label}</span>
       <span className={cn('rounded-md px-2 py-0.5 text-[11px] font-semibold', style.bg, style.text)}>
         {style.label}
       </span>
@@ -674,7 +679,7 @@ function QualityStars({ value }: { value: number | null }) {
   if (!value) return null
   return (
     <div className="flex flex-col items-start gap-0.5">
-      <span className="text-[9px] uppercase font-mono tracking-wider text-muted-foreground">Qualidade do estrategista</span>
+      <span className="text-[11px] uppercase font-mono tracking-wider text-muted-foreground">Qualidade do estrategista</span>
       <div className="flex items-center gap-0.5">
         {[1, 2, 3, 4, 5].map(i => (
           <Star
@@ -715,27 +720,27 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
             {/* Badges row */}
             <div className="flex items-center gap-2 flex-wrap">
               {ai?.is_group ? (
-                <span className="flex items-center gap-1 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 px-2 py-0.5 text-[10px] font-medium">
+                <span className="flex items-center gap-1 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 px-2 py-0.5 text-[11px] font-medium">
                   <Users className="h-3 w-3" />Grupo
                 </span>
               ) : ai && (
-                <span className="flex items-center gap-1 rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[10px] font-medium">
+                <span className="flex items-center gap-1 rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[11px] font-medium">
                   <User className="h-3 w-3" />Conversa direta
                 </span>
               )}
               {(ai || m) && <ScoreBadge score={unifiedScore} />}
               {sentStyle && (
-                <span className={cn('flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', sentStyle.cls)}>
+                <span className={cn('flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium', sentStyle.cls)}>
                   <Sparkles className="h-3 w-3" />{sentStyle.label}
                 </span>
               )}
               {ai?.risco_abandono === 'alto' && (
-                <span className="flex items-center gap-1 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 px-2 py-0.5 text-[10px] font-medium">
+                <span className="flex items-center gap-1 rounded-full bg-rose-500/10 text-rose-700 dark:text-rose-400 px-2 py-0.5 text-[11px] font-medium">
                   <AlertTriangle className="h-3 w-3" />Risco de abandono
                 </span>
               )}
               {!ai && (
-                <span className="text-[10px] text-muted-foreground italic">Sem análise</span>
+                <span className="text-[11px] text-muted-foreground italic">Sem análise</span>
               )}
             </div>
 
@@ -746,7 +751,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
                   <span className="flex items-center gap-1">
                     <MessageSquare className="h-3 w-3" />
                     {m.totalConversas} conversa{m.totalConversas !== 1 ? 's' : ''}
-                    <span className="text-[10px]">({m.conversasAbertas ?? m.totalConversas - m.conversasEncerradas}A/{m.conversasEncerradas}E)</span>
+                    <span className="text-[11px]">({m.totalConversas - m.conversasEncerradas}A/{m.conversasEncerradas}E)</span>
                   </span>
                   {m.csatTotal > 0 && (
                     <span className="flex items-center gap-0.5">
@@ -802,7 +807,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
           {/* Diagnóstico da marca (consultoria) */}
           {ai && (ai.clareza_posicionamento || ai.nivel_execucao || ai.nivel_confianca_cliente || ai.risco_abandono || ai.qualidade_consultoria_estrategista || ai.ia_score != null) && (
             <div className="rounded-xl border border-primary/15 bg-primary-muted/10 px-4 py-3 space-y-3">
-              <p className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-primary">
+              <p className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-primary">
                 <Shield className="h-3 w-3" /> Diagnóstico da consultoria
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -814,7 +819,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
               </div>
               {ai.temas_tratados && ai.temas_tratados.length > 0 && (
                 <div>
-                  <p className="text-[9px] uppercase font-mono tracking-wider text-muted-foreground mb-1.5">Temas trabalhados</p>
+                  <p className="text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-1.5">Temas trabalhados</p>
                   <div className="flex flex-wrap gap-1.5">
                     {ai.temas_tratados.map((t, i) => (
                       <span key={i} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground">{t}</span>
@@ -824,7 +829,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
               )}
               {ai.sugestoes_estrategista && ai.sugestoes_estrategista.length > 0 && (
                 <div className="rounded-lg border border-primary/30 bg-primary-muted/20 px-3 py-2.5">
-                  <p className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-primary mb-2">
+                  <p className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-primary mb-2">
                     <Lightbulb className="h-3 w-3" /> Como melhorar com este cliente
                   </p>
                   <ul className="space-y-1.5">
@@ -844,7 +849,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {(ai.direcionamentos_dados?.length ?? 0) > 0 && (
                 <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-3">
-                  <p className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-emerald-700 dark:text-emerald-400 mb-2">
+                  <p className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-emerald-700 dark:text-emerald-400 mb-2">
                     <Lightbulb className="h-3 w-3" /> Direcionamentos dados
                   </p>
                   <ul className="space-y-1.5">
@@ -858,7 +863,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
               )}
               {(ai.entregaveis_pendentes?.length ?? 0) > 0 && (
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-3">
-                  <p className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-amber-700 dark:text-amber-400 mb-2">
+                  <p className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-amber-700 dark:text-amber-400 mb-2">
                     <CheckCircle className="h-3 w-3" /> Entregáveis pendentes
                   </p>
                   <ul className="space-y-1.5">
@@ -872,7 +877,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
               )}
               {(ai.bloqueios?.length ?? 0) > 0 && (
                 <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-3">
-                  <p className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-rose-700 dark:text-rose-400 mb-2">
+                  <p className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-rose-700 dark:text-rose-400 mb-2">
                     <XCircle className="h-3 w-3" /> Bloqueios identificados
                   </p>
                   <ul className="space-y-1.5">
@@ -890,7 +895,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
           {/* AI analysis */}
           {ai ? (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-[10px] uppercase font-mono tracking-wider text-primary">
+              <div className="flex items-center gap-2 text-[11px] uppercase font-mono tracking-wider text-primary">
                 <Sparkles className="h-3 w-3" /> Análise narrativa · {ai.total_conversas ?? 0} conv · {ai.total_mensagens ?? 0} msgs
               </div>
 
@@ -900,7 +905,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
 
               {ai.nota_detalhada && (
                 <div className="rounded-xl border border-primary/20 bg-primary-muted/30 px-4 py-3">
-                  <p className="text-[10px] uppercase font-mono tracking-wider text-primary mb-1.5">Análise detalhada</p>
+                  <p className="text-[11px] uppercase font-mono tracking-wider text-primary mb-1.5">Análise detalhada</p>
                   <p className="text-sm text-foreground leading-relaxed">{ai.nota_detalhada}</p>
                 </div>
               )}
@@ -908,7 +913,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {ai.topicos && ai.topicos.length > 0 && (
                   <div>
-                    <p className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-muted-foreground mb-2">
+                    <p className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-2">
                       <BookOpen className="h-3 w-3" /> Tópicos
                     </p>
                     <ul className="space-y-1">
@@ -923,7 +928,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
 
                 {ai.objecoes && ai.objecoes.length > 0 && (
                   <div>
-                    <p className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-muted-foreground mb-2">
+                    <p className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-2">
                       <XCircle className="h-3 w-3" /> Objeções
                     </p>
                     <ul className="space-y-2">
@@ -933,7 +938,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
                             <ChevronRight className="h-3 w-3 text-warning shrink-0 mt-0.5" />{o}
                           </span>
                           {ai.como_lidar?.[i] && (
-                            <span className="ml-4 text-[10px] text-muted-foreground italic">{ai.como_lidar[i]}</span>
+                            <span className="ml-4 text-[11px] text-muted-foreground italic">{ai.como_lidar[i]}</span>
                           )}
                         </li>
                       ))}
@@ -943,7 +948,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
 
                 {ai.proximos_passos && ai.proximos_passos.length > 0 && (
                   <div>
-                    <p className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-muted-foreground mb-2">
+                    <p className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-2">
                       <CheckCircle className="h-3 w-3 text-success" /> Próximos passos
                     </p>
                     <ul className="space-y-1.5">
@@ -958,7 +963,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
 
                 {ai.como_lidar && ai.como_lidar.length > 0 && (!ai.objecoes || ai.objecoes.length === 0) && (
                   <div>
-                    <p className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-muted-foreground mb-2">
+                    <p className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-2">
                       <Lightbulb className="h-3 w-3 text-amber-500" /> Como lidar
                     </p>
                     <ul className="space-y-1.5">
@@ -974,7 +979,7 @@ function UnifiedClientCard({ report }: { report: UnifiedReport }) {
 
               {ai.alertas && ai.alertas.length > 0 && (
                 <div className="rounded-lg border border-danger/20 bg-danger-light/40 px-3 py-2.5">
-                  <p className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-danger mb-2">
+                  <p className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-danger mb-2">
                     <Bell className="h-3 w-3" /> Alertas
                   </p>
                   <ul className="space-y-1">
@@ -1010,7 +1015,7 @@ function MetricsCollapsible({ metrics: m }: { metrics: ContactMetrics }) {
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted/20 transition-colors rounded-xl"
       >
-        <span className="flex items-center gap-1.5 text-[10px] uppercase font-mono tracking-wider text-muted-foreground">
+        <span className="flex items-center gap-1.5 text-[11px] uppercase font-mono tracking-wider text-muted-foreground">
           <FileBarChart className="h-3 w-3" /> Métricas operacionais
         </span>
         {open ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
@@ -1018,23 +1023,23 @@ function MetricsCollapsible({ metrics: m }: { metrics: ContactMetrics }) {
       {open && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-3 pb-3">
           <div>
-            <p className="text-[9px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">Abertas</p>
+            <p className="text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">Abertas</p>
             <p className="text-base font-bold text-foreground">{m.totalConversas - m.conversasEncerradas}</p>
           </div>
           <div>
-            <p className="text-[9px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">Encerradas</p>
+            <p className="text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">Encerradas</p>
             <p className="text-base font-bold text-foreground">{m.conversasEncerradas}</p>
           </div>
           <div>
-            <p className="text-[9px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">TMA 1ª resposta</p>
+            <p className="text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">TMA 1ª resposta</p>
             <p className="text-base font-bold text-foreground">{m.tmaMinutos != null ? `${m.tmaMinutos} min` : '—'}</p>
           </div>
           <div>
-            <p className="text-[9px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">SLA Violados</p>
+            <p className="text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">SLA Violados</p>
             <p className={cn('text-base font-bold', m.slaViolado > 0 ? 'text-danger' : 'text-foreground')}>{m.slaViolado}</p>
           </div>
           <div>
-            <p className="text-[9px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">Sentimento</p>
+            <p className="text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">Sentimento</p>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="flex items-center gap-0.5 text-xs"><SmilePlus className="h-3 w-3 text-success" />{m.sentimentoPositivo}</span>
               <span className="flex items-center gap-0.5 text-xs"><Meh className="h-3 w-3 text-amber-500" />{m.sentimentoNeutro}</span>
@@ -1042,7 +1047,7 @@ function MetricsCollapsible({ metrics: m }: { metrics: ContactMetrics }) {
             </div>
           </div>
           <div>
-            <p className="text-[9px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">CSAT</p>
+            <p className="text-[11px] uppercase font-mono tracking-wider text-muted-foreground mb-0.5">CSAT</p>
             {m.csatTotal > 0 ? (
               <div className="flex items-center gap-1 mt-0.5">
                 {[1,2,3,4,5].map(i => (
@@ -1065,7 +1070,6 @@ function MetricsCollapsible({ metrics: m }: { metrics: ContactMetrics }) {
 function EstrategistaSection({ group }: { group: EstrategistaGroup }) {
   const [open, setOpen] = useState(true)
   const withAI = group.reports.filter(r => r.aiReport).length
-  const withMetrics = group.reports.filter(r => r.metrics).length
 
   return (
     <div className="space-y-2">
@@ -1249,8 +1253,8 @@ export default function ChatRelatorioSemanalPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <PageHeader
-          title="Relatório de Clientes"
-          description="Métricas e análise sentimental por estrategista e cliente."
+          title="Análise das conversas"
+          description="Como os clientes estão se sentindo nas conversas, por responsável e por cliente."
         />
         {/* Abas de período — apenas admin/gerente */}
         {!isEstrategista && (

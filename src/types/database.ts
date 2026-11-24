@@ -204,7 +204,7 @@ export interface NotificationRow {
 
 // Joined types
 export interface ClientWithProducts extends Client { products: Product[]; client_contracts?: ClientContract[] }
-export interface ProductWithDeliverables extends Product { deliverables: Deliverable[]; clients: Client }
+export interface ProductWithDeliverables extends Product { deliverables: Deliverable[]; clients?: Pick<Client, 'id' | 'nome'> | null }
 export interface DeliveryWithDetails extends Delivery {
   clients: Pick<Client, 'id' | 'nome'>
   deliverables: Pick<Deliverable, 'id' | 'nome' | 'tipo'> & { products: Pick<Product, 'id' | 'nome'> }

@@ -330,7 +330,7 @@ export function NewConversationDialog({
 
   // Motivo de o botão estar bloqueado, pra mostrar um aviso claro ao usuário.
   const motivoBloqueio = !instanceId
-    ? 'Selecione a instância de WhatsApp na etapa "Contato".'
+    ? 'Selecione o número de WhatsApp na etapa "Contato".'
     : normalizePhone(numero).length < 10
       ? 'Informe um número de WhatsApp válido (com DDD).'
       : mensagem.trim().length === 0
@@ -344,8 +344,8 @@ export function NewConversationDialog({
       {/* Success overlay */}
       {successAnim && (
         <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card/95 rounded-2xl animate-fade-in">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-500/15">
-            <CheckCircle className="h-8 w-8 text-green-500 animate-scale-in" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-success-light">
+            <CheckCircle className="h-8 w-8 text-success animate-scale-in" />
           </div>
           <p className="mt-3 text-sm font-medium text-foreground">
             Conversa iniciada com sucesso!
@@ -394,7 +394,7 @@ export function NewConversationDialog({
             {activeInstances.length > 1 && (
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-foreground">
-                  Instância WhatsApp
+                  Número de WhatsApp
                 </label>
                 <select
                   value={instanceId}
@@ -460,14 +460,14 @@ export function NewConversationDialog({
                       key={`${r.source}-${r.id}`}
                       type="button"
                       onClick={() => selectResult(r)}
-                      className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/60 transition-colors first:rounded-t-lg last:rounded-b-lg"
+                      className="flex w-full min-h-11 items-center gap-3 px-3 py-2 text-left hover:bg-accent transition-colors duration-fast first:rounded-t-lg last:rounded-b-lg"
                     >
                       <div
                         className={cn(
                           'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
                           r.source === 'client'
-                            ? 'bg-blue-500/10 text-blue-500'
-                            : 'bg-accent/10 text-accent',
+                            ? 'bg-primary-light text-link'
+                            : 'bg-bg-2 text-fg-2',
                         )}
                       >
                         {r.source === 'client' ? (
@@ -486,10 +486,8 @@ export function NewConversationDialog({
                       </div>
                       <span
                         className={cn(
-                          'shrink-0 rounded-full px-2 py-0.5 text-2xs font-medium',
-                          r.source === 'client'
-                            ? 'bg-blue-500/10 text-blue-500'
-                            : 'bg-muted text-muted-foreground',
+                          'tag shrink-0',
+                          r.source === 'client' && 'tag-info',
                         )}
                       >
                         {r.source === 'client' ? 'Cliente' : 'Contato'}
@@ -533,8 +531,9 @@ export function NewConversationDialog({
                   'w-full rounded-lg border bg-background px-3 py-2 font-mono',
                   'text-sm placeholder:text-muted-foreground',
                   'focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent',
-                  numberStatus === 'valid' && 'border-green-500/50',
-                  numberStatus === 'invalid' && 'border-red-500/50',
+                  'text-base sm:text-sm',
+                  numberStatus === 'valid' && 'border-success/50',
+                  numberStatus === 'invalid' && 'border-danger/50',
                   numberStatus !== 'valid' &&
                     numberStatus !== 'invalid' &&
                     'border-input',
@@ -548,12 +547,12 @@ export function NewConversationDialog({
                   </span>
                 )}
                 {numberStatus === 'valid' && (
-                  <span className="flex items-center gap-1 text-2xs text-green-600 dark:text-green-400">
+                  <span className="flex items-center gap-1 text-2xs text-success">
                     <CheckCircle className="h-3 w-3" /> Número encontrado no WhatsApp
                   </span>
                 )}
                 {numberStatus === 'invalid' && (
-                  <span className="flex items-center gap-1 text-2xs text-red-500">
+                  <span className="flex items-center gap-1 text-2xs text-danger">
                     <XCircle className="h-3 w-3" /> Número não encontrado no WhatsApp
                   </span>
                 )}
@@ -704,7 +703,7 @@ export function NewConversationDialog({
 
             {/* Aviso do que falta pra habilitar o botão */}
             {!canSubmit && motivoBloqueio && (
-              <p className="flex items-center gap-1.5 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+              <p className="flex items-center gap-1.5 rounded-lg bg-warning-light px-3 py-2 text-xs text-warning">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                 {motivoBloqueio}
               </p>

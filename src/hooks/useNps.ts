@@ -1,9 +1,10 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
 // ─── Domain types ────────────────────────────────────────────────────────────
 
-interface NpsSurvey {
+export interface NpsSurvey {
   id: string
   client_id: string
   delivery_id: string | null
@@ -13,7 +14,7 @@ interface NpsSurvey {
   clients?: { id: string; nome: string }
 }
 
-interface NpsResponse {
+export interface NpsResponse {
   id: string
   survey_id: string
   respondido_por: string | null
@@ -54,6 +55,27 @@ export function useNpsSurveys() {
         .order('criado_em', { ascending: false })
       if (error) throw error
       return data as NpsSurvey[]
+    },
+  })
+}
+
+export type RespostaCampanha = Pick<NpsResponse, 'id' | 'nota' | 'comentario' | 'criado_em'>
+export type CampanhaNps = NpsSurvey & { nps_responses: RespostaCampanha[] | null }
+
+/**
+ * Campanhas da equipe (/relatorios/pesquisas): cada pesquisa com o cliente e
+ * as respostas, numa consulta só. A RLS decide o que volta.
+ */
+export function useCampanhasNps() {
+  return useQuery({
+    queryKey: [...npsKeys.surveys(), 'campanhas'] as const,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('nps_surveys')
+        .select('*, clients(id, nome), nps_responses(id, nota, comentario, criado_em)')
+        .order('criado_em', { ascending: false })
+      if (error) throw error
+      return data as CampanhaNps[]
     },
   })
 }
@@ -125,7 +147,7 @@ export function useCreateSurvey() {
     mutationFn: async (input: { client_id: string; delivery_id?: string }) => {
       const { data, error } = await supabase
         .from('nps_surveys')
-        .insert({ ...input, enviado_em: new Date().toISOString() })
+        .insert({ ...({ ...input, enviado_em: new Date().toISOString() }), tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -148,12 +170,12 @@ export function useSubmitResponse() {
     }) => {
       const { error: insertError } = await supabase
         .from('nps_responses')
-        .insert({
+        .insert({ ...({
           survey_id: input.survey_id,
           nota: input.nota,
           comentario: input.comentario ?? null,
           respondido_por: input.respondido_por ?? null,
-        })
+        }), tenant_id: await tenantDaSessao() })
       if (insertError) throw insertError
 
       const { error: updateError } = await supabase

@@ -1,3 +1,4 @@
+import { nomesClientesContrato } from '@/lib/contratoClientes'
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Settings2, GripVertical } from 'lucide-react'
@@ -7,6 +8,7 @@ import {
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { ContratosTabs } from '@/components/contratos/ContratosTabs'
 import { GerenciarColunasModal } from '@/components/contratos/GerenciarColunasModal'
 import { useContratos, useUpdateContrato, type Contrato } from '@/hooks/useComissoes'
@@ -38,10 +40,10 @@ function ContratoCard({ c, onOpen }: { c: Contrato; onOpen: () => void }) {
         <GripVertical className="h-3.5 w-3.5" />
       </button>
       <button onClick={onOpen} className="min-w-0 flex-1 text-left">
-        <p className="text-sm font-medium text-foreground truncate">{c.cliente_nome}</p>
+        <p className="text-sm font-medium text-foreground truncate">{nomesClientesContrato(c)}</p>
         <div className="flex items-baseline justify-between gap-2 mt-1">
-          <span className="text-[10px] text-muted-foreground truncate">{c.produto_nome ?? '—'}</span>
-          <span className="text-[10px] tabular-nums text-foreground">{fmtBRL(Number(c.valor_total ?? 0))}</span>
+          <span className="text-[11px] text-muted-foreground truncate">{c.produto_nome ?? '—'}</span>
+          <span className="text-[11px] tabular-nums text-foreground">{fmtBRL(Number(c.valor_total ?? 0))}</span>
         </div>
       </button>
     </div>
@@ -63,14 +65,14 @@ function Coluna({ col, items, onOpen }: { col: KanbanColuna; items: Contrato[]; 
           <h3 className="text-sm font-medium text-foreground">{col.titulo}</h3>
           <span className="text-xs text-muted-foreground tabular-nums">{items.length}</span>
           {col.is_onboarding && (
-            <span className="rounded-full bg-purple-500/10 px-1.5 py-0.5 text-[9px] font-medium text-purple-500" title="Clientes vindos do formulário, ainda sem Clicksign">
+            <span className="rounded-full bg-primary-muted px-1.5 py-0.5 text-[11px] font-medium text-link" title="Clientes vindos do formulário, ainda sem Clicksign">
               formulário
             </span>
           )}
         </div>
-        <span className="text-[10px] tabular-nums text-muted-foreground">{fmtBRL(total)}</span>
+        <span className="text-[11px] tabular-nums text-muted-foreground">{fmtBRL(total)}</span>
       </div>
-      <div className="flex-1 px-2 pb-2 space-y-1.5 max-h-[70vh] overflow-y-auto min-h-[80px]">
+      <div className="flex-1 px-2 pb-2 space-y-1.5 max-h-[70dvh] overflow-y-auto min-h-[80px]">
         {items.length === 0 ? (
           <p className={cn('py-6 text-center text-xs', isOver ? 'text-primary' : 'text-muted-foreground/60')}>
             {isOver ? 'Solte aqui' : 'vazio'}
@@ -135,9 +137,9 @@ export function ContratosKanbanPage() {
   const cols = colunas ?? []
 
   return (
-    <div className="space-y-4 sm:space-y-6 animate-fade-in">
+    <PageContainer className="animate-fade-in">
       <PageHeader
-        title="Kanban"
+        title="Quadro"
         description="Arraste um cartão pela alça para mudar o status. Clique para abrir."
         action={
           isAdmin ? (
@@ -181,10 +183,10 @@ export function ContratosKanbanPage() {
           <DragOverlay>
             {ativo && (
               <div className="w-64 p-2.5 rounded-md bg-card border border-primary/40 shadow-lg rotate-2">
-                <p className="text-sm font-medium text-foreground truncate">{ativo.cliente_nome}</p>
+                <p className="text-sm font-medium text-foreground truncate">{nomesClientesContrato(ativo)}</p>
                 <div className="flex items-baseline justify-between gap-2 mt-1">
-                  <span className="text-[10px] text-muted-foreground truncate">{ativo.produto_nome ?? '—'}</span>
-                  <span className="text-[10px] tabular-nums text-foreground">{fmtBRL(Number(ativo.valor_total ?? 0))}</span>
+                  <span className="text-[11px] text-muted-foreground truncate">{ativo.produto_nome ?? '—'}</span>
+                  <span className="text-[11px] tabular-nums text-foreground">{fmtBRL(Number(ativo.valor_total ?? 0))}</span>
                 </div>
               </div>
             )}
@@ -193,6 +195,6 @@ export function ContratosKanbanPage() {
       )}
 
       {isAdmin && <GerenciarColunasModal open={gerirOpen} onClose={() => setGerirOpen(false)} />}
-    </div>
+    </PageContainer>
   )
 }

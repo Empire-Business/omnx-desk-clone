@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { Plus, Pencil, Trash2, Users, User, X, Smartphone } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { TabelaResponsiva } from '@/components/ui/TabelaResponsiva'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -90,7 +92,7 @@ interface DeptFormProps {
 
 function DeptForm({ initial = EMPTY_FORM, onSubmit, loading, submitLabel }: DeptFormProps) {
   const [form, setForm] = useState<DeptFormData>(initial)
-  const { data: instances = [] } = useInstances()
+  useInstances()
 
   function set<K extends keyof DeptFormData>(field: K, value: DeptFormData[K]) {
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -101,16 +103,18 @@ function DeptForm({ initial = EMPTY_FORM, onSubmit, loading, submitLabel }: Dept
     onSubmit(form)
   }
 
+  // Campo no padrão do DS, sem altura fixa (serve também a textarea); 16 px no celular.
   const inputCls = cn(
-    'w-full rounded-lg border border-input bg-background px-3 py-2',
-    'text-sm placeholder:text-muted-foreground',
-    'focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent',
+    'w-full rounded-md border border-input bg-card px-3 py-2 max-sm:min-h-11',
+    'text-base sm:text-sm placeholder:text-fg-placeholder transition-[border-color,box-shadow] duration-fast hover:border-stroke-strong',
+    'focus:outline-none focus:border-ring focus:shadow-[0_0_0_3px_var(--primary-glow)]',
   )
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
+      {/* 1 coluna no celular, 2 a partir de 640 px (auditoria 03) */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-foreground">Nome</label>
           <input
             required
@@ -162,7 +166,7 @@ function DeptForm({ initial = EMPTY_FORM, onSubmit, loading, submitLabel }: Dept
           />
         </div>
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-foreground">
             Mensagem de boas-vindas
           </label>
@@ -176,7 +180,7 @@ function DeptForm({ initial = EMPTY_FORM, onSubmit, loading, submitLabel }: Dept
         </div>
 
         {/* Business Hours */}
-        <div className="col-span-2 border-t border-border pt-4 mt-2">
+        <div className="sm:col-span-2 border-t border-border pt-4 mt-2">
           <p className="text-sm font-semibold text-foreground mb-3">Horario de atendimento</p>
         </div>
 
@@ -200,7 +204,7 @@ function DeptForm({ initial = EMPTY_FORM, onSubmit, loading, submitLabel }: Dept
           />
         </div>
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-foreground">Dias de atendimento</label>
           <div className="flex flex-wrap gap-2 mt-1">
             {DIAS_SEMANA.map((dia) => (
@@ -231,7 +235,7 @@ function DeptForm({ initial = EMPTY_FORM, onSubmit, loading, submitLabel }: Dept
           </div>
         </div>
 
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <label className="mb-1.5 block text-sm font-medium text-foreground">
             Mensagem fora do horario
           </label>
@@ -244,7 +248,7 @@ function DeptForm({ initial = EMPTY_FORM, onSubmit, loading, submitLabel }: Dept
           />
         </div>
 
-        <div className="col-span-2 flex items-center gap-2">
+        <div className="sm:col-span-2 flex items-center gap-2">
           <input
             id="dept-ativo"
             type="checkbox"
@@ -289,7 +293,7 @@ function DeptInstanceManager({ departmentId }: { departmentId: string }) {
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
           <Smartphone className="h-3.5 w-3.5 text-primary" />
-          Instâncias ({assignments.length})
+          Números ({assignments.length})
         </label>
         {!adding && (
           <button
@@ -308,7 +312,7 @@ function DeptInstanceManager({ departmentId }: { departmentId: string }) {
             key={a.id}
             className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2.5 py-1 text-xs font-medium text-foreground"
           >
-            {a.whatsapp_instances?.nome ?? 'Instância'}
+            {a.whatsapp_instances?.nome ?? 'Número'}
             {a.whatsapp_instances?.categoria && (
               <span className={cn(
                 'rounded-full px-1 py-0.5 text-2xs',
@@ -329,7 +333,7 @@ function DeptInstanceManager({ departmentId }: { departmentId: string }) {
           </span>
         ))}
         {assignments.length === 0 && (
-          <p className="text-xs text-muted-foreground py-1">Nenhuma instância vinculada.</p>
+          <p className="text-xs text-muted-foreground py-1">Nenhum número vinculado.</p>
         )}
       </div>
 
@@ -538,155 +542,147 @@ export default function ChatDepartamentosPage() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6 p-3 sm:p-4 lg:p-6 animate-fade-in">
+    <PageContainer respiro largura="larga">
       <PageHeader
-        title="Departamentos"
-        description="Configure os departamentos para organizar o atendimento."
+        title="Filas de atendimento"
+        count={departments.length}
+        description="Cada fila (departamento) recebe as conversas de alguns números e distribui para a sua equipe."
         action={
           <button
+            type="button"
             onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium gradient-primary text-primary-foreground transition-opacity hover:opacity-90"
+            className="btn btn-primary"
           >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Novo departamento</span>
-            <span className="sm:hidden">Novo</span>
+            <Plus aria-hidden />
+            Nova fila
           </button>
         }
       />
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="grid gap-2" aria-busy="true" aria-label="Carregando filas">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 rounded-lg bg-card ring-hairline px-4 py-3.5">
+              <div className="sk h-3.5 w-40 max-w-[40%]" />
+              <div className="sk ml-auto h-5 w-16 rounded-full" />
+            </div>
+          ))}
         </div>
       ) : departments.length === 0 ? (
         <EmptyState
           icon={Users}
-          title="Nenhum departamento cadastrado"
-          description="Crie departamentos para organizar as filas de atendimento."
+          title="Nenhuma fila cadastrada"
+          description="Crie filas (departamentos) para separar o atendimento — por exemplo, Financeiro e Suporte."
           action={
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium gradient-primary text-primary-foreground"
-            >
-              <Plus className="h-4 w-4" />
-              Novo departamento
+            <button type="button" onClick={() => setCreateOpen(true)} className="btn btn-primary">
+              <Plus aria-hidden />
+              Nova fila
             </button>
           }
         />
       ) : (
-        <div className="glass-card overflow-hidden">
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Nome
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Instâncias
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Agentes
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Distribuição
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  SLA 1ª Resp.
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  SLA Resolução
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Status
-                </th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {departments.map((dept) => (
-                <tr key={dept.id} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground">{dept.nome}</td>
-                  <td className="px-4 py-3">
-                    {(() => {
-                      const deptInstances = allDeptAssignments.filter(a => a.department_id === dept.id)
-                      if (deptInstances.length === 0) {
-                        return dept.instance_id
-                          ? <span className="text-muted-foreground">{instanceMap[dept.instance_id] ?? '—'}</span>
-                          : <span className="text-muted-foreground">—</span>
-                      }
-                      return (
-                        <div className="flex flex-wrap gap-1">
-                          {deptInstances.map(a => (
-                            <span key={a.id} className="inline-block rounded-full bg-primary-muted px-2 py-0.5 text-2xs font-medium text-primary">
-                              {a.whatsapp_instances?.nome ?? '?'}
-                            </span>
-                          ))}
-                        </div>
-                      )
-                    })()}
-                  </td>
-                  <td className="px-4 py-3">
-                    {(() => {
-                      const deptAgents = allDeptAgents.filter(a => a.department_id === dept.id)
-                      if (deptAgents.length === 0) {
-                        return <span className="text-muted-foreground">—</span>
-                      }
-                      return (
-                        <div className="flex flex-wrap gap-1">
-                          {deptAgents.map(a => (
-                            <span key={a.id} className="inline-block rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-foreground">
-                              {a.users?.nome ?? '?'}
-                            </span>
-                          ))}
-                        </div>
-                      )
-                    })()}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground capitalize">
-                    {DISTRIBUICAO_OPTIONS.find((o) => o.value === dept.distribuicao)?.label ??
-                      dept.distribuicao}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {dept.sla_primeira_resposta_minutos} min
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {dept.sla_resolucao_horas} h
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-medium',
-                        dept.ativo
-                          ? 'bg-success-light text-success'
-                          : 'bg-muted text-muted-foreground',
-                      )}
-                    >
-                      {dept.ativo ? 'Ativo' : 'Inativo'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => setEditTarget(dept)}
-                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(dept)}
-                        className="rounded-lg p-1.5 text-muted-foreground hover:bg-danger-light hover:text-danger transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-        </div>
+        <TabelaResponsiva
+          rotulo="Filas de atendimento"
+          linhas={departments}
+          chave={(d) => d.id}
+          colunas={[
+            {
+              id: 'nome',
+              titulo: 'Nome',
+              principal: true,
+              celula: (dept) => (
+                <button type="button" onClick={() => setEditTarget(dept)} className="rounded-sm text-left font-[650] text-foreground hover:underline underline-offset-2 focus-ds">
+                  {dept.nome}
+                </button>
+              ),
+            },
+            {
+              id: 'status',
+              titulo: 'Situação',
+              celula: (dept) => (
+                <span className="st st-sm" data-s={dept.ativo ? 'resolvido' : 'neutro'}>
+                  <span className="st-g" aria-hidden />
+                  {dept.ativo ? 'Ativa' : 'Desligada'}
+                </span>
+              ),
+            },
+            {
+              id: 'numeros',
+              titulo: 'Números',
+              celula: (dept) => {
+                const deptInstances = allDeptAssignments.filter(a => a.department_id === dept.id)
+                if (deptInstances.length === 0) {
+                  return <span className="text-muted-foreground">{dept.instance_id ? (instanceMap[dept.instance_id] ?? '—') : '—'}</span>
+                }
+                return (
+                  <div className="flex flex-wrap gap-1">
+                    {deptInstances.map(a => (
+                      <span key={a.id} className="tag tag-info">{a.whatsapp_instances?.nome ?? '?'}</span>
+                    ))}
+                  </div>
+                )
+              },
+            },
+            {
+              id: 'equipe',
+              titulo: 'Equipe',
+              celula: (dept) => {
+                const deptAgents = allDeptAgents.filter(a => a.department_id === dept.id)
+                if (deptAgents.length === 0) return <span className="text-muted-foreground">—</span>
+                return (
+                  <div className="flex flex-wrap gap-1">
+                    {deptAgents.map(a => (
+                      <span key={a.id} className="tag">{a.users?.nome ?? '?'}</span>
+                    ))}
+                  </div>
+                )
+              },
+            },
+            {
+              id: 'distribuicao',
+              titulo: 'Distribuição',
+              celula: (dept) => (
+                <span className="text-fg-2">
+                  {DISTRIBUICAO_OPTIONS.find((o) => o.value === dept.distribuicao)?.label ?? dept.distribuicao}
+                </span>
+              ),
+            },
+            {
+              id: 'sla1',
+              titulo: 'Prazo 1ª resposta',
+              numerica: true,
+              celula: (dept) => `${dept.sla_primeira_resposta_minutos} min`,
+            },
+            {
+              id: 'sla2',
+              titulo: 'Prazo para resolver',
+              numerica: true,
+              celula: (dept) => `${dept.sla_resolucao_horas} h`,
+            },
+          ]}
+          acoes={(dept) => (
+            <>
+              <button
+                type="button"
+                onClick={() => setEditTarget(dept)}
+                className="btn btn-ghost btn-icon btn-sm"
+                aria-label={`Editar ${dept.nome}`}
+                title="Editar"
+              >
+                <Pencil aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(dept)}
+                className="btn btn-ghost btn-icon btn-sm hover:!bg-danger-light hover:!text-danger"
+                aria-label={`Excluir ${dept.nome}`}
+                title="Excluir"
+              >
+                <Trash2 aria-hidden />
+              </button>
+            </>
+          )}
+        />
       )}
 
       <Modal
@@ -735,6 +731,6 @@ export default function ChatDepartamentosPage() {
         confirmLabel="Excluir"
         loading={deleteMutation.isPending}
       />
-    </div>
+    </PageContainer>
   )
 }

@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import type { Product, Deliverable, ProductWithDeliverables } from '@/types/database'
@@ -60,7 +61,7 @@ export function useCreateProduto() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: { client_id: string; nome: string; descricao?: string }) => {
-      const { data, error } = await supabase.from('products').insert(input).select().single()
+      const { data, error } = await supabase.from('products').insert({ ...(input), tenant_id: await tenantDaSessao() }).select().single()
       if (error) throw error
       return data as Product
     },
@@ -75,7 +76,7 @@ export function useCreateEntregavel() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (input: { product_id: string; nome: string; tipo: Deliverable['tipo']; descricao?: string; quantidade?: number }) => {
-      const { data, error } = await supabase.from('deliverables').insert(input).select().single()
+      const { data, error } = await supabase.from('deliverables').insert({ ...(input), tenant_id: await tenantDaSessao() }).select().single()
       if (error) throw error
       return data as Deliverable
     },

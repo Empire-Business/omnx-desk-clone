@@ -88,7 +88,10 @@ export function ClienteForm({ initial, onClose, onCreated, showClicksignField, i
       whatsapp: normalizePhoneForSave(rest.whatsapp),
       segmento: rest.segmento === 'Outro' ? customSegmento : rest.segmento,
     }
-    const payload = Object.fromEntries(Object.entries(finalForm).filter(([, v]) => v !== ''))
+    // Em edição, vazio é uma remoção explícita; omitir preservaria o valor antigo.
+    const payload = Object.fromEntries(Object.entries(finalForm)
+      .filter(([, v]) => isEdit || v !== '')
+      .map(([key, value]) => [key, isEdit && value === '' ? null : value]))
     if (isEdit && initial?.id) {
       await update.mutateAsync({ id: initial.id, ...payload })
     } else {
@@ -110,7 +113,7 @@ export function ClienteForm({ initial, onClose, onCreated, showClicksignField, i
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1 -mr-1">
+    <form onSubmit={handleSubmit} className="space-y-4 max-h-[75dvh] overflow-y-auto pr-1 -mr-1">
       <Section title="Dados básicos" icon={<User className="h-3.5 w-3.5" />}>
         <div className="sm:col-span-2">
           <label className={labelClass}>Nome *</label>
@@ -179,7 +182,7 @@ export function ClienteForm({ initial, onClose, onCreated, showClicksignField, i
         </div>
       </Section>
 
-      {!isEdit && (
+      {!isEdit && onCreated && (
         <Section title="Produtos comprados" icon={<Package className="h-3.5 w-3.5" />}>
           <div className="sm:col-span-2 space-y-2">
             {!produtos || produtos.length === 0 ? (

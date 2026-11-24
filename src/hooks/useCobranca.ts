@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { SUPABASE_URL } from '@/integrations/supabase/client'
@@ -108,7 +109,7 @@ export function useCreateInstance() {
     mutationFn: async (input: Omit<CobrancaInstance, 'id'>) => {
       const { data, error } = await supabase
         .from('cobranca_instances')
-        .insert(input)
+        .insert({ ...input, tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -180,7 +181,7 @@ export function useCreateRegua() {
     mutationFn: async (input: { nome: string; descricao?: string }) => {
       const { data, error } = await supabase
         .from('cobranca_reguas')
-        .insert(input)
+        .insert({ ...input, tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -204,7 +205,7 @@ export function useCreatePasso() {
     }) => {
       const { data, error } = await supabase
         .from('cobranca_regua_passos')
-        .insert(input)
+        .insert({ ...input, tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -293,7 +294,7 @@ export function useCreateDevedor() {
       const proximoEnvio = new Date(Date.now() + 60 * 60 * 1000).toISOString()
       const { data, error } = await supabase
         .from('cobranca_devedores')
-        .insert({ ...input, proximo_envio_em: proximoEnvio })
+        .insert({ ...input, proximo_envio_em: proximoEnvio, tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error
@@ -350,7 +351,9 @@ export function useImportDevedores() {
       regua_id: string
     }) => {
       const proximoEnvio = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+      const tenant_id = await tenantDaSessao()
       const inserts = rows.map((r) => ({
+        tenant_id,
         instance_id,
         regua_id,
         nome: r.nome,
@@ -524,158 +527,6 @@ export function useDeleteRegua() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: cobrancaKeys.reguas() })
-    },
-  })
-}
-
-// ----------------------------------------------------------------
-// Types — Conversations
-// ----------------------------------------------------------------
-
-export interface CobrancaConversation {
-  id: string
-  devedor_id: string
-  instance_id: string
-  status: 'aberta' | 'respondida' | 'encerrada'
-  ultima_mensagem: string | null
-  ultima_mensagem_em: string | null
-  criado_em: string
-  cobranca_devedores: { nome: string; numero_whatsapp: string; valor_divida: number | null } | null
-}
-
-export interface CobrancaMessage {
-  id: string
-  conversation_id: string
-  conteudo: string
-  enviado_por_agente: boolean
-  criado_em: string
-}
-
-// ----------------------------------------------------------------
-// Query keys — Conversations
-// ----------------------------------------------------------------
-
-export const cobrancaConversationKeys = {
-  conversations: () => ['cobranca', 'conversations'] as const,
-  messages: (id: string) => ['cobranca', 'conversations', id, 'messages'] as const,
-}
-
-// ----------------------------------------------------------------
-// Hooks — Conversations
-// ----------------------------------------------------------------
-
-export function useCobrancaConversations(filter?: { status?: string }) {
-  return useQuery({
-    queryKey: cobrancaConversationKeys.conversations(),
-    queryFn: async () => {
-      let query = supabase
-        .from('cobranca_conversations')
-        .select('*, cobranca_devedores(nome, numero_whatsapp, valor_divida)')
-        .order('ultima_mensagem_em', { ascending: false, nullsFirst: false })
-
-      if (filter?.status) {
-        query = query.eq('status', filter.status)
-      }
-
-      const { data, error } = await query
-      if (error) throw error
-      return data as CobrancaConversation[]
-    },
-  })
-}
-
-export function useCobrancaMessages(conversationId: string) {
-  return useQuery({
-    queryKey: cobrancaConversationKeys.messages(conversationId),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('cobranca_messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('criado_em', { ascending: true })
-      if (error) throw error
-      return data as CobrancaMessage[]
-    },
-    enabled: Boolean(conversationId),
-    refetchInterval: 10000,
-  })
-}
-
-export function useSendCobrancaMessage() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async ({
-      conversationId,
-      conteudo,
-      devedorNumero,
-      instanceId,
-    }: {
-      conversationId: string
-      conteudo: string
-      devedorNumero: string
-      instanceId: string
-    }) => {
-      // Insert message
-      const { data: msg, error: msgError } = await supabase
-        .from('cobranca_messages')
-        .insert({
-          conversation_id: conversationId,
-          conteudo,
-          enviado_por_agente: true,
-        })
-        .select()
-        .single()
-      if (msgError) throw msgError
-
-      // Update conversation
-      await supabase
-        .from('cobranca_conversations')
-        .update({
-          ultima_mensagem: conteudo,
-          ultima_mensagem_em: new Date().toISOString(),
-          status: 'respondida',
-        })
-        .eq('id', conversationId)
-
-      // Send via UAZAPI
-      const { data: { session } } = await supabase.auth.getSession()
-      await fetch(`${SUPABASE_URL}/functions/v1/uazapi-send-message`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          instance_id: instanceId,
-          number: devedorNumero,
-          text: conteudo,
-        }),
-      })
-
-      return msg as CobrancaMessage
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: cobrancaConversationKeys.conversations() })
-      queryClient.invalidateQueries({ queryKey: cobrancaConversationKeys.messages(variables.conversationId) })
-    },
-  })
-}
-
-export function useUpdateConversationStatus() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: CobrancaConversation['status'] }) => {
-      const { data, error } = await supabase
-        .from('cobranca_conversations')
-        .update({ status })
-        .eq('id', id)
-        .select()
-        .single()
-      if (error) throw error
-      return data as CobrancaConversation
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cobrancaConversationKeys.conversations() })
     },
   })
 }

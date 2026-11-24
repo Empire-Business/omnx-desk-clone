@@ -1,3 +1,5 @@
+import type { TablesUpdate } from '@/integrations/supabase/types'
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
@@ -67,7 +69,7 @@ export function useCriarProdutoCatalogo() {
     mutationFn: async (input: { nome: string; descricao?: string | null }) => {
       const { data, error } = await supabase
         .from('products')
-        .insert({ client_id: null, nome: input.nome.trim(), descricao: input.descricao?.trim() || null })
+        .insert({ ...({ client_id: null, nome: input.nome.trim(), descricao: input.descricao?.trim() || null }), tenant_id: await tenantDaSessao() })
         .select('id, nome, descricao, ativo, criado_em')
         .single()
       if (error) throw error
@@ -90,7 +92,7 @@ export function useAtualizarProdutoCatalogo() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: { id: string; nome?: string; descricao?: string | null; ativo?: boolean }) => {
-      const patch: Record<string, unknown> = {}
+      const patch: TablesUpdate<'products'> = {}
       if (input.nome !== undefined) patch.nome = input.nome.trim()
       if (input.descricao !== undefined) patch.descricao = input.descricao?.trim() || null
       if (input.ativo !== undefined) patch.ativo = input.ativo

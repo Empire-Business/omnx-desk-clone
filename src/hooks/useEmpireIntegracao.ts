@@ -18,14 +18,16 @@ export interface TesteConexaoResultado {
   base_url?: string
 }
 
-const PROVIDER = 'empire'
+/** Providers de tenant_integracoes geridos por este hook. */
+export type ProviderIntegracao = 'empire' | 'crm_omnx'
 
 /**
  * Gerencia a integração omnx-desk → Empire (CRM) por tenant: status, salvar/rotacionar o
  * secret (nunca exposto de volta), testar conexão e revogar. Só admin consegue usar (as RPCs
  * têm guarda interna). O secret vive no Vault; o front só lê status e escreve.
  */
-export function useEmpireIntegracao() {
+export function useEmpireIntegracao(provider: ProviderIntegracao = 'empire') {
+  const PROVIDER = provider
   const [status, setStatus] = useState<EmpireIntegracaoStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -44,7 +46,7 @@ export function useEmpireIntegracao() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [PROVIDER])
 
   useEffect(() => { void carregar() }, [carregar])
 
@@ -63,7 +65,7 @@ export function useEmpireIntegracao() {
     } finally {
       setSaving(false)
     }
-  }, [carregar])
+  }, [carregar, PROVIDER])
 
   const testar = useCallback(async (): Promise<TesteConexaoResultado> => {
     setTesting(true)
@@ -85,7 +87,7 @@ export function useEmpireIntegracao() {
     } catch (e) {
       return { ok: false, error: (e as Error).message }
     }
-  }, [carregar])
+  }, [carregar, PROVIDER])
 
   return { status, loading, saving, testing, carregar, salvar, testar, revogar }
 }

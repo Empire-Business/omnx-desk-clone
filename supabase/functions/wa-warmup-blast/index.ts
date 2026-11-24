@@ -1,15 +1,16 @@
 // Disparo one-shot: envia mensagens específicas de cada instância ao grupo,
 // com pequeno delay entre uma e outra pra parecer natural.
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { tokenUazapi, urlUazapi } from '../_shared/uazapi-credenciais.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const UAZAPI_URL = 'https://empirebusiness.uazapi.com'
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   const supabase = createClient(
@@ -23,7 +24,7 @@ Deno.serve(async (req) => {
 
   const { data: group } = await supabase
     .from('wa_warmup_groups')
-    .select('id, wa_chatid')
+    .select('id, wa_chatid, tenant_id')
     .eq('nome', groupName)
     .single()
 
@@ -36,7 +37,8 @@ Deno.serve(async (req) => {
 
   const results: Record<string, unknown>[] = []
   for (const item of items) {
-    const token = Deno.env.get(`UAZAPI_TOKEN_${item.instance_id}`)
+    const token = await tokenUazapi(supabase, item.instance_id, group.tenant_id ?? null)
+    const UAZAPI_URL = await urlUazapi(supabase, group.tenant_id ?? null)
     if (!token) {
       results.push({ instance: item.instance_id, error: 'token_missing' })
       continue

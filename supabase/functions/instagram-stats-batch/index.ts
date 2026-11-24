@@ -1,4 +1,6 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
+import { sessaoDeskLiberada } from '../_shared/desk-session.ts'
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const SCRAPECREATORS_URL = 'https://api.scrapecreators.com/v1/instagram/profile'
 const CONCURRENCY = 4
@@ -20,7 +22,7 @@ function normalizeHandle(input: string | null | undefined): string | null {
 }
 
 async function persistInstagramPic(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   picUrl: string,
   clientId: string,
 ): Promise<string | null> {
@@ -41,7 +43,7 @@ async function persistInstagramPic(
 }
 
 async function processClient(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   apiKey: string,
   client: { id: string; instagram: string | null },
 ): Promise<{ id: string; ok: boolean; error?: string }> {
@@ -122,7 +124,7 @@ async function runBatchedConcurrent<T, R>(
   return results
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -145,6 +147,14 @@ Deno.serve(async (req) => {
     const { data: { user }, error: userErr } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
     if (userErr || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders })
+    }
+    const deskSession = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } }, auth: { persistSession: false },
+    })
+    if (!await sessaoDeskLiberada(deskSession)) {
+      return new Response(JSON.stringify({ error: 'password_change_required' }), {
+        status: 403, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      })
     }
     const { data: profile } = await supabase.from('users').select('perfil').eq('id', user.id).single()
     if (profile?.perfil !== 'admin' && profile?.perfil !== 'gerente') {

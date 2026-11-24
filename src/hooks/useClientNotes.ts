@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
@@ -46,12 +47,12 @@ export function useCreateClientNote() {
       }
       const { data, error } = await supabase
         .from('client_notes')
-        .insert({
+        .insert({ ...({
           client_id: input.client_id,
           conteudo: input.conteudo,
           author_id: user?.id ?? null,
           author_nome,
-        })
+        }), tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error

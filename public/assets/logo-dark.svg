@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -4 925.5 208" width="925.5" height="208" fill="#FFFFFF" role="img" aria-label="OMNX Clients">
+  <title>OMNX Clients — gradiente azul · fundo escuro</title>
+  <defs><linearGradient id="g-x-dark" gradientUnits="userSpaceOnUse" x1="0" y1="100" x2="210" y2="100"><stop offset="0" stop-color="#67C7FF"/><stop offset=".46" stop-color="#0A4DFF"/><stop offset="1" stop-color="#4338CA"/></linearGradient></defs>
+  <g>
+    <path d="M0,100 A106.6,104 0 1,1 213.2,100 A106.6,104 0 1,1 0,100 Z M54,100 A52.6,50 0 1,0 159.2,100 A52.6,50 0 1,0 54,100 Z"/>
+    <path transform="translate(231.7 0)" d="M0,200 L0,0 L53.8,0 L120.5,74 L187.2,0 L241,0 L241,200 L185,200 L185,88.6 L120.5,160 L56,88.6 L56,200 Z"/>
+    <path transform="translate(492.5 0)" d="M0,200 L0,0 L51,0 L140.5,110.4 L140.5,0 L197,0 L197,200 L145,200 L56.5,90.3 L56.5,200 Z"/>
+    <g transform="translate(715.5 0)">
+      <path d="M0,0 H61 Q69,0 75,8 L141,100 L75,192 Q69,200 61,200 H0 L76,100 Z" fill="url(#g-x-dark)"/>
+      <path d="M155,0 H210 L147,82 L118,43 L144,8 Q149,0 155,0 Z" fill="url(#g-x-dark)"/>
+      <path d="M147,118 L210,200 H155 Q149,200 144,192 L118,157 Z" fill="url(#g-x-dark)"/>
+    </g>
+  </g>
+</svg>

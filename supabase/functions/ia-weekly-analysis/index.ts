@@ -1,3 +1,4 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
@@ -5,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
@@ -175,7 +176,7 @@ Deno.serve(async (req) => {
 
         const systemPrompt = `Você é um analista sênior de consultoria de marca. Analisa conversas entre um estrategista (consultor de marca) e seu cliente, gerando um diagnóstico acionável que ajuda o estrategista a melhorar e a liderança a entender o estado de cada relacionamento.
 
-Contexto: o estrategista atua como consultor de marca pessoal/empresarial. O trabalho dele inclui orientar posicionamento, conteúdo, identidade visual, tom de voz, autoridade, presença digital e execução. O cliente está em jornada de construção/desenvolvimento de marca.
+Contexto: o estrategista acompanha o cliente e atende seus pedidos por WhatsApp. O trabalho dele inclui orientar, esclarecer dúvidas, combinar prazos e acompanhar a execução do que foi combinado. O cliente está em acompanhamento contínuo.
 
 Você deve ler a conversa e extrair sinais reais — não inventar. Se não houver sinal suficiente para um campo, deixe como string vazia ou array vazio.
 
@@ -213,9 +214,9 @@ Definições:
 - risco_abandono: sinais de que pode esfriar — pouca resposta, postergação, dúvida sobre continuar, hostilidade.
 - qualidade_consultoria_estrategista: 1=raso/passivo, 3=cumpre o básico, 5=traz visão de fora, provoca, direciona.
 - ia_score: 0=relacionamento rompido, 50=neutro, 100=cliente engajado e marca avançando bem.
-- temas_tratados: ex. "posicionamento", "tom de voz", "calendário de conteúdo", "identidade visual", "autoridade", "estratégia de presença em LinkedIn".
+- temas_tratados: ex. "prazos", "contrato", "entregas combinadas", "dúvidas de uso", "pagamento", "reunião".
 - direcionamentos_dados: ações concretas que o estrategista RECOMENDOU ao cliente.
-- entregaveis_pendentes: deixe claro de quem é a pendência. Ex.: "[cliente] gravar 3 vídeos curtos", "[estrategista] enviar moodboard até sexta".
+- entregaveis_pendentes: deixe claro de quem é a pendência. Ex.: "[cliente] enviar os documentos pedidos", "[estrategista] enviar a proposta até sexta".
 - bloqueios: o que está travando o avanço. Ex.: "insegurança em aparecer", "indecisão sobre nicho", "falta de tempo do cliente".
 - como_lidar deve ter o mesmo número de itens que objecoes.
 - sugestoes_estrategista: 2-4 sugestões concretas e práticas para o estrategista melhorar a abordagem com ESTE cliente específico, baseadas no que você observou na conversa. Ex.: "Faça perguntas mais provocativas para forçar o cliente a tomar decisão sobre nicho", "Reduza o tom didático — o cliente já tem maturidade", "Estabeleça prazos curtos para entregas — ele precisa de pressão amigável". Seja específico ao caso, não genérico.

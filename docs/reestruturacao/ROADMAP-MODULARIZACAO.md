@@ -1,8 +1,44 @@
 # Roadmap — Reestruturação Modular do omnx-desk
 
+## Reorganização de atendimento — 06/11/2026 (publicada)
+
+Origem: pedido do dono nesta conversa; contrato em `../prd.md` §0.8.
+Plano e produção aprovados pelo dono. Migrations, serviços e telas publicados;
+[PR #29](https://github.com/Empire-Business/omnx-desk/pull/29) integrada por squash, main `cb8676c6faca8d78854ded26c14b0a2163456795`.
+
+- [x] Inventariar navegação, marketing, manual, IA e fluxo de pendências com agentes.
+- [x] Reorganizar entradas principais e navegação no celular, preservando acessos.
+- [x] Retirar ofertas de formatos de marketing, preservando leitura histórica.
+- [x] Publicar identificação/vínculo de tickets do WhatsApp e controles manuais.
+- [x] Publicar resolução automática por IA na conversa natural, sem comando obrigatório; verificações focadas e revisão independente concluídas.
+- [x] Aplicar somente as duas migrations autorizadas; publicar webhook v90, analisador v9 e ajuda v2; conferir catálogo/fontes e cron de 15 minutos ativo.
+- [x] Publicar frontend pelo fluxo GitHub→Vercel; menus e Nova demanda observados com Bruno administrador, sem criar pedido.
+- [x] Conferir uma pergunta real à ajuda com resposta de IA, fontes e atalhos, sem dados de clientes.
+- [x] Verificações focadas, revisão de segurança do delta e relatório HTML didático.
+- [ ] Homologar resolução/reabertura real de WhatsApp, semântica do classificador, SQL/RLS/concorrência, negativos entre empresas e uso efetivo/custos da cadência.
+- [ ] Conferir outros perfis e aparelhos físicos, realizar estudo com a operação e gravar os tutoriais.
+
+A simulação móvel de 390×844 foi encerrada e a sidebar restaurada. Não substitui
+teste em aparelho físico. A conferência de uma pergunta da ajuda não valida a
+resolução automática de pedidos. Evidências e riscos residuais no
+[changelog](../MUDANCAS.md) e em [validação](VALIDACAO-PREPUBLICACAO-DESK.md).
+A autorização registrada não se estende a outras operações de banco.
+
+### Íris no GT3 — publicação e teste privado em 27/10/2026
+
+- [x] Autorização expressa do usuário para produção e teste somente com sua conta; PRs Desk #14 e GT3 #25 integrados à `main`.
+- [x] Migrations aplicadas: Desk `20261027221159`; GT3 `20261027222022`; correção aprovada das prévias `20261027223439`. Segredos somente no servidor e quatro funções publicadas.
+- [x] Catálogo/RLS/ACLs das 11 tabelas e uso de Vault conferidos, sem achados nessa revisão; cron com HTTP 200 às 19:25 BRT.
+- [x] Primeiro teste real somente com Bruno, único vínculo em modo teste na carteira de Jin (24 clientes): DM com dois participantes, envio às 19:30 e pergunta sobre cliente próprio respondida; pedidos fora da carteira e financeiros/empresa recusados.
+- [x] Regressão das prévias diagnosticada como timeout e corrigida com canais materializados + busca indexada; visual restaurado e HTTP 200 às 19:35. 186 testes únicos + 69 reexecuções focadas; builds aprovados.
+- [x] Registrar encerramento: **piloto ativo somente para Bruno, em modo teste, carteira de Jin com 24 clientes; aviso às 08:00 America/Sao_Paulo, de segunda a sexta**. Pausa/reativação e dias úteis finais conferidos pela interface e no banco.
+- [ ] Verificar acesso com segunda conta real, corridas de revogação e mute; avaliar separadamente antes de cadastrar outros destinatários. Foto escolhida pelo usuário incorporada ao código no commit `9c2321ab`; foto conferida visualmente no perfil, cabeçalho, lista e mensagens.
+
+Detalhes e limites da validação: [Íris/GT3](../IRIS-GT3.md). Teste privado não significa homologação completa de concorrência ou liberação em lote.
+
 > Roadmap **vivo**: reflete o estado real do sistema, não só o plano.
 > Base: `AUDITORIA-ATUAL.md` + o brief de reestruturação entregue pelo usuário.
-> Atualizado em: 06/08/2026 às 12h00 BRT
+> Atualizado em: 26/10/2026 BRT
 
 ---
 
@@ -326,6 +362,23 @@ Estado real em 04/08/2026 (era plano, virou sistema):
 
 ---
 
+### Fase 9 — App Automações WhatsApp ⚪ (proposta 26/10/2026, aguarda aprovação do PRD §0.6)
+Esforço total: **Alto**. Depende da Fase 2 (permissões) e do app Chat (UAZAPI). Plano técnico: `~/.claude/plans/me-ajuda-a-planejar-agile-pike.md`.
+
+- `[ ]` **9.0 — Pré-requisitos** (Baixo): aprovar PRD §0.6 e este roadmap; obter doc de envio WhatsApp da Zernio (e confirmar se envia a grupos); decidir limiar padrão de cada anomalia; Zernio: validar endpoint de envio de template e envio a grupos (omnx-sdria não valida envio; fora da janela de 24h exige template aprovado).
+- `[x]` **9.1 — Fundação** (Médio): migration com `app_modules` (`automacoes-wa`), `permissoes_app` (`ver/editar/admin`), tabelas `wa_auto_config`, `wa_auto_gestores`, `wa_auto_regras_anomalia`, `wa_auto_envios` (todas com `tenant_id`, `tg_set_tenant_id`, RLS `tenant_isolation` RESTRICTIVE); ampliar CHECK de `tenant_integracoes.provider` (`uazapi`, `zernio`); revogar `EXECUTE` indevido das RPCs. Tela de config com abas Conexão e Gestores; rota/sidebar/`ROUTE_BY_SLUG`/`RECURSOS`.
+- `[x]` **9.2 — Adaptador de envio** (Médio): `_shared/wa-provider.ts` (`sendText`/`sendTemplate`, UAZAPI e Zernio), tokens no Vault, `base_url` por allowlist, idempotência (chave única por tenant+tipo+destino+janela), rate limit e disjuntor. Botão "Testar envio".
+- `[x]` **9.3 — Relatório diário + backtest** (Alto): `wa-auto-relatorio-diario` e `wa-auto-backtest` (dry-run); regras SLA, sentimento, contrato/reunião pendente e queda de volume.
+- `[x]` **9.4 — Resumo semanal** (Médio): `wa-auto-resumo-semanal` (privado/grupo; variável do template na oficial); prompt trata mensagens como dados.
+- `[x]` **9.5 — Agendamento em 2 etapas** (Médio): `wa-auto-agendar`; Etapa 1 grava em `meetings`, Etapa 2 envia o link ao grupo vinculado.
+- `[ ]` **9.6 — Release** (Médio): `/security-auditor` modo delta; teste com 2 tenants; homologação (`PLANO-DE-HOMOLOGACAO.md`); doc `docs/integracoes/zernio.md`, índice, `UML.md`, `MAPA-DE-NAVEGACAO.md`, `NIVEIS-DE-ACESSO.md`.
+
+**Requisitos de segurança (revisão design 26/10/2026):** F1 cron autenticado por segredo do Vault (nunca JWT anon no SQL); F2 `tenant_id` explícito em todo job com `service_role`; F3 tokens UAZAPI/Zernio no Vault, sem retorno ao browser; F4 saída da IA tratada como dado, destino nunca vem do texto; F5 minimização e retenção do histórico (as mensagens sempre citam o nome do cliente, sem trechos de conversa); F6 idempotência e limites; F7 permissões granulares.
+
+**Critério de conclusão:** as cinco aceitações do pedido (interface central, múltiplos gestores, backtest, 2 etapas, resumo semanal oficial/não oficial em privado e grupo) demonstradas em homologação, e skill de segurança sem `fail` em aberto.
+
+---
+
 ## 🔗 Dependências (ordem recomendada)
 
 ```
@@ -350,3 +403,54 @@ Todas ──► Fase 8 (testes/homologação)
 ## 📌 Decisões pendentes (aguardando usuário)
 - Quais de NPS/Entregas/Trilhas realmente não têm uso (→ vira task E6.1, não decisão agora).
 - Modelo exato de papéis unificados (→ E2.2, decisão de produto).
+
+
+## Responsáveis e guia de uso — 28/10/2026
+
+- [x] Diagnosticar vínculos, cascatas e nomes legados com leitura delimitada.
+- [x] Publicar troca individual com histórico, revisão de carteira e efeitos operacionais separados de contrato (PR21).
+- [x] Publicar manual público didático com exemplos fictícios: https://desk.omnx.pro/manual (PR20).
+- [x] Aplicar somente a migration autorizada no Desk, versão registrada 20261028194828; catálogo/RLS/ACL conferidos.
+- [x] Conferir leitura, prévia e cancelamento na sessão autenticada sem fabricar alterações reais.
+- [ ] Acompanhar primeira troca legítima; mutações com atores reais e concorrência não foram testadas em produção.
+
+Contrato e continuidade: `docs/RESPONSAVEIS-CLIENTE.md`.
+
+## Tempo de resposta — 03/11/2026
+
+Implementação local e revisão da meta60 minutos úteis, painel e alertas GT3.
+Estado de execução, autorização e critérios ficam em
+`.omnx/tasks/TASK-6a43a0b6-a48e-44e9-9e2d-42a32f4432b2.md`.
+Contrato: `docs/TEMPO-RESPOSTA.md`. Publicação e validação em banco pendentes.
+
+## Segurança — conta nova só com papel e empresa do servidor (19/11/2026)
+
+Origem: achado da checagem de segurança do primeiro acesso (ensaio real de 19/11/2026), confirmado na leitura da
+produção (cadastro público ligado). Detalhes em `../MUDANCAS.md`. Esforço: Médio. Precisa entrar antes das
+migrações do primeiro acesso (20261119180000 em diante).
+
+- [x] `handle_new_user` não lê mais `perfil`/`tenant_id` de `raw_user_meta_data`; vínculo pelo gatilho adiado `desk_conta_nova_conferida`, só com `raw_app_meta_data` (20261119150000).
+- [x] `admin-create-user` e `provision-tenant` mandam `app_metadata`; `provision-tenant` não responde sucesso sem a conta na empresa.
+- [x] Testes: `verificar-cadastro-servidor.sql` (banco do zero) e `_shared/cadastro-servidor.test.ts`.
+- [ ] Produção (só leitura): rodar a consulta do PR que procura contas criadas pela brecha.
+- [ ] Produção (só leitura, antes de aplicar 20261119150000): conferir que o `md5(prosrc)` do `handle_new_user` é o de 20261109100000 (valor no PR).
+- [ ] Publicar na ordem: funções primeiro, migração depois.
+
+## App instalado — correções do ensaio real de 19/11/2026
+
+Origem: ensaio real do Desk 0.2.1 numa conta de teste (D3, D4 e o aviso da licença).
+Detalhes em `../MUDANCAS.md` (19/11/2026). Esforço: Médio. Depende só da linha de base do
+app instalado (20261109100000 a 20261109140000). Concluída quando o PR for integrado e o
+pacote seguinte do app instalado sair com as três migrações.
+
+- [x] D3: botão "Criar a primeira conta" na tela de entrada, só enquanto o app não tem administradora (`desk_primeiro_acesso_aberto`, 20261119180000).
+- [x] D3: cadastros simultâneos no primeiro acesso não viram duas administradoras (trava consultiva no `handle_new_user`).
+- [x] D3: a pergunta da tela de entrada passa pela licença negada (`htai_licenca_rpcs_livres`).
+- [x] D4: `is_master_admin` e `desk_mfa_situacao` pela régua do `is_admin` (só `users.perfil`, 20261119180100).
+- [x] Aviso da licença por motivo: não ativada, vencida, suspensa, revogada e sem confirmação (20261119180200, funções e tela).
+- [x] Testes: Vitest (tela, funções e contrato das migrações) e banco do ensaio (`verificar-primeiro-acesso`, `verificar-superadmin`, `verificar-licenca-aviso`, `corrida-primeiro-acesso`).
+- [ ] Produção da empresa: rodar só a consulta de leitura do D4 (quem perderia a superadministração) antes de aplicar 20261119180100.
+- [ ] Produção da empresa (só leitura): conferir no painel que o cadastro público está desligado.
+- [x] Achado anterior (perfil e empresa nos dados da conta): resolvido na seção "Segurança — conta nova só com papel e empresa do servidor" acima; esta entrega vem depois dela.
+- [ ] Código de primeiro acesso de uso único (instalador + gatilho), para ninguém assumir a primeira conta antes da dona.
+- [ ] Repetir o primeiro acesso pela tela no próximo ensaio real do pacote.

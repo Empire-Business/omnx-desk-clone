@@ -3,6 +3,7 @@ import { Plus, Trash2, Wifi, WifiOff, QrCode, Ban } from 'lucide-react'
 import { usePermissoes } from '@/hooks/usePermissoes'
 import { cn, formatPhone } from '@/lib/utils'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -14,6 +15,8 @@ import {
 } from '@/hooks/useChat'
 import type { WaInstance } from '@/hooks/useChat'
 import { useMyInstanceIds } from '@/hooks/useUsers'
+import { useNumerosComToken } from '@/hooks/useUazapiTokens'
+import { TokenDoNumero } from '@/components/whatsapp/TokenDoNumero'
 
 const STATUS_CONFIG: Record<
   WaInstance['status'],
@@ -136,7 +139,7 @@ function InstanceForm({ initial = EMPTY_FORM, onSubmit, loading, submitLabel }: 
           ))}
         </div>
       </div>
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-input bg-background/50 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3 rounded-lg bg-bg-1 ring-hairline px-3 py-2.5">
         <div className="min-w-0">
           <p className="text-sm font-medium text-foreground">Ocultar grupos</p>
           <p className="text-xs text-muted-foreground">
@@ -180,6 +183,7 @@ export default function ChatInstanciasPage() {
   const isAdmin = can('chat', 'admin')
   const { data: myInstanceIds } = useMyInstanceIds()
   const { data: instances = [], isLoading } = useInstances(myInstanceIds)
+  const { data: comToken } = useNumerosComToken(isAdmin)
   const createMutation = useCreateInstance()
   const updateMutation = useUpdateInstance()
   const deleteMutation = useDeleteInstance()
@@ -232,65 +236,74 @@ export default function ChatInstanciasPage() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6 p-3 sm:p-4 lg:p-6 animate-fade-in">
+    <PageContainer respiro largura="larga">
       <PageHeader
-        title="Instâncias WhatsApp"
-        description="Gerencie as conexões WhatsApp do OMNXChat."
+        title="Números de WhatsApp"
+        count={instances.length}
+        description="Os números que a empresa usa para conversar com os clientes."
         action={
           isAdmin ? (
             <button
+              type="button"
               onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium gradient-primary text-primary-foreground transition-opacity hover:opacity-90"
+              className="btn btn-primary"
             >
-              <Plus className="h-4 w-4" />
-              Nova instância
+              <Plus aria-hidden />
+              Novo número
             </button>
           ) : undefined
         }
       />
 
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Carregando números">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="grid gap-3 rounded-xl bg-card ring-hairline p-5">
+              <div className="flex justify-between gap-3"><div className="sk h-4 w-32" /><div className="sk h-5 w-20 rounded-full" /></div>
+              <div className="sk h-3 w-24" />
+              <div className="sk h-5 w-16 rounded-full" />
+            </div>
+          ))}
         </div>
       ) : instances.length === 0 ? (
         <EmptyState
           icon={Wifi}
-          title="Nenhuma instância cadastrada"
-          description="Crie uma instância para começar a usar o OMNXChat."
+          title="Nenhum número conectado"
+          description="Conecte um número de WhatsApp para começar a conversar com os clientes pelo Desk."
           action={
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium gradient-primary text-primary-foreground"
-            >
-              <Plus className="h-4 w-4" />
-              Nova instância
+            <button type="button" onClick={() => setCreateOpen(true)} className="btn btn-primary">
+              <Plus aria-hidden />
+              Novo número
             </button>
           }
         />
       ) : (
-        <div className="grid gap-3 sm:gap-4 lg:gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {instances.map((instance) => {
             const config = STATUS_CONFIG[instance.status]
             const StatusIcon = config.icon
             return (
               <div
                 key={instance.id}
+                role={isAdmin ? 'button' : undefined}
+                tabIndex={isAdmin ? 0 : undefined}
+                aria-label={isAdmin ? `Editar ${instance.nome}` : undefined}
                 className={cn(
-                  'glass-card p-5',
-                  isAdmin ? 'entity-card-hover cursor-pointer' : 'cursor-default',
+                  'rounded-xl bg-card ring-hairline p-4 sm:p-5 transition-[box-shadow] duration-fast animate-row-in',
+                  isAdmin ? 'cursor-pointer hover:shadow-pop focus-visible:outline-none focus-visible:shadow-[var(--focus)]' : 'cursor-default',
                 )}
                 onClick={() => isAdmin && setEditTarget(instance)}
+                onKeyDown={(e) => { if (isAdmin && e.target === e.currentTarget && e.key === 'Enter') setEditTarget(instance) }}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-base font-semibold text-foreground flex items-center gap-2">
+                    <p className="truncate text-[15px] font-[650] text-foreground flex items-center gap-2">
                       {instance.cor && (
-                        <span className="inline-block h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: instance.cor }} />
+                        <span className="inline-block h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: instance.cor }} aria-hidden />
                       )}
                       {instance.nome}
                     </p>
-                    <p className="mt-0.5 font-mono text-xs text-muted-foreground">
+                    <p className="mono mt-0.5 truncate text-[11.5px] text-fg-4" title="Identificação técnica da conexão">
                       {instance.instance_id}
                     </p>
                   </div>
@@ -306,7 +319,7 @@ export default function ChatInstanciasPage() {
                 </div>
 
                 {instance.numero_whatsapp && (
-                  <p className="mt-3 text-sm text-muted-foreground">{formatPhone(instance.numero_whatsapp)}</p>
+                  <p className="mono mt-3 text-sm text-fg-2">{formatPhone(instance.numero_whatsapp)}</p>
                 )}
 
                 <div className="mt-4 flex items-center justify-between">
@@ -331,26 +344,22 @@ export default function ChatInstanciasPage() {
                         />
                       </button>
                     ) : null}
-                    <span
-                      className={cn(
-                        'rounded-full px-2 py-0.5 text-xs font-medium',
-                        instance.ativo
-                          ? 'bg-success-light text-success'
-                          : 'bg-muted text-muted-foreground',
-                      )}
-                    >
-                      {instance.ativo ? 'Ativo' : 'Inativo'}
+                    <span className={cn('tag', instance.ativo && 'tag-success')}>
+                      {instance.ativo ? 'Ativo' : 'Desligado'}
                     </span>
                   </div>
                   {isAdmin && (
                     <button
+                      type="button"
                       onClick={(e) => {
                         e.stopPropagation()
                         setDeleteTarget(instance)
                       }}
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-danger-light hover:text-danger transition-colors"
+                      className="btn btn-ghost btn-icon btn-sm hover:!bg-danger-light hover:!text-danger"
+                      aria-label={`Excluir ${instance.nome}`}
+                      title="Excluir"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 aria-hidden />
                     </button>
                   )}
                 </div>
@@ -388,6 +397,9 @@ export default function ChatInstanciasPage() {
             submitLabel="Salvar alterações"
           />
         )}
+        {editTarget && (
+          <TokenDoNumero instanciaId={editTarget.id} salvo={comToken?.has(editTarget.id) ?? false} />
+        )}
       </Modal>
 
       <ConfirmDialog
@@ -399,6 +411,6 @@ export default function ChatInstanciasPage() {
         confirmLabel="Excluir"
         loading={deleteMutation.isPending}
       />
-    </div>
+    </PageContainer>
   )
 }

@@ -1,3 +1,5 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
+import { sessaoDeskLiberada } from '../_shared/desk-session.ts'
 // Disparo — leva um recorte da base para o CRM externo marcado com uma tag.
 //
 // Esta função NÃO manda mensagem. Ela entrega público etiquetado; quem dispara é
@@ -59,7 +61,7 @@ async function autorizarAdmin(authHeader: string | null): Promise<{ ok: boolean;
     auth: { persistSession: false },
   })
   const { data: { user } } = await userClient.auth.getUser()
-  if (!user) return { ok: false, tenantId: null, userId: null }
+  if (!user || !await sessaoDeskLiberada(userClient)) return { ok: false, tenantId: null, userId: null }
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } })
   const { data } = await admin.from('users').select('perfil').eq('id', user.id).single()
   if (data?.perfil !== 'admin') return { ok: false, tenantId: null, userId: null }
@@ -113,7 +115,7 @@ interface RespostaCrm {
   error?: string
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
 

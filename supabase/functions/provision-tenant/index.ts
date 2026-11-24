@@ -1,4 +1,5 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,11 +8,8 @@ const corsHeaders = {
     'authorization, x-client-info, apikey, content-type, x-platform-key, idempotency-key',
 }
 
-// URL pública do app — é pra cá que o link de primeiro acesso devolve o dono.
-const APP_URL = (Deno.env.get('APP_URL') ?? 'https://desk.omnx.pro').replace(/\/+$/, '')
-
-// Validade do link mágico do Supabase (padrão do GoTrue: 1 hora).
-const LINK_TTL_MS = 60 * 60 * 1000
+// URL pública do app devolvida à High Ticket AI após criar o tenant.
+const APP_URL = (Deno.env.get('APP_URL') ?? 'https://desk.omnx.pro').trim().replace(/\/+$/, '')
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -79,24 +77,7 @@ function rateLimited(bucket: string): boolean {
   return slot.count > RL_MAX
 }
 
-type AdminClient = ReturnType<typeof createClient>
-
-/**
- * Link de entrada do dono. Tenta magiclink; se falhar (ex.: provider desligado),
- * cai pra recovery, que também autentica e leva pra definição de senha.
- */
-async function gerarLoginUrl(admin: AdminClient, email: string): Promise<string | null> {
-  for (const type of ['magiclink', 'recovery'] as const) {
-    const { data, error } = await admin.auth.admin.generateLink({
-      type,
-      email,
-      options: { redirectTo: APP_URL },
-    })
-    if (!error && data?.properties?.action_link) return data.properties.action_link
-    console.warn(`generateLink(${type}) falhou: ${error?.message ?? 'sem action_link'}`)
-  }
-  return null
-}
+type AdminClient = SupabaseClient
 
 /** Auditoria — nunca pode derrubar o provisionamento. */
 async function auditar(
@@ -128,7 +109,7 @@ async function auditar(
 }
 
 /**
- * Provisiona uma EMPRESA nova (tenant + 1º admin) e devolve o link de entrada.
+ * Provisiona uma EMPRESA nova (tenant + 1º admin). A entrada usa OIDC da High Ticket AI.
  *
  * Dois caminhos de autenticação:
  *   (a) JWT de humano + is_master_admin()  → tela /empresas
@@ -136,7 +117,7 @@ async function auditar(
  *
  * verify_jwt está DESLIGADO no config.toml — a autorização é feita aqui dentro.
  */
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
   if (req.method !== 'POST') return fail('method_not_allowed', 405)
 
@@ -197,9 +178,14 @@ Deno.serve(async (req) => {
     const txt = (v: unknown, max = 200): string =>
       typeof v === 'string' ? v.trim().slice(0, max) : ''
 
+    const action = txt(body.action, 40) || 'provision_tenant'
+    if (!['provision_tenant', 'provision_member'].includes(action)) {
+      return fail('invalid_payload', 422, 'action inválida')
+    }
+
     // Dois formatos de payload, de propósito:
     //  • `org_name` + `owner: { name, email }` — contrato de provisionamento usado
-    //    pela plataforma (Empire OS) e pelos outros sistemas da linha OMNX;
+    //    pela plataforma (High Ticket AI) e pelos outros sistemas da linha OMNX;
     //  • `empresa_nome` / `admin_nome` / `admin_email` — formato histórico da tela
     //    /empresas, que continua chamando esta mesma função.
     // O contrato novo ganha quando os dois vêm.
@@ -213,6 +199,93 @@ Deno.serve(async (req) => {
 
     // external_id do corpo tem prioridade; o header Idempotency-Key é o plano B.
     externalRef = txt(body.external_id, 200) || txt(req.headers.get('idempotency-key'), 200) || null
+
+    if (origem === 'platform_key' && !externalRef) {
+      return fail('invalid_payload', 422, 'external_id é obrigatório no provisionamento da plataforma')
+    }
+
+    if (action === 'provision_member') {
+      // Este caminho só é aceito pela chave M2M. Um master admin humano continua
+      // usando esta função exclusivamente para criar tenants pelo painel interno.
+      if (origem !== 'platform_key') return fail('invalid_platform_key', 401)
+
+      const member = (body.member ?? {}) as { name?: unknown; email?: unknown }
+      const memberEmail = txt(member.email).toLowerCase()
+      const memberName = txt(member.name) || memberEmail.split('@')[0]
+      if (!memberEmail || !memberEmail.includes('@')) {
+        return fail('invalid_payload', 422, 'member.email inválido')
+      }
+
+      const { data: tenant } = await admin
+        .from('tenants')
+        .select('id, slug')
+        .eq('external_ref', externalRef)
+        .maybeSingle()
+      if (!tenant) return fail('owner_not_activated', 404)
+
+      const { data: idExistente } = await admin.rpc('get_user_id_by_email', { p_email: memberEmail })
+      let memberUserId: string | null = (idExistente as string | null) ?? null
+
+      if (memberUserId) {
+        const { data: existingProfile } = await admin
+          .from('users')
+          .select('tenant_id')
+          .eq('id', memberUserId)
+          .maybeSingle()
+        if (existingProfile?.tenant_id && existingProfile.tenant_id !== tenant.id) {
+          return fail('email_taken_other_tenant', 409)
+        }
+        if (existingProfile?.tenant_id === tenant.id) {
+          return json({
+            ok: true,
+            already_provisioned: true,
+            tenant_id: tenant.id,
+            user_id: memberUserId,
+            slug: tenant.slug,
+            app_url: APP_URL,
+          })
+        }
+      } else {
+        const { data: created, error: createErr } = await admin.auth.admin.createUser({
+          email: memberEmail,
+          password: senhaAleatoria(32),
+          email_confirm: true,
+          user_metadata: { nome: memberName, perfil: 'atendimento', tenant_id: tenant.id },
+          // Papel e empresa valem só daqui (migração 20261119150000).
+          app_metadata: { perfil: 'atendimento', tenant_id: tenant.id },
+        })
+        if (createErr || !created.user) {
+          return fail('provision_failed', 500, `criação do membro falhou: ${(createErr?.message ?? 'unknown').slice(0, 200)}`)
+        }
+        memberUserId = created.user.id
+      }
+
+      const { data: vinculoMembro, error: profileErr } = await admin
+        .from('users')
+        .update({ nome: memberName, perfil: 'atendimento', tenant_id: tenant.id })
+        .eq('id', memberUserId)
+        .select('id')
+      if (profileErr || !vinculoMembro?.length) {
+        // Conta sem linha em users (ex.: banco recusou o vínculo): não responde sucesso.
+        return fail('provision_failed', 500, `vínculo do membro falhou: ${(profileErr?.message ?? 'conta sem cadastro no app').slice(0, 200)}`)
+      }
+
+      await auditar(admin, {
+        origem,
+        externalId: externalRef,
+        resultado: 'member_created',
+        tenantId: tenant.id as string,
+        detalhes: { role: 'atendimento' },
+      })
+      return json({
+        ok: true,
+        already_provisioned: false,
+        tenant_id: tenant.id,
+        user_id: memberUserId,
+        slug: tenant.slug,
+        app_url: APP_URL,
+      }, 201)
+    }
 
     if (!empresaNome) return fail('invalid_payload', 422, 'org_name (ou empresa_nome) é obrigatório')
     if (!adminNome) return fail('invalid_payload', 422, 'owner.name (ou admin_nome) é obrigatório')
@@ -229,19 +302,6 @@ Deno.serve(async (req) => {
         .maybeSingle()
 
       if (existente) {
-        // Reconciliação: devolve o mesmo tenant com um link de entrada NOVO.
-        const { data: dono } = await admin
-          .from('users')
-          .select('email')
-          .eq('tenant_id', existente.id)
-          .eq('perfil', 'admin')
-          .order('criado_em', { ascending: true })
-          .limit(1)
-          .maybeSingle()
-
-        const emailDono = (dono?.email as string | undefined) ?? adminEmail
-        const loginUrl = await gerarLoginUrl(admin, emailDono)
-
         await auditar(admin, {
           origem,
           externalId: externalRef,
@@ -255,7 +315,6 @@ Deno.serve(async (req) => {
           tenant_id: existente.id,
           slug: existente.slug,
           app_url: APP_URL,
-          login_url: loginUrl,
         })
       }
     }
@@ -293,7 +352,6 @@ Deno.serve(async (req) => {
           .eq('external_ref', externalRef)
           .maybeSingle()
         if (existente) {
-          const loginUrl = await gerarLoginUrl(admin, adminEmail)
           await auditar(admin, {
             origem,
             externalId: externalRef,
@@ -306,7 +364,6 @@ Deno.serve(async (req) => {
             tenant_id: existente.id,
             slug: existente.slug,
             app_url: APP_URL,
-            login_url: loginUrl,
           })
         }
       }
@@ -324,12 +381,14 @@ Deno.serve(async (req) => {
 
     // ── 5. Cria o dono da empresa ───────────────────────────────────────────
     // Senha aleatória descartável: nunca sai na resposta nem no log. O acesso
-    // real acontece pelo login_url (magic link) devolvido abaixo.
+    // real acontece pelo provedor OIDC da High Ticket AI.
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: adminEmail,
       password: senhaAleatoria(32),
       email_confirm: true,
       user_metadata: { nome: adminNome, perfil: 'admin', tenant_id: tenantId },
+      // Papel e empresa valem só daqui (migração 20261119150000).
+      app_metadata: { perfil: 'admin', tenant_id: tenantId },
     })
 
     if (createErr || !created.user) {
@@ -350,26 +409,27 @@ Deno.serve(async (req) => {
     }
 
     // ── 6. Consistência do perfil + seed inicial ────────────────────────────
-    await admin
+    const { data: vinculoDono, error: vinculoErr } = await admin
       .from('users')
       .update({ nome: adminNome, perfil: 'admin', tenant_id: tenantId })
       .eq('id', created.user.id)
-
-    const { error: seedErr } = await admin.rpc('seed_tenant', { p_tenant_id: tenantId })
-    if (seedErr) console.error('seed_tenant falhou:', seedErr.message)
-
-    // ── 7. Link de entrada ──────────────────────────────────────────────────
-    const loginUrl = await gerarLoginUrl(admin, adminEmail)
-    if (!loginUrl) {
+      .select('id')
+    if (vinculoErr || !vinculoDono?.length) {
+      // O dono não entrou na empresa: desfaz conta e empresa e avisa, em vez de responder sucesso.
+      await admin.auth.admin.deleteUser(created.user.id)
+      await admin.from('tenants').delete().eq('id', tenantId)
+      const msg = vinculoErr?.message ?? 'conta do dono sem cadastro no app'
       await auditar(admin, {
         origem,
         externalId: externalRef,
         resultado: 'provision_failed',
-        tenantId,
-        detalhes: { etapa: 'generate_link' },
+        detalhes: { etapa: 'owner_link', erro: msg },
       })
-      return fail('provision_failed', 500, 'não foi possível gerar o link de acesso')
+      return fail('provision_failed', 500, msg)
     }
+
+    const { error: seedErr } = await admin.rpc('seed_tenant', { p_tenant_id: tenantId })
+    if (seedErr) console.error('seed_tenant falhou:', seedErr.message)
 
     await auditar(admin, {
       origem,
@@ -385,8 +445,6 @@ Deno.serve(async (req) => {
         tenant_id: tenantId,
         slug,
         app_url: APP_URL,
-        login_url: loginUrl,
-        expires_at: new Date(Date.now() + LINK_TTL_MS).toISOString(),
       },
       201,
     )

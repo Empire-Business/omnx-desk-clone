@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
@@ -61,7 +62,7 @@ export function useCreateTemplate() {
       const variaveis = extractVariables(params.conteudo)
       const { data, error } = await supabase
         .from('chat_templates')
-        .insert({ ...params, variaveis })
+        .insert({ ...({ ...params, variaveis }), tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error

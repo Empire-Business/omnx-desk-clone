@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
 import { useIsAppEnabled } from '@/hooks/useAppModules'
 
@@ -16,11 +16,14 @@ import { useIsAppEnabled } from '@/hooks/useAppModules'
  */
 
 // Rota "casa" de cada app, usada para redirecionar quando o app pedido está off.
+// Endereços novos (navegação de 11/2026); os slugs do banco não mudam (R7).
 const ROUTE_BY_SLUG: Record<string, string> = {
   dashboard: '/',
-  chat: '/chat',
+  atendimento: '/tickets',
+  chat: '/conversas',
   contratos: '/contratos',
   cobranca: '/cobranca',
+  'automacoes-wa': '/ia',
   portal: '/portal',
 }
 

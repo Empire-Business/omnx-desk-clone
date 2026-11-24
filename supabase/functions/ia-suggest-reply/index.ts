@@ -1,4 +1,6 @@
+import { sessaoDeskLiberada } from '../_shared/desk-session.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { travaDeLicenca } from '../_shared/htai-licenca.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -15,6 +17,9 @@ Deno.serve(async (req) => {
       },
     })
   }
+  // Licença HTAI (desligada sem HTAI_ENTITLEMENTS_MODE; ver docs/LICENCA-HTAI.md)
+  const licencaNegada = await travaDeLicenca({ 'Access-Control-Allow-Origin': '*' })
+  if (licencaNegada) return licencaNegada
 
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -44,6 +49,14 @@ Deno.serve(async (req) => {
         headers: { 'Content-Type': 'application/json' },
       })
     }
+    const deskSession = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: authHeader } }, auth: { persistSession: false },
+    })
+    if (!await sessaoDeskLiberada(deskSession)) {
+      return new Response(JSON.stringify({ error: 'password_change_required' }), {
+        status: 403, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      })
+    }
   }
 
   // Parse body
@@ -63,6 +76,27 @@ Deno.serve(async (req) => {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     })
+  }
+
+  // As leituras abaixo usam service_role (sem RLS). Antes, confere COMO o usuário
+  // (JWT dele + RLS) que ele enxerga a conversa — inclui empresa, número atribuído
+  // e grupo interno (restrito_admin, só admin/gerente).
+  if (jwt !== supabaseKey) {
+    const usuario = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false },
+    })
+    const { data: visivel } = await usuario
+      .from('chat_conversations')
+      .select('id')
+      .eq('id', conversation_id)
+      .maybeSingle()
+    if (!visivel) {
+      return new Response(JSON.stringify({ error: 'Conversa não encontrada' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
   }
 
   // Load last 10 messages from the conversation
@@ -91,11 +125,9 @@ Deno.serve(async (req) => {
   // Reverse to chronological order
   const orderedMessages = messages.reverse()
 
-  // Load quick replies for context
-  const { data: quickReplies } = await supabase
-    .from('chat_respostas_rapidas')
-    .select('titulo, conteudo, categoria')
-    .limit(20)
+  // Respostas rápidas: a tabela chat_respostas_rapidas não existe em migração
+  // nenhuma (nem na produção); a consulta sempre voltava vazia. Decisão do dono
+  // (09/11/2026): código que usa tabela inexistente sai do pacote instalável.
 
   // Build conversation context for the LLM
   const conversationText = orderedMessages
@@ -105,12 +137,7 @@ Deno.serve(async (req) => {
     })
     .join('\n')
 
-  const quickRepliesContext = quickReplies && quickReplies.length > 0
-    ? '\n\nRespostas rápidas disponíveis (use como referência de tom e estilo):\n' +
-      quickReplies.map(qr => `- [${qr.categoria ?? 'geral'}] ${qr.titulo}: ${qr.conteudo}`).join('\n')
-    : ''
-
-  const systemPrompt = `Você é um assistente de atendimento ao cliente via WhatsApp para uma agência de marketing digital.
+  const systemPrompt = `Você é um assistente de atendimento ao cliente via WhatsApp para uma empresa de serviços.
 Com base na conversa abaixo, sugira 2 a 3 respostas curtas e profissionais em português brasileiro.
 
 Regras:
@@ -122,7 +149,7 @@ Regras:
 - Retorne APENAS um JSON válido (sem markdown, sem explicação) no formato:
 [
   { "text": "<resposta sugerida>", "tone": "formal" | "amigavel" | "direto" }
-]${quickRepliesContext}`
+]`
 
   if (!openrouterKey) {
     console.error('OPENROUTER_API_KEY not set')

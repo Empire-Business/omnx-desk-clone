@@ -3,7 +3,8 @@
 > Engenharia reversa do schema real em produção (`wuzmckatbmlpkdxtfhqr`), 115
 > tabelas no schema `public`. Diagramas por domínio — um ER com 115 entidades
 > seria ilegível, então o núcleo está detalhado e o resto agrupado.
-> Atualizado em: 04/08/2026 BRT · inclui o app Atendimento (Fase 4).
+> Atualizado em: 26/10/2026 às 17h18 BRT · inclui o SSO efêmero do Empire OS e o
+> App Automações WhatsApp (§3.6).
 
 ---
 
@@ -217,6 +218,161 @@ stateDiagram-v2
 
 ---
 
+## 3.6. App Automações WhatsApp (`automacoes-wa`, Fase 9 — 26/10/2026)
+
+Quatro tabelas próprias (migration `20261026120000`, ajustes em `…140000` e
+`…180000`) + o cofre já existente `tenant_integracoes`. Todas com `tenant_id`,
+carimbo `tg_set_tenant_id` e RLS `tenant_isolation` RESTRICTIVE.
+
+```mermaid
+erDiagram
+  tenants ||--|| wa_auto_config          : "1 por empresa (UNIQUE tenant_id)"
+  tenants ||--o{ wa_auto_gestores        : "máx. 10 (trigger)"
+  tenants ||--o{ wa_auto_regras_anomalia : "4 linhas (UNIQUE tenant_id, tipo)"
+  tenants ||--o{ wa_auto_envios          : "histórico, 90 dias"
+  tenants ||--o{ tenant_integracoes      : "segredo no Vault por provider"
+  whatsapp_instances ||--o{ wa_auto_config : "uazapi_instance_id (trigger confere tenant)"
+  meetings ||--o| wa_auto_envios         : "payload.meeting_id (agendamento_link)"
+
+  wa_auto_config {
+    uuid id PK
+    uuid tenant_id FK "UNIQUE"
+    text provider "uazapi|zernio"
+    text uazapi_instance_id "whatsapp_instances.instance_id"
+    bool relatorio_ativo "default false"
+    time relatorio_hora "09:00"
+    bool resumo_ativo "default false"
+    smallint resumo_dia "1=seg … 7=dom"
+    time resumo_hora "09:00"
+    text resumo_destino "grupo|privado do CLIENTE"
+    bool agendamento_ativo "default false"
+    text template_relatorio "nome do modelo Zernio"
+    text template_resumo
+    text template_link
+    text template_idioma "pt_BR"
+  }
+  wa_auto_gestores {
+    uuid id PK
+    uuid tenant_id FK
+    text nome "1-80"
+    text telefone "E.164, UNIQUE por tenant"
+    bool ativo
+  }
+  wa_auto_regras_anomalia {
+    uuid id PK
+    uuid tenant_id FK
+    text tipo "sem_resposta|sentimento_negativo|pendencia|queda_volume"
+    bool ativo "default false"
+    numeric limiar "horas ou %"
+  }
+  wa_auto_envios {
+    uuid id PK
+    uuid tenant_id FK
+    text tipo "relatorio_diario|resumo_semanal|agendamento_link|teste"
+    text provider "uazapi|zernio"
+    text destino "E.164, grupo @g.us ou 'previa'"
+    text destino_nome
+    text status "pendente|enviado|falhou|simulado"
+    text erro
+    text chave_idempotencia "UNIQUE (tenant_id, chave)"
+    jsonb payload "só contagens/ids, sem texto"
+  }
+  tenant_integracoes {
+    uuid tenant_id FK
+    text provider "empire|uazapi|zernio"
+    uuid secret_key_id "vault.secrets"
+    text base_url "*.uazapi.com / *.zernio.com"
+    jsonb metadata "zernio: account_id"
+  }
+```
+
+**Regras que o diagrama não mostra:**
+
+- `chave_idempotencia` = `<tipo>:<destino só dígitos ou grupo>:<janela>`. Janela
+  é o dia em Brasília (`AAAA-MM-DD`) no relatório e no resumo, o minuto UTC no
+  teste e `reuniao-<id>` no link. A linha é gravada **antes** do envio.
+- Índice parcial `uq_wa_auto_envios_agendamento_reuniao`: no máximo 1 linha
+  `pendente`/`enviado` de `agendamento_link` por (empresa, `payload->>'meeting_id'`).
+- `seed_wa_auto_for_tenant` cria a config e as 4 regras (desligadas) para toda
+  empresa existente e, por trigger, para cada empresa nova.
+- O front só **lê** `wa_auto_envios`; quem grava são as edge functions.
+
+### Relatório diário (cron)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant C as pg_cron (15 min)
+  participant V as Vault
+  participant F as wa-auto-relatorio-diario
+  participant DB as Banco (service_role)
+  participant P as UAZAPI / Zernio
+  actor G as Gestor
+
+  C->>V: lê wa_auto_cron_secret (só se alguma empresa ligou)
+  C->>F: POST + x-cron-secret
+  F->>DB: wa_auto_cron_secret_confere()
+  F->>DB: empresas com relatorio_ativo e hora vencida (até +3h)
+  loop cada empresa
+    F->>DB: app ligado? gestores ativos? quem já recebeu hoje?
+    F->>DB: resolveWaProvider (config + segredo)
+    F->>DB: disjuntor aberto? → pausa até a próxima rodada
+    F->>DB: coleta 4 anomalias + reuniões do dia (tenant_id explícito)
+    loop cada gestor pendente
+      F->>DB: INSERT envio 'pendente' (chave do dia)
+      F->>P: texto (UAZAPI) ou modelo template_relatorio (Zernio)
+      P-->>G: mensagem citando os clientes pelo nome
+      F->>DB: UPDATE status enviado/falhou
+    end
+  end
+```
+
+### Agendamento em duas etapas
+
+```mermaid
+stateDiagram-v2
+  [*] --> Marcada: acao 'marcar' (meetings.status = scheduled, sem link)
+  Marcada --> Enviando: acao 'enviar_link' (reserva em wa_auto_envios)
+  Enviando --> LinkEnviado: UAZAPI ok (meeting_link + metadata.link_enviado_em)
+  Enviando --> Falhou: recusa do provedor
+  Enviando --> Incerto: timeout / erro de rede
+  Falhou --> Enviando: tentar de novo
+  Incerto --> Enviando: só com confirmar_reenvio = true
+  LinkEnviado --> [*]
+
+  note right of Enviando
+    Grupo derivado do cliente no servidor,
+    na instância configurada. Sempre UAZAPI.
+    Pendente há mais de 10 min vira Incerto.
+  end note
+```
+
+### Resumo semanal (para o CLIENTE)
+
+Regra de produto (26/10/2026): o **diário** vai ao gestor; o **semanal** vai ao
+**cliente**, no grupo dele ou na conversa privada com ele, com assuntos e
+próximos passos — sem risco, clima ou avaliação. O backend está sendo refeito
+para isso (a versão publicada ainda manda o modo `privado` aos gestores).
+
+```mermaid
+flowchart TD
+  A[pg_cron 15 min + x-cron-secret] --> B{resumo_ativo e<br/>dia/hora chegaram?}
+  B -->|não| Z[nada]
+  B -->|sim| C{resumo_destino}
+  C -->|grupo| F{provider}
+  F -->|zernio| Y[pulado: oficial_sem_grupo]
+  F -->|uazapi| G[grupos da instância<br/>vinculados a cliente ativo]
+  C -->|privado| P[conversa direta<br/>com cada cliente]
+  G --> H{mensagens suficientes<br/>na semana?}
+  P --> H
+  H -->|não| I[registra 'sem_assunto']
+  H -->|sim| J[IA resume só aquela conversa<br/>JSON validado e higienizado]
+  J -->|falhou| K[registra 'falha_ia'<br/>até 3 tentativas/dia]
+  J -->|ok| L[envia ao cliente<br/>no mesmo canal]
+```
+
+---
+
 ## 4. Mapa das 115 tabelas por domínio
 
 | Domínio | Tabelas (principais) |
@@ -225,6 +381,7 @@ stateDiagram-v2
 | **Clientes** | `clients`, `client_assignments`, `client_contracts`, `client_notes`, `client_interactions`, `client_alerts` |
 | **Contratos / Vendas / Comissões** | `contratos`, `contrato_anexos`, `contrato_modelos`, `contrato_tags`, `contratos_kanban_colunas`, `contratos_audit_log`, `vendas_pendentes`, `comissoes`, `extratos_mensais`, `produtos_comissao`, `products`, `salario_fixo_itens`, `pj_*` |
 | **Chat (OMNXChat)** | `chat_conversations`, `chat_messages`, `chat_contacts`, `chat_departments`, `chat_department_agents`, `chat_csat`, `chat_quick_replies`, `chat_templates`, `whatsapp_instances`, `ia_bots`, `ia_bot_*`, `wa_warmup_*` |
+| **Automações WhatsApp** | `wa_auto_config`, `wa_auto_gestores`, `wa_auto_regras_anomalia`, `wa_auto_envios` (+ `tenant_integracoes` para os segredos) |
 | **Atendimento (Social Media)** | `atendimento_tipos`, `atendimento_etapas`, `atendimento_demandas`, `atendimento_comentarios`, `atendimento_historico` |
 | **Cobrança** | `cobranca_devedores`, `cobranca_instances`, `cobranca_reguas`, `cobranca_regua_passos`, `cobranca_sends` |
 | **Entregas / Portal / Trilhas** | `deliverables`, `deliveries`, `delivery_*`, `learning_*`, `nps_surveys`, `nps_responses` |
@@ -278,3 +435,55 @@ flowchart TD
 > O Atendimento é o primeiro app cujo gate vive **também no banco**: as policies
 > chamam `has_permissao('atendimento', …)`. Esconder o menu não protege nada —
 > a RLS é que impede um perfil sem permissão de ler as demandas pela API.
+
+---
+
+## SSO de entrada pelo Empire OS
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant E as Empire OS
+    participant P as provision-tenant
+    participant D as tenants e usuarios
+    participant A as Supabase Auth
+    actor O as Dono
+
+    E->>P: X-Platform-Key + external_id do workspace + owner.email
+    P->>P: Validar chave antes do payload
+    P->>D: Reconciliar tenant por external_ref
+    P->>D: Criar/reutilizar usuário e vínculo admin
+    P-->>E: tenant_id + app_url
+    E-->>O: Abrir /login?empire_sso=1
+    O->>A: Entrar com Empire OS (OIDC + PKCE)
+    A->>E: Autorizar com a sessão/senha do Empire OS
+    E-->>A: identity verificada + workspace_id
+    A-->>O: Sessão autenticada no Desk no tenant reconciliado
+```
+
+A mesma senha e o mesmo e-mail são usados porque a autenticação ocorre no Empire OS;
+a senha nunca é copiada nem armazenada no Desk. A chave de plataforma fica somente na
+Edge Function, e o vínculo por `external_ref` mantém o owner em seu tenant próprio.
+## Ativação SaaS sequencial de membro (2026-09-12)
+
+```mermaid
+sequenceDiagram
+    actor O as Owner no Empire
+    actor M as Membro no Empire
+    participant E as provision-saas
+    participant P as provision-tenant Desk
+    participant D as Banco Desk
+    O->>E: Ativar plataforma
+    E->>P: provision_tenant + external_ref
+    P->>D: Criar tenant + admin
+    M->>E: Ativar meu acesso
+    E->>E: Exigir parent ready no mesmo workspace
+    E->>P: provision_member + mesmo external_ref
+    P->>D: Localizar tenant existente
+    alt tenant existe
+        P->>D: Criar/reconciliar user com perfil atendimento
+        P-->>E: mesmo tenant_id + user_id
+    else owner ainda não ativou
+        P-->>E: owner_not_activated
+    end
+```

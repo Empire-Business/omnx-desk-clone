@@ -232,7 +232,7 @@ function NovoDevedorModal({ onClose }: { onClose: () => void }) {
             <input className={inputCls} type="number" step="0.01" value={form.valor_divida} onChange={set('valor_divida')} placeholder="0,00" />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">Instância *</label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Número de WhatsApp *</label>
             <select className={inputCls} value={form.instance_id} onChange={set('instance_id')} required>
               <option value="">Selecione...</option>
               {instances?.map((i) => <option key={i.id} value={i.id}>{i.nome}</option>)}
@@ -310,7 +310,7 @@ function ImportCsvModal({ onClose }: { onClose: () => void }) {
     <Modal open title="Importar CSV" description="Uma linha por devedor: nome,numero,valor" onClose={onClose} size="md">
       <form onSubmit={handleImport} className="space-y-4">
         <div>
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Instância *</label>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Número de WhatsApp *</label>
           <select className={inputCls} value={instanceId} onChange={(e) => setInstanceId(e.target.value)} required>
             <option value="">Selecione...</option>
             {instances?.map((i) => <option key={i.id} value={i.id}>{i.nome}</option>)}
@@ -445,7 +445,7 @@ export function DevedoresPage() {
             value={filterInstance}
             onChange={(e) => setFilterInstance(e.target.value)}
           >
-            <option value="">Todas as instâncias</option>
+            <option value="">Todos os números</option>
             {instances?.map((i) => <option key={i.id} value={i.id}>{i.nome}</option>)}
           </select>
         </div>

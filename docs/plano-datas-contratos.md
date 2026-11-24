@@ -38,6 +38,15 @@ Assim as telas e métricas continuam funcionando sem reescrever tudo de uma vez.
    gravar `data_assinatura = now()` (se ainda estiver vazia).
 2. **Pagamento** — no fluxo de onboarding (quando a entrada é confirmada), gravar `data_pagamento`.
 
+### Notificação da assinatura
+
+Quando o gatilho identifica uma nova assinatura, a edge function
+`notificar-contrato-assinado` envia a mesma notificação e os mesmos anexos em
+cópias individuais para `bruno@aliancadealtovalor.com.br`,
+`highticket@marvee.com.br` e `exosconsultoria@marvee.com.br`. Esse envio é
+restrito ao tenant mestre (a operação principal); contratos de outras empresas
+não usam essa lista.
+
 ## 4. "Sem data de assinatura" — sentinela em vez de vazio
 
 Decisão do Bruno: contratos **sem data real** recebem uma **data muito antiga (sentinela)** em vez de ficar vazio,

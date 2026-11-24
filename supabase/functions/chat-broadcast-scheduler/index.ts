@@ -1,6 +1,13 @@
+import { servirComLicenca } from '../_shared/htai-licenca.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { tokenUazapi, urlUazapi } from '../_shared/uazapi-credenciais.ts'
+import { autorizarAgendador } from '../_shared/agendador-auth.ts'
 
-const UAZAPI_URL = 'https://empirebusiness.uazapi.com'
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-cron-secret',
+}
+
 const HOURLY_LIMIT = 60
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
@@ -54,11 +61,12 @@ async function generateIaVariation(
   }
 }
 
-Deno.serve(async (req) => {
+servirComLicenca(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
@@ -66,6 +74,23 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   )
+
+  // Só o agendador do banco (x-cron-secret) ou uma pessoa com permissão de
+  // edição no Chat, e nesse caso só para uma campanha da empresa dela.
+  const autorizacao = await autorizarAgendador(req, supabase, {
+    criarUsuario: (jwt) => createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false },
+    }),
+    recurso: 'chat',
+    acao: 'editar',
+  })
+  if (!autorizacao) {
+    return new Response(JSON.stringify({ error: 'unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
 
   const openrouterKey = Deno.env.get('OPENROUTER_API_KEY') ?? ''
 
@@ -80,7 +105,7 @@ Deno.serve(async (req) => {
   if (!campaignId) {
     return new Response(JSON.stringify({ error: 'campaign_id is required' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   }
 
@@ -95,10 +120,10 @@ Deno.serve(async (req) => {
       .eq('id', campaignId)
       .single()
 
-    if (campaignError || !campaign) {
+    if (campaignError || !campaign || (autorizacao.tipo === 'usuario' && campaign.tenant_id !== autorizacao.tenantId)) {
       return new Response(JSON.stringify({ error: 'Campaign not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -112,16 +137,17 @@ Deno.serve(async (req) => {
     if (!instance) {
       return new Response(JSON.stringify({ error: 'Instance not found' }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
     // Get instance token
-    const token = Deno.env.get(`UAZAPI_TOKEN_${instance.instance_id}`)
+    const token = await tokenUazapi(supabase, instance.instance_id, instance.tenant_id)
+    const UAZAPI_URL = await urlUazapi(supabase, instance.tenant_id)
     if (!token) {
       return new Response(JSON.stringify({ error: `Token not found for instance ${instance.instance_id}` }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -141,7 +167,7 @@ Deno.serve(async (req) => {
     if (contatosError) {
       return new Response(JSON.stringify({ error: contatosError.message }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -268,7 +294,7 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ campaign_id: campaignId, sent, failed }),
-      { headers: { 'Content-Type': 'application/json' } }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (err) {
     console.error('Broadcast scheduler error:', err)
@@ -283,7 +309,7 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })

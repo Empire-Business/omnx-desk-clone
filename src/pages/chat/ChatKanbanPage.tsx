@@ -16,16 +16,16 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { useConversations, useUpdateConversationStatus } from '@/hooks/useChat'
 import type { ConversationWithContact, ChatConversation } from '@/hooks/useChat'
 
+/** Colunas com o selo de status do DS (`.st[data-s]`): cor + forma do marcador, nunca só cor. */
 const COLUMNS: {
   key: ChatConversation['status']
   label: string
-  color: string
-  lightColor: string
+  tom: 'aberto' | 'andamento' | 'aguardando' | 'resolvido'
 }[] = [
-  { key: 'aberta', label: 'Abertas', color: 'bg-info', lightColor: 'bg-info-light text-info' },
-  { key: 'em_atendimento', label: 'Em Atendimento', color: 'bg-success', lightColor: 'bg-success-light text-success' },
-  { key: 'aguardando', label: 'Aguardando', color: 'bg-warning', lightColor: 'bg-warning-light text-warning' },
-  { key: 'encerrada', label: 'Encerradas', color: 'bg-muted-foreground', lightColor: 'bg-muted text-muted-foreground' },
+  { key: 'aberta', label: 'Abertas', tom: 'aberto' },
+  { key: 'em_atendimento', label: 'Em atendimento', tom: 'andamento' },
+  { key: 'aguardando', label: 'Aguardando', tom: 'aguardando' },
+  { key: 'encerrada', label: 'Encerradas', tom: 'resolvido' },
 ]
 
 function formatRelativeTime(iso: string) {
@@ -51,8 +51,8 @@ function DraggableCard({ conversation }: { conversation: ConversationWithContact
     <div
       ref={setNodeRef}
       className={cn(
-        'glass-card p-3 space-y-2 transition-shadow',
-        isDragging ? 'opacity-30' : 'entity-card-hover',
+        'rounded-lg bg-card ring-hairline p-3 space-y-2 transition-[opacity,box-shadow] duration-fast animate-row-in',
+        isDragging ? 'opacity-30' : 'hover:shadow-pop',
       )}
     >
       <CardContent conversation={conversation} dragListeners={listeners} dragAttributes={attributes} />
@@ -66,8 +66,8 @@ function CardContent({
   dragAttributes,
 }: {
   conversation: ConversationWithContact
-  dragListeners?: Record<string, unknown>
-  dragAttributes?: Record<string, unknown>
+  dragListeners?: ReturnType<typeof useDraggable>['listeners']
+  dragAttributes?: ReturnType<typeof useDraggable>['attributes']
 }) {
   const navigate = useNavigate()
   const contact = conversation.chat_contacts
@@ -76,47 +76,51 @@ function CardContent({
   return (
     <>
       <div className="flex items-start justify-between gap-2">
-        <div
-          className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer"
-          onClick={() => navigate('/chat')}
+        <button
+          type="button"
+          className="flex items-center gap-2 min-w-0 flex-1 cursor-pointer rounded-md text-left focus-ds"
+          onClick={() => navigate(conversation.contact_id ? `/conversas?contato=${encodeURIComponent(conversation.contact_id)}` : '/conversas')}
         >
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-muted text-primary font-semibold text-2xs">
+          <span className="av" data-h="0" aria-hidden>
             {contactName.slice(0, 2).toUpperCase()}
-          </div>
-          <p className="truncate text-sm font-semibold text-foreground">{contactName}</p>
-        </div>
+          </span>
+          <span className="truncate text-sm font-[650] text-foreground">{contactName}</span>
+        </button>
         <div className="flex items-center gap-1">
-          <span className="shrink-0 text-2xs text-muted-foreground">
+          <span className="wait shrink-0">
             {formatRelativeTime(conversation.atualizado_em)}
           </span>
           <button
+            type="button"
             {...dragListeners}
             {...dragAttributes}
-            className="shrink-0 cursor-grab active:cursor-grabbing p-0.5 rounded text-muted-foreground hover:text-foreground"
+            aria-label={`Arrastar a conversa com ${contactName} para outra coluna`}
+            className="btn btn-ghost btn-icon btn-sm shrink-0 cursor-grab touch-none active:cursor-grabbing"
           >
-            <GripVertical className="h-3.5 w-3.5" />
+            <GripVertical aria-hidden />
           </button>
         </div>
       </div>
 
-      <div className="flex items-center gap-3 text-2xs text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <MessageSquare className="h-3 w-3" />
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+        <span className="mono flex items-center gap-1">
+          <MessageSquare className="h-3 w-3" aria-hidden />
           {conversation.protocolo}
         </span>
         {conversation.chat_departments && (
-          <span className="flex items-center gap-1">
-            <User className="h-3 w-3" />
-            {conversation.chat_departments.nome}
+          <span className="flex min-w-0 items-center gap-1">
+            <User className="h-3 w-3 shrink-0" aria-hidden />
+            <span className="truncate">{conversation.chat_departments.nome}</span>
           </span>
         )}
       </div>
 
       {(conversation.sla_primeira_resposta_violado || conversation.sla_resolucao_violado) && (
-        <div className="flex items-center gap-1 text-2xs text-danger">
-          <Clock className="h-3 w-3" />
-          SLA violado
-        </div>
+        <span className="st st-sm" data-s="atrasado">
+          <span className="st-g" aria-hidden />
+          <Clock className="h-3 w-3" aria-hidden />
+          Passou do prazo
+        </span>
       )}
     </>
   )
@@ -127,52 +131,49 @@ function CardContent({
 function DroppableColumn({
   columnKey,
   label,
-  color,
-  lightColor,
+  tom,
   conversations,
 }: {
   columnKey: string
   label: string
-  color: string
-  lightColor: string
+  tom: string
   conversations: ConversationWithContact[]
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: columnKey })
 
   return (
-    <div
+    <section
       ref={setNodeRef}
+      aria-label={`${label}: ${conversations.length}`}
       className={cn(
-        'flex w-72 shrink-0 flex-col rounded-xl transition-colors',
-        isOver && 'bg-primary-muted/30 ring-2 ring-primary/20',
+        // Coluna do quadro: 85% da tela no celular (mostra que há mais ao lado), 288 px no computador.
+        'flex w-[85vw] max-w-72 shrink-0 snap-start flex-col rounded-xl bg-bg-1 p-2 ring-hairline transition-[background-color,box-shadow] duration-fast min-h-0',
+        isOver && 'bg-primary-light shadow-[inset_0_0_0_2px_var(--primary-muted)]',
       )}
     >
       {/* Column header */}
-      <div className="flex items-center gap-2 mb-3 px-1">
-        <div className={cn('h-2 w-2 rounded-full', color)} />
-        <h3 className="text-sm font-semibold text-foreground">{label}</h3>
-        <span className={cn('rounded-full px-2 py-0.5 text-2xs font-medium', lightColor)}>
-          {conversations.length}
-        </span>
+      <div className="flex items-center gap-2 mb-2 px-1 pt-0.5">
+        <span className="st" data-s={tom}><span className="st-g" aria-hidden />{label}</span>
+        <span className="count ml-auto">{conversations.length}</span>
       </div>
 
       {/* Cards */}
-      <div className="flex-1 space-y-2 overflow-y-auto pr-1 min-h-[100px]">
+      <div className="flex-1 space-y-2 overflow-y-auto overscroll-contain min-h-[100px]">
         {conversations.map((c) => (
           <DraggableCard key={c.id} conversation={c} />
         ))}
         {conversations.length === 0 && (
           <div
             className={cn(
-              'flex items-center justify-center py-8 text-sm text-muted-foreground rounded-lg border-2 border-dashed border-border/50',
-              isOver && 'border-primary/30 text-primary',
+              'flex items-center justify-center py-8 text-[13px] text-muted-foreground rounded-lg border border-dashed border-stroke-default',
+              isOver && 'border-primary text-link',
             )}
           >
             {isOver ? 'Solte aqui' : 'Nenhuma conversa'}
           </div>
         )}
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -220,20 +221,27 @@ export default function ChatKanbanPage() {
   }
 
   return (
-    <div className="flex flex-col h-full animate-fade-in">
-      <div className="px-3 sm:px-4 lg:px-6 pt-3 sm:pt-4 lg:pt-6 pb-2 sm:pb-3 lg:pb-4">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="px-4 pt-4 pb-3 sm:px-6 sm:pt-6 md:px-8 2xl:px-10">
         <PageHeader
-          title="Kanban de Atendimento"
-          description="Arraste os cards entre as colunas para alterar o status."
+          title="Quadro de conversas"
+          description="Arraste pelo puxador para mudar a situação da conversa."
+          count={conversations.length}
         />
       </div>
 
       {isLoading ? (
-        <div className="flex items-center justify-center flex-1">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="flex flex-1 gap-3 overflow-hidden px-4 pb-4 sm:px-6 md:px-8 2xl:px-10" aria-busy="true" aria-label="Carregando quadro">
+          {COLUMNS.map((col) => (
+            <div key={col.key} className="flex w-[85vw] max-w-72 shrink-0 flex-col gap-2 rounded-xl bg-bg-1 p-2 ring-hairline">
+              <div className="sk h-5 w-28 rounded-full" />
+              <div className="sk h-20 rounded-lg" />
+              <div className="sk h-20 rounded-lg" />
+            </div>
+          ))}
         </div>
       ) : (
-        <div className="flex-1 overflow-x-auto scrollbar-hide px-3 sm:px-4 lg:px-6 pb-3 sm:pb-4 lg:pb-6">
+        <div className="flex-1 min-h-0 overflow-x-auto kanban-scroll snap-x snap-mandatory scroll-px-4 sm:scroll-px-6 md:snap-none px-4 pb-4 sm:px-6 sm:pb-6 md:px-8 2xl:px-10">
           <DndContext
             sensors={sensors}
             onDragStart={handleDragStart}
@@ -245,8 +253,7 @@ export default function ChatKanbanPage() {
                   key={col.key}
                   columnKey={col.key}
                   label={col.label}
-                  color={col.color}
-                  lightColor={col.lightColor}
+                  tom={col.tom}
                   conversations={grouped[col.key] ?? []}
                 />
               ))}
@@ -254,7 +261,7 @@ export default function ChatKanbanPage() {
 
             <DragOverlay>
               {activeCard && (
-                <div className="w-72 glass-card p-3 space-y-2 shadow-lg rotate-2 opacity-90">
+                <div className="w-72 rounded-lg bg-card p-3 space-y-2 shadow-modal ring-hairline rotate-1">
                   <CardContent conversation={activeCard} />
                 </div>
               )}

@@ -9,6 +9,16 @@ import { cn } from '@/lib/utils'
 import { getMeetUrl } from '@/lib/livekit'
 import { NewMeetingDialog } from '@/components/chat/NewMeetingDialog'
 import { useAuth } from '@/contexts/AuthContext'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { PageHeader } from '@/components/ui/PageHeader'
+import { AbasRolaveis } from '@/components/ui/AbasRolaveis'
+import { EmptyState as EstadoVazio } from '@/components/ui/EmptyState'
+import { RECURSOS } from '@/config/recursos'
+
+// Sala de vídeo (LiveKit) e resumo por IA dependem de funções que só existem quando
+// configuradas (src/config/recursos.ts). Desligadas, a lista de reuniões continua.
+const VIDEO = RECURSOS.reuniaoVideo
+const RESUMO_IA = RECURSOS.reuniaoResumoIa
 
 interface ActionItem {
   task: string
@@ -123,6 +133,7 @@ export default function ReunioesPage() {
   }
 
   async function generateAiSummary(id: string) {
+    if (!RESUMO_IA) return
     setAiPendingId(id)
     try {
       const { error: err } = await supabase.functions.invoke('meeting-ai-summary', {
@@ -159,37 +170,29 @@ export default function ReunioesPage() {
   }, [meetings, filter])
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <PageContainer respiro>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
-              <Video className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <h1 className="text-2xl font-semibold text-foreground tracking-tight">Reuniões</h1>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {isAdmin
-              ? 'Videochamadas de toda a equipe — admin vê tudo.'
-              : 'Suas videochamadas com gravação automática e resumo por IA.'}
-          </p>
-        </div>
-        <button
-          onClick={() => setNewMeetingOpen(true)}
-          className={cn(
-            'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all cursor-pointer',
-            'bg-primary text-primary-foreground hover:bg-primary-hover shadow-lg',
-          )}
-        >
-          <Plus className="h-4 w-4" />
-          Nova reunião
-        </button>
-      </div>
+      <PageHeader
+        title="Reuniões"
+        count={stats.total}
+        description={!VIDEO
+          ? 'Reuniões marcadas com os clientes.'
+          : isAdmin
+            ? 'Videochamadas de toda a equipe — como administrador, você vê todas.'
+            : RESUMO_IA
+              ? 'Suas videochamadas, com gravação automática e resumo por IA.'
+              : 'Suas videochamadas, com gravação automática.'}
+        action={VIDEO ? (
+          <button type="button" onClick={() => setNewMeetingOpen(true)} className="btn btn-primary">
+            <Plus aria-hidden />
+            Nova reunião
+          </button>
+        ) : undefined}
+      />
 
+      <div className="grid gap-4 sm:gap-6">
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
         <StatCard icon={<CalendarClock className="h-4 w-4" />} label="Total" value={stats.total.toString()} />
         <StatCard
           icon={<Radio className="h-4 w-4" />}
@@ -207,53 +210,45 @@ export default function ReunioesPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl bg-destructive/10 border border-destructive/30 p-3 text-sm text-destructive flex items-center gap-2">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>{error}</span>
+        <div role="alert" className="rounded-lg bg-danger-light p-3 text-sm text-danger flex items-start gap-2 animate-band-in">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1 break-words">{error}</span>
           <button
+            type="button"
             onClick={() => setError(null)}
-            className="ml-auto opacity-60 hover:opacity-100 cursor-pointer"
-            aria-label="Fechar"
+            className="btn btn-ghost btn-icon btn-sm -my-1 shrink-0 text-danger"
+            aria-label="Fechar aviso"
           >
-            <X className="h-3.5 w-3.5" />
+            <X aria-hidden />
           </button>
         </div>
       )}
 
-      {/* Filter tabs */}
-      <div className="flex items-center gap-1 rounded-xl border border-border bg-muted/30 p-1 w-fit">
-        {([
+      {/* Filter tabs — rolam de lado no celular (auditoria 03: w-fit estourava 375 px) */}
+      <AbasRolaveis
+        rotulo="Filtrar reuniões"
+        itens={([
           { id: 'all', label: 'Todas', count: stats.total },
           { id: 'live', label: 'Ao vivo', count: stats.live },
           { id: 'scheduled', label: 'Agendadas', count: stats.scheduled },
           { id: 'completed', label: 'Concluídas', count: stats.completed },
-        ] as const).map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setFilter(tab.id)}
-            className={cn(
-              'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all cursor-pointer',
-              filter === tab.id
-                ? 'bg-card text-foreground shadow-sm border border-border'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {tab.label}
-            <span className={cn(
-              'rounded-full px-1.5 text-[10px] font-semibold',
-              filter === tab.id ? 'bg-accent/20 text-accent' : 'bg-muted-foreground/10',
-            )}>
-              {tab.count}
-            </span>
-          </button>
-        ))}
-      </div>
+        ] as const).map((tab) => ({
+          id: tab.id,
+          rotulo: tab.label,
+          contador: tab.count,
+          ativo: filter === tab.id,
+          onClick: () => setFilter(tab.id),
+        }))}
+      />
 
       {/* Meetings list */}
       {loading ? (
-        <div className="grid gap-3">
+        <div className="grid gap-3" aria-busy="true" aria-label="Carregando reuniões">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 rounded-2xl border border-border bg-muted/30 animate-pulse" />
+            <div key={i} className="flex items-start gap-4 rounded-xl bg-card ring-hairline p-4">
+              <div className="sk h-11 w-11 rounded-lg" />
+              <div className="grid flex-1 gap-2"><div className="sk h-4 w-1/2" /><div className="sk h-3 w-1/3" /></div>
+            </div>
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -276,27 +271,33 @@ export default function ReunioesPage() {
         </div>
       )}
 
-      <NewMeetingDialog
-        open={newMeetingOpen}
-        onClose={() => setNewMeetingOpen(false)}
-        onCreated={loadMeetings}
-      />
+      {VIDEO && (
+        <NewMeetingDialog
+          open={newMeetingOpen}
+          onClose={() => setNewMeetingOpen(false)}
+          onCreated={loadMeetings}
+        />
+      )}
 
       {/* Helper panel */}
-      <div className="rounded-2xl border border-border bg-gradient-to-br from-accent/5 to-primary/5 p-5 text-xs space-y-2">
-        <p className="font-semibold text-foreground text-sm flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-accent" /> Como testar
+      {VIDEO && (
+      <div className="rounded-xl bg-bg-1 ring-hairline p-4 sm:p-5 text-[13px] space-y-2">
+        <p className="t-h5 m-0 flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-link" aria-hidden /> Como testar
         </p>
         <ol className="text-muted-foreground space-y-1 list-decimal list-inside">
           <li>Clica em <strong className="text-foreground">"Nova reunião"</strong> — abre aba do host com câmera/mic</li>
           <li>Ativa o <strong className="text-foreground">blur de fundo</strong> com o botão de estrela na control bar</li>
           <li>Copia o link do convidado (🔗) e abre em outra aba anônima pra simular o cliente</li>
           <li>A gravação inicia automaticamente em segundos</li>
-          <li>Encerra a sala → aparece botão <strong className="text-foreground">"Resumir com IA"</strong> nesta lista</li>
+          {RESUMO_IA && (
+            <li>Encerra a sala → aparece botão <strong className="text-foreground">"Resumir com IA"</strong> nesta lista</li>
+          )}
         </ol>
       </div>
+      )}
       </div>
-    </div>
+    </PageContainer>
   )
 }
 
@@ -307,17 +308,17 @@ function StatCard({
 }: { icon: React.ReactNode; label: string; value: string; highlight?: boolean }) {
   return (
     <div className={cn(
-      'rounded-2xl border p-4 transition-colors',
+      'min-w-0 rounded-xl p-3 sm:p-4 transition-colors duration-base',
       highlight
-        ? 'border-destructive/40 bg-destructive/5'
-        : 'border-border bg-card',
+        ? 'bg-danger-light shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--danger)_30%,transparent)]'
+        : 'bg-card ring-hairline',
     )}>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-        <span className={highlight ? 'text-destructive' : ''}>{icon}</span>
-        <span className="uppercase tracking-wider font-medium">{label}</span>
-        {highlight && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />}
+      <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground mb-1">
+        <span className={cn('shrink-0', highlight && 'text-danger')} aria-hidden>{icon}</span>
+        <span className="truncate font-semibold">{label}</span>
+        {highlight && <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-danger animate-pulse" aria-hidden />}
       </div>
-      <p className={cn('text-2xl font-bold tabular-nums', highlight && 'text-destructive')}>
+      <p className={cn('mono text-xl sm:text-2xl font-semibold', highlight && 'text-danger')}>
         {value}
       </p>
     </div>
@@ -348,40 +349,43 @@ function MeetingCard({
 
   return (
     <div className={cn(
-      'rounded-2xl border bg-card transition-all overflow-hidden',
-      isLive ? 'border-destructive/40 shadow-lg' : 'border-border hover:border-accent/40',
+      'rounded-xl bg-card transition-[box-shadow] duration-base overflow-hidden animate-row-in',
+      isLive
+        ? 'shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--danger)_45%,transparent)]'
+        : 'ring-hairline hover:shadow-pop',
     )}>
-      <div className="p-4 flex items-start gap-4">
+      {/* No celular as ações descem para uma linha própria (não espremem o título) */}
+      <div className="p-3 sm:p-4 flex flex-wrap items-start gap-x-3 gap-y-2 sm:flex-nowrap sm:gap-4">
         {/* Icon/thumbnail */}
         <div className={cn(
-          'h-12 w-12 shrink-0 rounded-xl flex items-center justify-center',
+          'h-10 w-10 sm:h-11 sm:w-11 shrink-0 rounded-lg flex items-center justify-center',
           isLive
-            ? 'bg-destructive/10 text-destructive'
-            : 'bg-primary-light text-accent',
-        )}>
+            ? 'bg-danger-light text-danger'
+            : 'bg-primary-light text-link',
+        )} aria-hidden>
           {isLive ? <Radio className="h-5 w-5 animate-pulse" /> : <Video className="h-5 w-5" />}
         </div>
 
         {/* Main info */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 basis-[calc(100%-3.25rem)] sm:basis-auto">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h3 className="font-semibold text-foreground truncate">{title}</h3>
+            <h3 className="m-0 min-w-0 truncate text-[15px] font-[650] text-foreground">{title}</h3>
             <StatusBadge meeting={meeting} />
           </div>
-          <div className="text-xs text-muted-foreground flex items-center gap-3 flex-wrap">
+          <div className="text-[12.5px] text-muted-foreground flex items-center gap-x-3 gap-y-1 flex-wrap">
             {meeting.guest_name && (
               <span className="flex items-center gap-1 text-foreground font-medium">{meeting.guest_name}</span>
             )}
             {meeting.scheduled_at && meeting.status === 'scheduled' ? (
-              <span className="flex items-center gap-1 text-primary">
-                <Calendar className="h-3 w-3" />
+              <span className="mono flex items-center gap-1 text-link">
+                <Calendar className="h-3 w-3" aria-hidden />
                 {new Date(meeting.scheduled_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                 {meeting.scheduled_duration_min ? ` • ${meeting.scheduled_duration_min}min` : ''}
               </span>
             ) : (
               <>
-                <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {durationText}</span>
-                <span>{new Date(meeting.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                <span className="mono flex items-center gap-1"><Clock className="h-3 w-3" aria-hidden /> {durationText}</span>
+                <span className="mono">{new Date(meeting.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
               </>
             )}
             {typeof meeting.participants_count === 'number' && meeting.participants_count > 0 && (
@@ -391,55 +395,56 @@ function MeetingCard({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex w-full items-center justify-end gap-1 sm:w-auto shrink-0">
           {meeting.recording_url && (
             <a
               href={meeting.recording_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium hover:border-accent/50 hover:bg-accent/5 transition-all cursor-pointer"
+              className="btn btn-secondary btn-sm"
               title="Ver gravação"
             >
-              <Film className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Gravação</span>
+              <Film aria-hidden />
+              <span>Gravação</span>
             </a>
           )}
-          <IconBtn onClick={onCopyLink} title="Compartilhar link" active={copied}>
-            {copied ? <Check className="h-3.5 w-3.5 text-accent" /> : <Share2 className="h-3.5 w-3.5" />}
-          </IconBtn>
-          <a
-            href={getMeetUrl(meeting.livekit_room_name, { role: 'host' })}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cn(
-              'flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer',
-              'bg-primary text-primary-foreground hover:bg-primary-hover shadow-md',
-            )}
-            title="Entrar como host"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Entrar</span>
-          </a>
+          {VIDEO && (
+            <IconBtn onClick={onCopyLink} title={copied ? 'Link copiado' : 'Copiar link do convidado'} active={copied}>
+              {copied ? <Check className="text-success" aria-hidden /> : <Share2 aria-hidden />}
+            </IconBtn>
+          )}
           {isCompleted && (
-            <IconBtn onClick={onToggleExpand} title={expanded ? 'Recolher' : 'Expandir'}>
-              {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            <IconBtn onClick={onToggleExpand} title={expanded ? 'Recolher' : 'Ver resumo'}>
+              {expanded ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
             </IconBtn>
           )}
           <IconBtn onClick={onDelete} title="Excluir" danger>
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 aria-hidden />
           </IconBtn>
+          {VIDEO && (
+            <a
+              href={getMeetUrl(meeting.livekit_room_name, { role: 'host' })}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary btn-sm"
+              title="Entrar como anfitrião"
+            >
+              <ExternalLink aria-hidden />
+              <span>Entrar</span>
+            </a>
+          )}
         </div>
       </div>
 
       {/* Expanded content */}
       {expanded && isCompleted && (
-        <div className="border-t border-border bg-muted/30 p-4 space-y-3">
+        <div className="border-t border-border bg-bg-0 p-3 sm:p-4 space-y-3 animate-band-in">
           {meeting.ai_summary ? (
             <>
               <div>
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-accent uppercase tracking-wider mb-1.5">
-                  <Sparkles className="h-3 w-3" />
-                  Resumo IA
+                <div className="t-h6 flex items-center gap-1.5 !text-iris-fg mb-1.5">
+                  <span className="iris-mark sm" aria-hidden />
+                  Resumo pela IA
                 </div>
                 <p className="text-sm text-foreground leading-relaxed">{meeting.ai_summary}</p>
               </div>
@@ -452,10 +457,10 @@ function MeetingCard({
                   <ul className="space-y-1.5">
                     {meeting.ai_action_items.map((a, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm">
-                        <span className="mt-0.5 h-4 w-4 shrink-0 rounded border border-border bg-background" />
-                        <div className="flex-1">
+                        <span className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border border-stroke-default bg-card" aria-hidden />
+                        <div className="min-w-0 flex-1">
                           <span className="text-foreground">{a.task}</span>
-                          {a.owner && <span className="ml-2 text-xs rounded-full bg-accent/10 text-accent px-2 py-0.5">{a.owner}</span>}
+                          {a.owner && <span className="tag tag-info ml-2">{a.owner}</span>}
                           {a.due && <span className="ml-1.5 text-xs text-muted-foreground">• {a.due}</span>}
                         </div>
                       </li>
@@ -464,31 +469,29 @@ function MeetingCard({
                 </div>
               )}
               {meeting.ai_generated_at && (
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[11px] text-muted-foreground">
                   Gerado em {new Date(meeting.ai_generated_at).toLocaleString('pt-BR')}
                 </p>
               )}
               <TranscriptSection turns={meeting.transcriptions} />
             </>
-          ) : (
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-xs text-muted-foreground">
-                Gere automaticamente um resumo e lista de próximas ações com IA.
+          ) : RESUMO_IA ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0 flex-1 text-[13px] text-muted-foreground">
+                Gere automaticamente um resumo e a lista de próximas ações com IA.
               </div>
               <button
+                type="button"
                 onClick={onGenerateAi}
                 disabled={aiPending}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer shrink-0',
-                  'bg-primary text-primary-foreground hover:bg-primary-hover shadow-md',
-                  'disabled:opacity-50 disabled:cursor-not-allowed',
-                )}
+                aria-busy={aiPending}
+                className="btn btn-iris shrink-0"
               >
-                {aiPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                {aiPending ? 'Gerando...' : 'Resumir com IA'}
+                {aiPending ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+                {aiPending ? 'Gerando…' : 'Resumir com IA'}
               </button>
             </div>
-          )}
+          ) : null}
           {!meeting.ai_summary && <TranscriptSection turns={meeting.transcriptions} />}
         </div>
       )}
@@ -508,26 +511,29 @@ function TranscriptSection({ turns }: { turns: TranscriptTurn[] | null }) {
   return (
     <div className="border-t border-border pt-3">
       <button
+        type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-xs font-semibold text-foreground hover:text-accent transition-colors cursor-pointer"
+        aria-expanded={open}
+        className="btn btn-ghost btn-sm -ml-2"
       >
-        <FileText className="h-3.5 w-3.5" />
+        <FileText aria-hidden />
         Transcrição ({turns.length} falas)
-        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        {open ? <ChevronUp aria-hidden /> : <ChevronDown aria-hidden />}
       </button>
       {open && (
         <div className="mt-2 space-y-2">
-          <div className="max-h-80 overflow-y-auto rounded-lg border border-border bg-background p-3 space-y-2">
+          <div className="max-h-[min(20rem,50dvh)] overflow-y-auto rounded-lg bg-card ring-hairline p-3 space-y-2">
             {turns.map((t, i) => (
               <div key={i} className="text-sm">
-                <span className="font-semibold text-accent">{t.speaker}:</span>{' '}
+                <span className="font-semibold text-link">{t.speaker}:</span>{' '}
                 <span className="text-foreground">{t.text}</span>
               </div>
             ))}
           </div>
           <button
+            type="button"
             onClick={copyAll}
-            className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer underline"
+            className="min-h-8 text-[12px] text-link hover:underline underline-offset-2 cursor-pointer"
           >
             Copiar transcrição completa
           </button>
@@ -542,32 +548,34 @@ function StatusBadge({ meeting }: { meeting: MeetingRow }) {
   const isCompleted = meeting.status === 'completed'
   const isScheduled = meeting.scheduled_at && meeting.status === 'scheduled'
 
+  // Selos de status do DS (`.st[data-s]`): cor + forma do marcador.
   if (isLive) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 text-destructive px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
-        <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
+      <span className="st st-sm" data-s="atrasado">
+        <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" aria-hidden />
         Ao vivo
       </span>
     )
   }
   if (isCompleted) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 text-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
-        <CheckCircle2 className="h-3 w-3" />
+      <span className="st st-sm" data-s="resolvido">
+        <span className="st-g" aria-hidden />
         Concluída
       </span>
     )
   }
   if (isScheduled) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
-        <Calendar className="h-3 w-3" />
+      <span className="st st-sm" data-s="aberto">
+        <Calendar className="h-3 w-3" aria-hidden />
         Agendada
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-muted text-muted-foreground px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+    <span className="st st-sm" data-s="aguardando">
+      <span className="st-g" aria-hidden />
       Pendente
     </span>
   )
@@ -584,16 +592,14 @@ function IconBtn({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       title={title}
       aria-label={title}
       className={cn(
-        'flex h-8 w-8 items-center justify-center rounded-lg border transition-all cursor-pointer',
-        danger
-          ? 'border-transparent text-muted-foreground hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive'
-          : active
-            ? 'border-accent/40 bg-accent/10 text-accent'
-            : 'border-border text-muted-foreground hover:border-accent/40 hover:bg-accent/5 hover:text-foreground',
+        'btn btn-ghost btn-icon btn-sm',
+        danger && 'hover:!bg-danger-light hover:!text-danger',
+        active && '!bg-success-light',
       )}
     >
       {children}
@@ -610,24 +616,18 @@ function EmptyState({ onCreate, filter }: { onCreate: () => void; filter: Filter
     filter === 'completed' ? 'Nenhuma reunião concluída ainda.' :
     'Nenhuma reunião registrada ainda.'
 
+  // Estado vazio do DS, com a próxima ação.
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-muted/20 p-10 text-center">
-      <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-primary-light flex items-center justify-center">
-        <Video className="h-6 w-6 text-accent" />
-      </div>
-      <h3 className="font-semibold text-foreground mb-1">{msg}</h3>
-      <p className="text-sm text-muted-foreground mb-5">
-        Crie uma nova reunião e compartilhe o link com quem quiser.
-      </p>
-      {filter === 'all' && (
-        <button
-          onClick={onCreate}
-          className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover shadow-lg transition-all cursor-pointer"
-        >
-          <Plus className="h-4 w-4" />
+    <EstadoVazio
+      icon={Video}
+      title={msg}
+      description={VIDEO ? 'Crie uma nova reunião e compartilhe o link com quem quiser.' : 'As reuniões marcadas com os clientes aparecem aqui.'}
+      action={filter === 'all' && VIDEO ? (
+        <button type="button" onClick={onCreate} className="btn btn-primary">
+          <Plus aria-hidden />
           Criar primeira reunião
         </button>
-      )}
-    </div>
+      ) : undefined}
+    />
   )
 }

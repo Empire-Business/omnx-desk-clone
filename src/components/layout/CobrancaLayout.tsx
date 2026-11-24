@@ -12,12 +12,14 @@ import {
   PanelLeftOpen,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { SidebarBottom } from './SidebarBottom'
+import { NotificationsButton, SidebarBottom } from './SidebarBottom'
+import { BarraSuperior } from './BarraSuperior'
 import { BottomNav } from './BottomNav'
 import { OmnxBrandBand } from './OmnxBrandBand'
+import { BRAND } from '@/config/brand'
 
 const navItems = [
-  { label: 'Dashboard', icon: LayoutDashboard, to: '/cobranca' },
+  { label: 'Visão geral', icon: LayoutDashboard, to: '/cobranca' },
   { label: 'Devedores', icon: Users, to: '/cobranca/devedores' },
   { label: 'Réguas', icon: GitBranch, to: '/cobranca/reguas' },
 ] as const
@@ -49,7 +51,7 @@ export function CobrancaLayout() {
   const isCollapsed = isMobile ? false : collapsed
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-background">
+    <div className="cume-frame flex h-dvh overflow-hidden">
       {/* Mobile overlay */}
       {isMobile && mobileOpen && (
         <div
@@ -62,7 +64,7 @@ export function CobrancaLayout() {
       {showSidebar && (
         <aside
           className={cn(
-            'flex flex-col h-dvh bg-sidebar border-r border-sidebar-border transition-[width] duration-300 z-40',
+            'tema-marinho flex flex-col h-dvh bg-sidebar border-r border-sidebar-border transition-[width] duration-300 z-40',
             isCollapsed ? 'w-16' : 'w-64',
             isMobile && 'fixed inset-y-0 left-0 animate-slide-in-right',
           )}
@@ -89,7 +91,7 @@ export function CobrancaLayout() {
                   <>
                     <div className="flex flex-col min-w-0 flex-1">
                       <span className="text-[12.5px] font-semibold text-sidebar-foreground leading-tight truncate">
-                        OMNX Cobrança
+                        {BRAND.cobranca}
                       </span>
                       <span className="text-[10.5px] text-sidebar-foreground/55 leading-tight">
                         Voltar ao sistema
@@ -176,12 +178,25 @@ export function CobrancaLayout() {
             </ul>
           </nav>
 
-          <SidebarBottom collapsed={isCollapsed} tenantName="OMNX Desk" />
+          {isMobile ? (
+            <SidebarBottom collapsed={isCollapsed} tenantName={BRAND.appName} />
+          ) : (
+            /* Sino de avisos de volta no rodapé da barra lateral, como na main: a barra superior
+               do Cume aqui vai sem ele, mas a notificação continua alcançável dentro da Cobrança. */
+            <div className={cn('shrink-0 px-3 pb-2.5 pt-1.5', isCollapsed && 'px-2')}>
+              <div className="flex items-center gap-1">
+                <NotificationsButton collapsed={isCollapsed} />
+              </div>
+            </div>
+          )}
         </aside>
       )}
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* No app de Cobrança a barra vai sem a busca global e sem o sino: os dois não existiam antes. */}
+      {!isMobile && <BarraSuperior busca={false} avisos={false} />}
+      <div className="cume-sheet flex min-h-0 flex-1 flex-col min-w-0 overflow-hidden">
         {isMobile && (
           <header className="flex h-14 items-center gap-3 border-b border-border bg-card px-4 shrink-0">
             <button
@@ -194,12 +209,13 @@ export function CobrancaLayout() {
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-accent/20">
               <Banknote className="h-3.5 w-3.5 text-accent" />
             </div>
-            <span className="text-sm font-semibold text-foreground">OMNX Cobrança</span>
+            <span className="text-sm font-semibold text-foreground">{BRAND.cobranca}</span>
           </header>
         )}
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 pb-[calc(3.5rem+env(safe-area-inset-bottom))] sm:pb-4 lg:pb-6">
           <Outlet />
         </main>
+      </div>
       </div>
       <BottomNav />
     </div>

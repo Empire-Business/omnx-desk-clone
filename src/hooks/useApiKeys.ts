@@ -1,3 +1,4 @@
+import { tenantDaSessao } from '@/lib/authTenant'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 
@@ -6,7 +7,6 @@ import { supabase } from '@/lib/supabase'
 export interface ApiKey {
   id: string
   nome: string
-  key_hash: string
   key_prefix: string
   permissoes: string[]
   criado_por: string | null
@@ -72,7 +72,8 @@ export function useApiKeys() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('api_keys')
-        .select('*')
+        // Nunca traz key_hash para o navegador: a lista só precisa de metadados.
+        .select('id, nome, key_prefix, permissoes, criado_por, ativo, ultimo_uso, expira_em, criado_em, atualizado_em')
         .order('criado_em', { ascending: false })
       if (error) throw error
       return data as ApiKey[]
@@ -83,6 +84,10 @@ export function useApiKeys() {
 export function useCreateApiKey() {
   const qc = useQueryClient()
   return useMutation({
+    // A chave completa só existe no retorno desta mutação (mostrada uma vez). gcTime 0 tira o
+    // resultado do cache de mutações assim que a tela solta o observador; a lista de chaves
+    // (useApiKeys) nunca contém a chave completa.
+    gcTime: 0,
     mutationFn: async (params: {
       nome: string
       permissoes: string[]
@@ -94,14 +99,15 @@ export function useCreateApiKey() {
 
       const { data, error } = await supabase
         .from('api_keys')
-        .insert({
+        .insert({ ...({
           nome: params.nome,
           key_hash: keyHash,
           key_prefix: keyPrefix,
           permissoes: params.permissoes,
           expira_em: params.expira_em ?? null,
-        })
-        .select()
+        }), tenant_id: await tenantDaSessao() })
+        // colunas explícitas: o hash da chave nunca volta para o navegador
+        .select('id, nome, key_prefix, permissoes, criado_por, ativo, ultimo_uso, expira_em, criado_em, atualizado_em')
         .single()
 
       if (error) throw error
@@ -159,12 +165,12 @@ export function useCreateWebhook() {
       const secret = `whsec_${crypto.randomUUID().replace(/-/g, '')}`
       const { data, error } = await supabase
         .from('webhooks')
-        .insert({
+        .insert({ ...({
           nome: params.nome,
           url: params.url,
           secret,
           eventos: params.eventos,
-        })
+        }), tenant_id: await tenantDaSessao() })
         .select()
         .single()
       if (error) throw error

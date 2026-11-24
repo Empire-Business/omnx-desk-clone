@@ -1,12 +1,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { cadastrarColaborador, ErroCadastro } from './handler.ts'
+import { travaDeLicenca } from '../_shared/htai-licenca.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
-
-const ALLOWED_PERFIS = ['admin', 'gerente', 'atendimento', 'estrategista', 'cliente']
 
 // URL pública do app — destino do link de definição de senha.
 const APP_URL = (Deno.env.get('APP_URL') ?? 'https://desk.omnx.pro').replace(/\/+$/, '')
@@ -34,6 +34,9 @@ function json(body: unknown, status = 200) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
+  // Licença HTAI (desligada sem HTAI_ENTITLEMENTS_MODE; ver docs/LICENCA-HTAI.md)
+  const licencaNegada = await travaDeLicenca(corsHeaders)
+  if (licencaNegada) return licencaNegada
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
 
   try {
@@ -45,92 +48,75 @@ Deno.serve(async (req) => {
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: auth } },
     })
-    const { data: u } = await userClient.auth.getUser()
-    if (!u.user) return json({ error: 'unauthorized' }, 401)
-
-    const { data: profile } = await userClient
-      .from('users')
-      .select('perfil')
-      .eq('id', u.user.id)
-      .single()
-    if (!profile || !['admin', 'gerente'].includes(profile.perfil as string)) {
-      return json({ error: 'forbidden' }, 403)
-    }
-
-    // Tenant do admin chamador — o novo usuário nasce NO MESMO tenant (multi-tenant).
-    // Sem isto, o trigger cairia no fallback e jogaria a pessoa no tenant mestre.
-    const { data: callerProfile } = await userClient
-      .from('profiles')
-      .select('tenant_id')
-      .eq('user_id', u.user.id)
-      .single()
-    const callerTenantId = callerProfile?.tenant_id ?? null
-
-    const body = await req.json() as {
-      nome?: string
-      email?: string
-      perfil?: string
-      department_id?: string | null
-    }
-    const nome = (body.nome ?? '').trim()
-    const email = (body.email ?? '').trim().toLowerCase()
-    const perfil = (body.perfil ?? '').trim()
-    const departmentId = body.department_id ?? null
-
-    if (!nome) return json({ error: 'nome_required' }, 400)
-    if (!email || !email.includes('@')) return json({ error: 'email_invalid' }, 400)
-    if (!ALLOWED_PERFIS.includes(perfil)) return json({ error: 'perfil_invalid' }, 400)
-
     const admin = createClient(supabaseUrl, serviceKey)
+    let body: unknown
+    try { body = await req.json() }
+    catch { return json({ error: 'body_invalid' }, 400) }
 
-    // Cria o usuário com e-mail já confirmado e senha aleatória que nunca sai
-    // daqui — o acesso é entregue via link de definição de senha.
-    const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email,
-      password: senhaAleatoria(32),
-      email_confirm: true,
-      user_metadata: { nome, perfil, ...(callerTenantId ? { tenant_id: callerTenantId } : {}) },
-    })
-
-    if (createErr || !created.user) {
-      const msg = createErr?.message ?? 'unknown'
-      // E-mail já cadastrado → erro claro para a UI
-      const jaExiste = /already been registered|already exists|duplicate/i.test(msg)
-      return json(
-        { error: jaExiste ? 'email_ja_cadastrado' : 'create_failed', detail: msg },
-        jaExiste ? 409 : 400,
-      )
-    }
-
-    // Trigger handle_new_user popula public.users, mas garante consistência
-    // (inclui tenant_id do chamador, determinístico).
-    await admin
-      .from('users')
-      .update({ nome, perfil, department_id: departmentId, ...(callerTenantId ? { tenant_id: callerTenantId } : {}) })
-      .eq('id', created.user.id)
-
-    // Link de definição de senha (recovery): o colaborador clica, cai no app e
-    // escolhe a própria senha. Substitui a antiga senha padrão compartilhada.
-    let definirSenhaUrl: string | null = null
-    const { data: linkData, error: linkErr } = await admin.auth.admin.generateLink({
-      type: 'recovery',
-      email,
-      options: { redirectTo: APP_URL },
-    })
-    if (linkErr || !linkData?.properties?.action_link) {
-      console.warn(`generateLink(recovery) falhou: ${linkErr?.message ?? 'sem action_link'}`)
-    } else {
-      definirSenhaUrl = linkData.properties.action_link
-    }
-
-    return json({
-      id: created.user.id,
-      email: created.user.email,
-      nome,
-      perfil,
-      definir_senha_url: definirSenhaUrl,
-    })
-  } catch (e) {
-    return json({ error: 'internal_error', detail: (e as Error).message }, 500)
+    const result = await cadastrarColaborador({
+      async usuarioAutenticado() {
+        const { data, error } = await userClient.auth.getUser()
+        return error ? null : data.user?.id ?? null
+      },
+      async perfilDoUsuario(id) {
+        const { data, error } = await userClient.from('users')
+          .select('perfil, ativo, tenant_id').eq('id', id).single()
+        if (error) throw new ErroCadastro('forbidden', 403)
+        return data
+      },
+      async tenantDoProfile(id) {
+        const { data, error } = await userClient.from('profiles')
+          .select('tenant_id').eq('user_id', id).single()
+        if (error) throw new ErroCadastro('tenant_invalid', 403)
+        return data?.tenant_id ?? null
+      },
+      async departamentoDoTenant(id, tenantId) {
+        const { data, error } = await admin.from('chat_departments')
+          .select('id').eq('id', id).eq('tenant_id', tenantId).maybeSingle()
+        if (error) throw new ErroCadastro('department_check_failed', 500)
+        return Boolean(data)
+      },
+      async criarAuth(input) {
+        const { data, error } = await admin.auth.admin.createUser({
+          email: input.email,
+          password: senhaAleatoria(32),
+          email_confirm: true,
+          user_metadata: { nome: input.nome, perfil: input.perfil, tenant_id: input.tenant_id },
+          // Papel e empresa valem só daqui: app_metadata só o servidor grava
+          // (migração 20261119150000). user_metadata fica durante a transição.
+          app_metadata: { perfil: input.perfil, tenant_id: input.tenant_id },
+        })
+        if (error || !data.user) {
+          const duplicate = /already been registered|already exists|duplicate/i.test(error?.message ?? '')
+          throw new ErroCadastro(duplicate ? 'email_ja_cadastrado' : 'create_failed', duplicate ? 409 : 500)
+        }
+        return { id: data.user.id }
+      },
+      async persistirPerfil(id, input) {
+        const { data, error } = await admin.from('users')
+          .update({ nome: input.nome, perfil: input.perfil, department_id: input.department_id })
+          .eq('id', id).eq('tenant_id', input.tenant_id).select('id').single()
+        if (error || !data) throw new ErroCadastro('profile_save_failed', 500)
+        const profile = await admin.from('profiles').select('tenant_id')
+          .eq('user_id', id).eq('tenant_id', input.tenant_id).single()
+        if (profile.error || !profile.data) throw new ErroCadastro('profile_save_failed', 500)
+      },
+      async gerarLink(email) {
+        const { data, error } = await admin.auth.admin.generateLink({
+          type: 'recovery', email, options: { redirectTo: `${APP_URL}/reset-password` },
+        })
+        if (error || !data?.properties?.action_link) throw new ErroCadastro('recovery_failed', 500)
+        return data.properties.action_link
+      },
+      async removerAuth(id) {
+        const { error } = await admin.auth.admin.deleteUser(id)
+        if (error) throw new ErroCadastro('cleanup_failed', 500)
+      },
+    }, body)
+    return json(result)
+  } catch (error) {
+    // Não devolver mensagens internas do provedor, tokens nem links em respostas de erro.
+    if (error instanceof ErroCadastro) return json({ error: error.codigo }, error.status)
+    return json({ error: 'internal_error' }, 500)
   }
 })

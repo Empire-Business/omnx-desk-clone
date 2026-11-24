@@ -73,7 +73,7 @@ export function RowTags({
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1.5 w-72 rounded-xl border border-border bg-popover p-3 text-left shadow-xl">
           <div className="mb-2 flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tags</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Etiquetas</span>
             <button
               type="button"
               onClick={() => setOpen(false)}

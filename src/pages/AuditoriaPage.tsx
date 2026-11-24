@@ -5,6 +5,8 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { PageContainer } from '@/components/ui/PageContainer'
+import { TabelaResponsiva } from '@/components/ui/TabelaResponsiva'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useAuditLogs } from '@/hooks/useAuditLog'
 
@@ -81,9 +83,8 @@ function truncateJson(obj: Record<string, unknown>, maxLen = 120): string {
 
 function Shimmer() {
   return (
-    <div className="space-y-4 animate-pulse">
-      <div className="glass-card h-14 rounded-xl" />
-      <div className="glass-card h-96 rounded-xl" />
+    <div role="status" aria-label="Carregando registros" className="space-y-3">
+      {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="sk h-12 rounded-md" />)}
     </div>
   )
 }
@@ -103,10 +104,10 @@ function DetailsCell({ detalhes }: { detalhes: Record<string, unknown> }) {
     <div className="max-w-xs">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group"
+        className="focus-ds inline-flex min-h-8 items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors group"
       >
         <Eye className="h-3 w-3" />
-        <span className="font-mono truncate max-w-[200px]">
+        <span className="t-mono truncate max-w-[200px]">
           {expanded ? 'Recolher' : truncateJson(detalhes)}
         </span>
         <ChevronDown
@@ -117,7 +118,7 @@ function DetailsCell({ detalhes }: { detalhes: Record<string, unknown> }) {
         />
       </button>
       {expanded && (
-        <pre className="mt-2 rounded-lg bg-muted/50 border border-border p-3 text-[11px] font-mono text-foreground overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
+        <pre className="mt-2 rounded-lg bg-muted/50 border border-border p-3 text-[12px] font-mono text-foreground overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all">
           {jsonStr}
         </pre>
       )}
@@ -148,7 +149,7 @@ export function AuditoriaPage() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 lg:space-y-6 animate-fade-in">
+    <PageContainer>
       <PageHeader
         title="Auditoria"
         description="Registro completo de ações realizadas no sistema."
@@ -158,15 +159,15 @@ export function AuditoriaPage() {
       <div className="glass-card p-3 sm:p-4">
         <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-end gap-3 sm:gap-4">
           {/* Ação */}
-          <div className="space-y-1.5 min-w-[160px]">
-            <label className="flex items-center gap-1.5 font-mono text-[11px] tracking-wider uppercase text-muted-foreground">
+          <div className="space-y-1.5 w-full sm:w-auto sm:min-w-[160px]">
+            <label className="flex items-center gap-1.5 text-[12.5px] font-semibold text-fg-2">
               <Filter className="h-3 w-3" />
               Ação
             </label>
             <select
               value={filters.acao ?? ''}
               onChange={(e) => setFilters((f) => ({ ...f, acao: e.target.value || undefined }))}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+              className="select w-full"
             >
               {ACAO_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -177,15 +178,15 @@ export function AuditoriaPage() {
           </div>
 
           {/* Entidade */}
-          <div className="space-y-1.5 min-w-[180px]">
-            <label className="flex items-center gap-1.5 font-mono text-[11px] tracking-wider uppercase text-muted-foreground">
+          <div className="space-y-1.5 w-full sm:w-auto sm:min-w-[180px]">
+            <label className="flex items-center gap-1.5 text-[12.5px] font-semibold text-fg-2">
               <FileText className="h-3 w-3" />
               Entidade
             </label>
             <select
               value={filters.entidade ?? ''}
               onChange={(e) => setFilters((f) => ({ ...f, entidade: e.target.value || undefined }))}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+              className="select w-full"
             >
               {ENTIDADE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -196,8 +197,8 @@ export function AuditoriaPage() {
           </div>
 
           {/* Período: De */}
-          <div className="space-y-1.5 min-w-[160px]">
-            <label className="flex items-center gap-1.5 font-mono text-[11px] tracking-wider uppercase text-muted-foreground">
+          <div className="space-y-1.5 w-full sm:w-auto sm:min-w-[160px]">
+            <label className="flex items-center gap-1.5 text-[12.5px] font-semibold text-fg-2">
               <Clock className="h-3 w-3" />
               De
             </label>
@@ -205,13 +206,13 @@ export function AuditoriaPage() {
               type="date"
               value={filters.from ?? ''}
               onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value || undefined }))}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+              className="input w-full"
             />
           </div>
 
           {/* Período: Até */}
-          <div className="space-y-1.5 min-w-[160px]">
-            <label className="flex items-center gap-1.5 font-mono text-[11px] tracking-wider uppercase text-muted-foreground">
+          <div className="space-y-1.5 w-full sm:w-auto sm:min-w-[160px]">
+            <label className="flex items-center gap-1.5 text-[12.5px] font-semibold text-fg-2">
               <Clock className="h-3 w-3" />
               Até
             </label>
@@ -219,7 +220,7 @@ export function AuditoriaPage() {
               type="date"
               value={filters.to ?? ''}
               onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value || undefined }))}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors"
+              className="input w-full"
             />
           </div>
 
@@ -227,7 +228,7 @@ export function AuditoriaPage() {
           {hasActiveFilters && (
             <button
               onClick={clearFilters}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="btn btn-secondary"
             >
               <AlertCircle className="h-3.5 w-3.5" />
               Limpar filtros
@@ -252,7 +253,7 @@ export function AuditoriaPage() {
             hasActiveFilters ? (
               <button
                 onClick={clearFilters}
-                className="inline-flex items-center gap-2 rounded-lg gradient-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:opacity-90 transition-opacity"
+                className="btn btn-primary"
               >
                 <Search className="h-4 w-4" />
                 Limpar filtros
@@ -270,107 +271,62 @@ export function AuditoriaPage() {
             </span>
           </div>
 
-          {/* Table */}
-          <div className="glass-card overflow-hidden overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/30">
-                  <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
-                    Data/Hora
-                  </th>
-                  <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
-                    Usuário
-                  </th>
-                  <th className="px-3 sm:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
-                    Ação
-                  </th>
-                  <th className="hidden md:table-cell px-3 sm:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
-                    Entidade
-                  </th>
-                  <th className="hidden lg:table-cell px-3 sm:px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide whitespace-nowrap">
-                    Detalhes
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {logs.map((log) => {
-                  const acaoConfig = ACAO_BADGE[log.acao] ?? {
-                    label: log.acao,
-                    classes: 'bg-muted text-muted-foreground',
-                    icon: FileText,
-                  }
-                  const AcaoIcon = acaoConfig.icon
-                  const perfilClasses = PERFIL_BADGE[log.user_perfil] ?? 'bg-muted text-muted-foreground'
-
+          <TabelaResponsiva
+            rotulo="Registro de ações do sistema"
+            linhas={logs}
+            chave={(log) => String(log.id)}
+            colunas={[
+              {
+                id: 'quando', titulo: 'Data/hora', principal: true,
+                celula: (log) => <span className="t-mono text-muted-foreground">{formatDateTime(log.criado_em)}</span>,
+              },
+              {
+                id: 'usuario', titulo: 'Usuário',
+                celula: (log) => {
+                  const perfilClasses = PERFIL_BADGE[log.user_perfil ?? ''] ?? 'bg-muted text-muted-foreground'
                   return (
-                    <tr key={log.id} className="hover:bg-muted/20 transition-colors">
-                      {/* Data/Hora */}
-                      <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
-                        <span className="text-xs font-mono text-muted-foreground">
-                          {formatDateTime(log.criado_em)}
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted">
+                        <User className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                      </div>
+                      <div className="min-w-0 text-left">
+                        <p className="truncate text-sm font-medium text-foreground">{log.user_nome}</p>
+                        <span className={cn('inline-flex items-center rounded-sm px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-wider', perfilClasses)}>
+                          {log.user_perfil}
                         </span>
-                      </td>
-
-                      {/* Usuário */}
-                      <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted shrink-0">
-                            <User className="h-3.5 w-3.5 text-muted-foreground" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-foreground truncate">
-                              {log.user_nome}
-                            </p>
-                            <span
-                              className={cn(
-                                'inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] font-mono tracking-wider uppercase font-medium',
-                                perfilClasses,
-                              )}
-                            >
-                              {log.user_perfil}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Ação */}
-                      <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-[11px] font-mono tracking-wider uppercase font-medium',
-                            acaoConfig.classes,
-                          )}
-                        >
-                          <AcaoIcon className="h-3 w-3" />
-                          {acaoConfig.label}
-                        </span>
-                      </td>
-
-                      {/* Entidade */}
-                      <td className="hidden md:table-cell px-3 sm:px-4 py-3 whitespace-nowrap">
-                        <div className="space-y-0.5">
-                          <p className="text-sm text-foreground">{log.entidade}</p>
-                          {log.entidade_id && (
-                            <p className="text-[10px] font-mono text-muted-foreground truncate max-w-[140px]">
-                              {log.entidade_id}
-                            </p>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Detalhes */}
-                      <td className="hidden lg:table-cell px-3 sm:px-4 py-3">
-                        <DetailsCell detalhes={log.detalhes} />
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
                   )
-                })}
-              </tbody>
-            </table>
-          </div>
+                },
+              },
+              {
+                id: 'acao', titulo: 'Ação',
+                celula: (log) => {
+                  const acaoConfig = ACAO_BADGE[log.acao] ?? { label: log.acao, classes: 'bg-muted text-muted-foreground', icon: FileText }
+                  const AcaoIcon = acaoConfig.icon
+                  return (
+                    <span className={cn('inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-[11.5px] font-medium uppercase tracking-wider', acaoConfig.classes)}>
+                      <AcaoIcon className="h-3 w-3" aria-hidden />
+                      {acaoConfig.label}
+                    </span>
+                  )
+                },
+              },
+              {
+                id: 'entidade', titulo: 'Entidade',
+                celula: (log) => (
+                  <div className="space-y-0.5 text-left">
+                    <p className="text-sm text-foreground">{log.entidade}</p>
+                    {log.entidade_id && <p className="t-mono max-w-[160px] truncate text-muted-foreground">{log.entidade_id}</p>}
+                  </div>
+                ),
+              },
+              { id: 'detalhes', titulo: 'Detalhes', celula: (log) => <DetailsCell detalhes={log.detalhes ?? {}} /> },
+            ]}
+          />
         </>
       )}
-    </div>
+    </PageContainer>
   )
 }
 
