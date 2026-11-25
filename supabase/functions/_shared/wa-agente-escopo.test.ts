@@ -81,10 +81,10 @@ describe('participantes', () => {
   })
   it('classifica membros, números da empresa e externos (sem telefone = externo)', () => {
     const membros = new Map([[chaveTelefone('+5511911112222'), 'u1'], [chaveTelefone('+5511933334444'), 'u2']])
-    const proprios = new Set([chaveTelefone('+5511951979967')])
+    const proprios = new Set([chaveTelefone('+5511900009967')])
     const r = classificarParticipantes([
       '5511911112222@s.whatsapp.net', '551133334444@s.whatsapp.net', // u2 sem o 9º dígito
-      '5511951979967@s.whatsapp.net', '999@lid', '5521977776666@s.whatsapp.net',
+      '5511900009967@s.whatsapp.net', '999@lid', '5521977776666@s.whatsapp.net',
     ], membros, proprios)
     expect(r.membros.sort()).toEqual(['u1', 'u2'])
     expect(r.externos).toBe(2)
@@ -114,9 +114,9 @@ function banco(extra: { participantes?: string[] } = {}) {
       { tenant_id: T, user_id: 'u2', telefone: '+5511933334444', ativo: true },
       { tenant_id: 'outro', user_id: 'x9', telefone: '+5521977776666', ativo: true },
     ],
-    whatsapp_instances: [{ tenant_id: T, numero_whatsapp: '+5511951979967' }],
+    whatsapp_instances: [{ tenant_id: T, numero_whatsapp: '+5511900009967' }],
     chat_contacts: [{ id: 'g1', tenant_id: T, numero_whatsapp: GRUPO }],
-    chat_group_members: (extra.participantes ?? ['5511911112222@s.whatsapp.net', '5511933334444@s.whatsapp.net', '5511951979967@s.whatsapp.net'])
+    chat_group_members: (extra.participantes ?? ['5511911112222@s.whatsapp.net', '5511933334444@s.whatsapp.net', '5511900009967@s.whatsapp.net'])
       .map((n) => ({ tenant_id: T, contact_id: 'g1', numero_whatsapp: n })),
   }
   const escopos: Record<string, { total: boolean; client_ids: string[] }> = {

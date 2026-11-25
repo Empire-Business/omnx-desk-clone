@@ -64,7 +64,7 @@ BEGIN
    LIMIT 1;
   IF v_base IS NULL OR v_base !~ '^https://' THEN
     -- Reserva: o endereço deste projeto (o empacotador troca pelo do cliente).
-    v_base := 'https://wuzmckatbmlpkdxtfhqr.supabase.co';
+    v_base := 'https://seu-projeto-supabase.supabase.co';
   END IF;
   RETURN v_base || '/functions/v1/' || p_funcao;
 END;

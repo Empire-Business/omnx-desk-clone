@@ -13,7 +13,7 @@ const GRUPO = '120363000000000001@g.us'
 const info: InfoComoFalar = {
   nome: 'Ana', nomeContato: 'Ana Suporte', privado: true, grupos: true,
   membros: new Set([chaveTelefone('+5511911112222')]),
-  gruposLiberados: new Map([[GRUPO, '+5511951979967']]),
+  gruposLiberados: new Map([[GRUPO, '+5511900009967']]),
 }
 const zero = () => 0
 
@@ -48,12 +48,12 @@ describe('carregarInfoComoFalar', () => {
         { tenant_id: T, grupo_id: 'g1', instance_uuid: 'i2', ordem: 2 },
         { tenant_id: T, grupo_id: 'g1', instance_uuid: 'i1', ordem: 1 },
       ],
-      whatsapp_instances: [{ id: 'i1', tenant_id: T, numero_whatsapp: '+5511951979967' }, { id: 'i2', tenant_id: T, numero_whatsapp: '+5511900001111' }],
+      whatsapp_instances: [{ id: 'i1', tenant_id: T, numero_whatsapp: '+5511900009967' }, { id: 'i2', tenant_id: T, numero_whatsapp: '+5511900001111' }],
     }
     const f = criarSupabaseFalso(tabelas)
     const r = await carregarInfoComoFalar(f.client, T)
     expect(r?.membros.size).toBe(1)
-    expect(r?.gruposLiberados.get(GRUPO)).toBe('+5511951979967')
+    expect(r?.gruposLiberados.get(GRUPO)).toBe('+5511900009967')
     for (const c of f.consultas) expect(c.filtros).toContain('eq:tenant_id')
     tabelas.wa_auto_config[0].agente_ativo = false
     expect(await carregarInfoComoFalar(criarSupabaseFalso(tabelas).client, T)).toBeNull()
@@ -70,10 +70,10 @@ const dados: DadosRelatorio = {
 
 describe('relatório com rodapé', () => {
   const rodapePriv = rodapesPrivado()[0]
-  const rodapeGrupo = rodapesGrupo({ nome: 'Ana', nomeContato: 'Ana Suporte', telefoneNumero: '+5511951979967' })[0]
+  const rodapeGrupo = rodapesGrupo({ nome: 'Ana', nomeContato: 'Ana Suporte', telefoneNumero: '+5511900009967' })[0]
 
   it('comoFalarSeguro aceita os rodapés e recusa texto estranho', () => {
-    for (const r of [...rodapesPrivado(), ...rodapesGrupo({ nome: 'Ana', telefoneNumero: '+5511951979967' })]) expect(comoFalarSeguro(r)).toBe(r)
+    for (const r of [...rodapesPrivado(), ...rodapesGrupo({ nome: 'Ana', telefoneNumero: '+5511900009967' })]) expect(comoFalarSeguro(r)).toBe(r)
     expect(comoFalarSeguro('a {{x}}')).toBeNull()
     expect(comoFalarSeguro('a\nb\nc')).toBeNull()
     expect(comoFalarSeguro('x'.repeat(401))).toBeNull()
@@ -128,7 +128,7 @@ describe('relatório com rodapé', () => {
 describe('boas-vindas', () => {
   it('pedido com exemplos e "como chamar" como blocos literais; fallback válido', () => {
     for (const canal of ['privado', 'grupo'] as const) {
-      const p = pedidoBoasVindas(canal, { nome: 'Ana', nomeContato: 'Ana Suporte', telefoneNumero: '+5511951979967' }, 'manha')
+      const p = pedidoBoasVindas(canal, { nome: 'Ana', nomeContato: 'Ana Suporte', telefoneNumero: '+5511900009967' }, 'manha')
       const m = mascarar(p)
       expect(m).not.toBeNull()
       expect(m!.texto).toContain('[EXEMPLOS]')

@@ -42,8 +42,8 @@ Assim as telas e métricas continuam funcionando sem reescrever tudo de uma vez.
 
 Quando o gatilho identifica uma nova assinatura, a edge function
 `notificar-contrato-assinado` envia a mesma notificação e os mesmos anexos em
-cópias individuais para `bruno@aliancadealtovalor.com.br`,
-`highticket@marvee.com.br` e `exosconsultoria@marvee.com.br`. Esse envio é
+cópias individuais para `socio@suaempresa.com.br`,
+`comercial@suaempresa.com.br` e `consultoria@suaempresa.com.br`. Esse envio é
 restrito ao tenant mestre (a operação principal); contratos de outras empresas
 não usam essa lista.
 

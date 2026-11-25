@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { chamarIaMidia, paraBase64, transcreverDoStorage, type TranscricaoAgora, URL_OPENROUTER } from './wa-midia-transcrever.ts'
 import { interpretarTranscricao } from './wa-midia.ts'
 
-const SUPA = 'https://wuzmckatbmlpkdxtfhqr.supabase.co'
+const SUPA = 'https://seu-projeto-supabase.supabase.co'
 const CONV = '6f1c2a34-1111-4222-8333-944455556666'
 const URL_AUDIO = `${SUPA}/storage/v1/object/public/chat-media/${CONV}/1730000000000.ogg`
 

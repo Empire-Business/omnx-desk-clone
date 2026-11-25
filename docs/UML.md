@@ -1,6 +1,6 @@
 # UML — Modelo de entidades e fluxo dos apps (omnx-desk)
 
-> Engenharia reversa do schema real em produção (`wuzmckatbmlpkdxtfhqr`), 115
+> Engenharia reversa do schema real em produção (`<project-ref>`), 115
 > tabelas no schema `public`. Diagramas por domínio — um ER com 115 entidades
 > seria ilegível, então o núcleo está detalhado e o resto agrupado.
 > Atualizado em: 26/10/2026 às 17h18 BRT · inclui o SSO efêmero do Empire OS e o

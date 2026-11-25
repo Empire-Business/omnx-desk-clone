@@ -19,7 +19,7 @@ export function normalizaTelefoneBR(bruto: string | null | undefined): string {
  * Chave de comparação entre bases: DDD + os últimos 8 dígitos.
  *
  * O Brasil acrescentou o nono dígito aos celulares e bases antigas ficaram sem
- * ele — o mesmo telefone é `+5521989358444` aqui e `+552189358444` no CRM.
+ * ele — o mesmo telefone é `+5521999990000` aqui e `+552199990000` no CRM.
  * Comparar a string cheia criaria contato duplicado; cortar o nono faz casar.
  *
  * Vazio quando não é um telefone brasileiro plausível: melhor não casar do que

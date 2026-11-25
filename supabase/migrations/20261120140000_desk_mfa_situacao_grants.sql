@@ -9,7 +9,7 @@
 -- mexe em ACL: onde a 20261109140000 nunca rodou (no SaaS da empresa, onde a pilha
 -- de licença HTAI não existe), a função ficou com o EXECUTE de fábrica para PUBLIC.
 --
--- O QUE SE VIU NA PRODUÇÃO (wuzmckatbmlpkdxtfhqr, SaaS)
+-- O QUE SE VIU NA PRODUÇÃO (seu-projeto-supabase, SaaS)
 --   proacl = =X/postgres | postgres=X/postgres | anon=X/postgres | authenticated=X/postgres | service_role=X/postgres
 -- Ou seja: anon podia chamar a RPC. Hoje ela devolve, para quem não está logado,
 --   {"aal":"aal1","exigida":false,"pendente":false,"superadmin":false}

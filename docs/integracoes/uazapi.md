@@ -54,12 +54,12 @@ painel de secrets do Supabase — nunca em documento ou código).
 Em **Chat → Instâncias WhatsApp → Nova instância**:
 - **Nome:** nome amigável
 - **Instance ID:** mesmo valor do nome da instância no UAZAPI (ex: `Cami`)
-- **Número WhatsApp:** número conectado (ex: `5521967119236`)
+- **Número WhatsApp:** número conectado (ex: `5511900000001`)
 
 ### 4. Webhook no UAZAPI
 
 Na instância UAZAPI, configurar webhook com:
-- **URL:** `https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/uazapi-webhook`
+- **URL:** `https://<project-ref>.supabase.co/functions/v1/uazapi-webhook`
   — ou, com o número **protegido**, `…/uazapi-webhook/k/<token>` (ver abaixo)
 - **Eventos:** `messages`
 - **Excluir:** `wasSentByApi` (os grupos precisam chegar: a Íris e a análise de
@@ -92,7 +92,7 @@ número ganha um token secreto no **caminho** do endereço do webhook
 ### `uazapi-webhook` (recebimento)
 
 - **Path:** `supabase/functions/uazapi-webhook/index.ts`
-- **URL:** `https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/uazapi-webhook`
+- **URL:** `https://<project-ref>.supabase.co/functions/v1/uazapi-webhook`
 - **verify_jwt:** `false` (webhook externo; autenticação pelo token no caminho, ver acima)
 - **Método:** `POST`
 
@@ -102,11 +102,11 @@ número ganha um token secreto no **caminho** do endereço do webhook
 {
   "EventType": "messages",
   "instanceName": "Cami",
-  "owner": "5521967119236",
+  "owner": "5511900000001",
   "message": {
     "fromMe": false,
-    "chatid": "5521975218427@s.whatsapp.net",
-    "sender_pn": "5521975218427@s.whatsapp.net",
+    "chatid": "5511900000002@s.whatsapp.net",
+    "sender_pn": "5511900000002@s.whatsapp.net",
     "senderName": "Nome do Contato",
     "messageid": "ACCE77BD80A54A3E9161740C09F62629",
     "messageType": "Conversation",
@@ -217,7 +217,7 @@ com `dry_run` (padrão) para ver as contagens:
 
 ```sql
 SELECT net.http_post(
-  url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/uazapi-recuperar-mensagens',
+  url := 'https://<project-ref>.supabase.co/functions/v1/uazapi-recuperar-mensagens',
   headers := jsonb_build_object('Content-Type','application/json','x-cron-secret', s.decrypted_secret),
   body := '{"instance_uuid":"<uuid>","desde":"2026-10-26T02:00:00Z","dry_run":true}'::jsonb,
   timeout_milliseconds := 150000)
@@ -251,7 +251,7 @@ conseguiu ouvir e pede para escrever. Migration `20261027160000`.
 ### `uazapi-send-message` (envio)
 
 - **Path:** `supabase/functions/uazapi-send-message/index.ts`
-- **URL:** `https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/uazapi-send-message`
+- **URL:** `https://<project-ref>.supabase.co/functions/v1/uazapi-send-message`
 - **verify_jwt:** `false` (auth interna via `auth.getUser()`)
 - **Método:** `POST`
 
@@ -272,7 +272,7 @@ Header: `Authorization: Bearer {access_token}`
 ```
 POST https://empirebusiness.uazapi.com/send/text
 Header: token: {instance_token}
-Body: { "number": "5521975218427", "text": "Mensagem" }
+Body: { "number": "5511900000002", "text": "Mensagem" }
 ```
 
 #### API UAZAPI — Envio de mídia
@@ -281,7 +281,7 @@ Body: { "number": "5521975218427", "text": "Mensagem" }
 POST https://empirebusiness.uazapi.com/send/media
 Header: token: {instance_token}
 Body: {
-  "number": "5521975218427",
+  "number": "5511900000002",
   "type": "image|video|document|audio|ptt",
   "file": "URL ou base64",
   "text": "Legenda (opcional)"
@@ -307,7 +307,7 @@ Simula "Digitando..." ou "Gravando áudio..." antes do envio:
 ```
 POST https://empirebusiness.uazapi.com/message/presence
 Header: token: {instance_token}
-Body: { "number": "5521975218427", "presence": "composing|recording|paused", "delay": 3000 }
+Body: { "number": "5511900000002", "presence": "composing|recording|paused", "delay": 3000 }
 ```
 
 | Valor | Efeito |
@@ -382,11 +382,11 @@ Body: { "number": "5521975218427", "presence": "composing|recording|paused", "de
 
 | Nome (app)     | Instance ID    | Número            | Uso         |
 |----------------|----------------|-------------------|-------------|
-| Suporte 1      | `Suporte1`     | +55 21 97286-9214 | Suporte EB (recriada 08/05/2026) |
-| Suporte 2      | `Cami`         | +55 11 94285-6707 | Suporte     |
-| Suporte 3      | `empire3`      | +55 11 5195-1461  | Suporte     |
-| Suporte 4      | `Suporte4`     | +55 11 5197-9967  | Suporte (nova 08/05/2026) |
-| Financeiro 1   | `Financeiro1`  | +55 11 94526-6344 | Financeiro  |
+| Suporte 1      | `Suporte1`     | +55 11 90000-0011 | Suporte EB (recriada 08/05/2026) |
+| Suporte 2      | `Cami`         | +55 11 90000-0012 | Suporte     |
+| Suporte 3      | `empire3`      | +55 11 90000-0013 | Suporte     |
+| Suporte 4      | `Suporte4`     | +55 11 90000-0014 | Suporte (nova 08/05/2026) |
+| Financeiro 1   | `Financeiro1`  | +55 11 90000-0015 | Financeiro  |
 
 ---
 

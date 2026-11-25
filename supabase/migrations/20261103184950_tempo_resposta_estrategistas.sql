@@ -667,7 +667,7 @@ BEGIN
   IF to_regclass('cron.job') IS NULL THEN RETURN; END IF;
   SELECT jobid,command INTO jid,comando FROM cron.job WHERE jobname='chat-sla-monitor-every-5min';
   IF jid IS NULL THEN RETURN; END IF;
-  IF position('https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/chat-sla-monitor' IN comando)=0 THEN
+  IF position('https://seu-projeto-supabase.supabase.co/functions/v1/chat-sla-monitor' IN comando)=0 THEN
     RAISE EXCEPTION 'tempo_resposta_cron_destino_divergente';
   END IF;
   IF to_regclass('vault.decrypted_secrets') IS NULL THEN RAISE EXCEPTION 'tempo_resposta_cron_segredo_ausente'; END IF;
@@ -676,7 +676,7 @@ BEGIN
   END IF;
   PERFORM cron.alter_job(jid,command:=$job$
     SELECT net.http_post(
-      url:='https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/chat-sla-monitor',
+      url:='https://seu-projeto-supabase.supabase.co/functions/v1/chat-sla-monitor',
       headers:=jsonb_build_object('Content-Type','application/json','x-cron-secret',
         (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name='wa_auto_cron_secret')),
       body:='{}'::jsonb

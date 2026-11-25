@@ -968,8 +968,8 @@ Reversão: `DROP TABLE` das 4 tabelas `wa_auto_*` (CASCADE) e `DELETE` do app em
 ## 2026-09-18 — Contratos assinados: destinatários da operação principal
 
 Os avisos de contrato assinado do tenant mestre agora seguem em cópias
-individuais para Bruno, `highticket@marvee.com.br` e
-`exosconsultoria@marvee.com.br`, com os mesmos anexos. A edge function passou a
+individuais para Bruno, `comercial@suaempresa.com.br` e
+`consultoria@suaempresa.com.br`, com os mesmos anexos. A edge function passou a
 aceitar apenas o gatilho interno autenticado por segredo; assim, usuários do
 aplicativo não conseguem disparar avisos de contratos de outra empresa.
 
@@ -1633,7 +1633,7 @@ tem mais de um contrato).
 individual por coluna.
 
 **Telefone.** Os números no banco vêm de origens diferentes e estão em formatos
-variados ("21 98935-8444", "5511999998888", "(11) 99999-8888"). `src/lib/telefone.ts`
+variados ("11 98765-4321", "5511999998888", "(11) 99999-8888"). `src/lib/telefone.ts`
 normaliza para E.164 (+55…), que é o formato aceito pelas ferramentas de disparo.
 Quando o número não bate com nenhum tamanho conhecido, a linha sai marcada na coluna
 "Aviso" em vez de ser descartada — melhor conferir do que perder o contato em

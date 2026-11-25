@@ -2,7 +2,7 @@
  * Normalização de telefone brasileiro.
  *
  * Os telefones no banco vieram de origens diferentes (Notion, formulários,
- * digitação manual) e estão em todo tipo de formato: "21 98935-8444",
+ * digitação manual) e estão em todo tipo de formato: "21 99999-0000",
  * "5511999998888", "(11) 99999-8888". Ferramentas de disparo só aceitam o
  * padrão internacional E.164 — daí esta conversão.
  */
@@ -40,7 +40,7 @@ export function normalizaTelefoneBR(bruto: string | null | undefined): TelefoneN
  * Chave de comparação entre bases diferentes: DDD + os últimos 8 dígitos.
  *
  * O Brasil acrescentou o nono dígito aos celulares e bases antigas ficaram sem
- * ele — o mesmo telefone aparece como `+5521989358444` aqui e `+552189358444`
+ * ele — o mesmo telefone aparece como `+5521999990000` aqui e `+552199990000`
  * no CRM. Comparar a string cheia trataria os dois como pessoas diferentes e
  * criaria contato duplicado; cortar o nono dígito faz os dois casarem.
  *

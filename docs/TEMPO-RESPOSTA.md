@@ -46,7 +46,7 @@ Exemplo: mensagem às 11h40 e resposta às 13h20 representam 40 minutos úteis. 
 
 O usuário autorizou expressamente os dois ambientes e os sete backends nesta etapa. Não foram aplicadas migrations antigas nem criados casos artificiais em produção. Registro e evidências: [release do backend](handoffs/2026-11-03-tempo-resposta-backend-release.json).
 
-- Desk (`wuzmckatbmlpkdxtfhqr`): arquivo aprovado `20261103184950_tempo_resposta_estrategistas.sql`, registrado pelo MCP como versão `20261103191005`. Inclui somente a correção de autenticação do cron legado identificado, sem mudar seu horário nem criar outro job.
+- Desk (`<project-ref>`): arquivo aprovado `20261103184950_tempo_resposta_estrategistas.sql`, registrado pelo MCP como versão `20261103191005`. Inclui somente a correção de autenticação do cron legado identificado, sem mudar seu horário nem criar outro job.
 - GT3 (`opbdoulspzlabxzevffc`): arquivo aprovado `20261103184932_iris_response_alerts.sql`, registrado pelo MCP como versão `20261103191032`. Adiciona o opt-in e job de alertas, sem workspaces habilitados.
 - Publicados: Desk `tempo-resposta-admin` v1, `iris-gt3` v9, `uazapi-webhook` v87, `uazapi-send-message` v60, `chat-sla-monitor` v35; GT3 `iris-workspace` v4 e `iris-response-alerts` v1.
 - Pendentes: homologação autenticada, calendário, identificação dos responsáveis e piloto autorizado antes de ativar. Interface publicada não significa monitor ativado.

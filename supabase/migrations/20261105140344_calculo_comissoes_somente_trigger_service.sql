@@ -1,6 +1,6 @@
 -- Fecha somente a chamada REST direta ao recálculo interno, sem mudar cálculo,
 -- dados, triggers ou autorização das operações normais de contratos.
--- Evidência de catálogo em Desk wuzmckatbmlpkdxtfhqr, 2026-11-05:
+-- Evidência de catálogo em Desk seu-projeto-supabase, 2026-11-05:
 -- calcular_comissoes_contrato(uuid) é SECURITY DEFINER, owner postgres,
 -- ACL {postgres=X/postgres,service_role=X/postgres,authenticated=X/postgres}.
 -- Não valida ator/tenant e altera previstas por UUID recebido.

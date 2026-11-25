@@ -1,4 +1,4 @@
-project_id = "wuzmckatbmlpkdxtfhqr"
+project_id = "seu-projeto-supabase"
 
 # Provisionamento de empresa chamado máquina-a-máquina pela plataforma (High Ticket AI):
 # a chamada não traz JWT de usuário, então a verificação automática é desligada e a

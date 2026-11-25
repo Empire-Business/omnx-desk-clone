@@ -96,25 +96,6 @@ CREATE TABLE IF NOT EXISTS private."client_assignment_iris_context" (
   "client_id" uuid NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS private."client_assignment_report_20261105" (
-  "client_id" uuid NOT NULL,
-  "tenant_id" uuid NOT NULL,
-  "solicitante_id" uuid NOT NULL,
-  "pedido_fonte_id" uuid NOT NULL,
-  "mensagem_fonte_id" uuid NOT NULL,
-  "rotulo" text NOT NULL,
-  "acao" text NOT NULL,
-  "assignment_id" uuid,
-  "user_id" uuid,
-  "revisao_esperada" bigint NOT NULL,
-  "idempotencia" uuid NOT NULL,
-  "backend_pid" integer,
-  "transacao" bigint,
-  "executor_sql" text,
-  "iniciado_em" timestamp with time zone,
-  "executado_em" timestamp with time zone,
-  "recibo" jsonb
-);
 
 CREATE TABLE IF NOT EXISTS private."cliente_relacionamento_ia_tentativas" (
   "id" uuid NOT NULL,
@@ -2423,8 +2404,6 @@ ALTER TABLE private."atendimento_wa_entradas" ADD CONSTRAINT "atendimento_wa_ent
 ALTER TABLE private."backup_vinculos_20261027_contatos" ADD CONSTRAINT "backup_vinculos_20261027_contatos_pkey" PRIMARY KEY (id);
 ALTER TABLE private."backup_vinculos_20261027_juncao" ADD CONSTRAINT "backup_vinculos_20261027_juncao_pkey" PRIMARY KEY (id);
 ALTER TABLE private."client_assignment_iris_context" ADD CONSTRAINT "client_assignment_iris_context_pkey" PRIMARY KEY (backend_pid, transacao);
-ALTER TABLE private."client_assignment_report_20261105" ADD CONSTRAINT "client_assignment_report_20261105_idempotencia_key" UNIQUE (idempotencia);
-ALTER TABLE private."client_assignment_report_20261105" ADD CONSTRAINT "client_assignment_report_20261105_pkey" PRIMARY KEY (client_id);
 ALTER TABLE private."cliente_relacionamento_ia_tentativas" ADD CONSTRAINT "cliente_relacionamento_ia_tentativas_pkey" PRIMARY KEY (id);
 ALTER TABLE public."_webhook_debug" ADD CONSTRAINT "_webhook_debug_pkey" PRIMARY KEY (id);
 ALTER TABLE public."api_keys" ADD CONSTRAINT "api_keys_pkey" PRIMARY KEY (id);
@@ -3683,125 +3662,14 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION private.client_assignment_reconciliar_report_20261105()
- RETURNS jsonb
- LANGUAGE plpgsql
- SET search_path TO 'pg_catalog', 'public'
- SET lock_timeout TO '5s'
- SET statement_timeout TO '30s'
-AS $function$
-DECLARE r private.client_assignment_report_20261105%ROWTYPE; c jsonb; resultado jsonb;
-  n integer; rev bigint; ids uuid[]; pessoas uuid[];
-BEGIN
-  IF session_user NOT IN ('postgres','supabase_admin') OR current_user NOT IN ('postgres','supabase_admin') OR auth.uid() IS NOT NULL THEN
-    RAISE EXCEPTION 'manutencao_sessao_administrativa_exigida' USING ERRCODE='42501';
-  END IF;
-  PERFORM 1 FROM private.client_assignment_report_20261105 ORDER BY client_id FOR UPDATE;
-  GET DIAGNOSTICS n=ROW_COUNT;
-  IF n<>11 THEN RAISE EXCEPTION 'manutencao_lote_incompleto' USING ERRCODE='22023'; END IF;
-  IF EXISTS (SELECT 1 FROM private.client_assignment_report_20261105 WHERE backend_pid IS NOT NULL OR transacao IS NOT NULL) THEN
-    RAISE EXCEPTION 'manutencao_contexto_ja_ativo' USING ERRCODE='42501';
-  END IF;
-  SELECT array_agg(client_id ORDER BY client_id) INTO ids FROM private.client_assignment_report_20261105;
-  PERFORM id FROM public.clients WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND id=ANY(ids) ORDER BY id FOR UPDATE;
-  GET DIAGNOSTICS n=ROW_COUNT;
-  IF n<>11 THEN RAISE EXCEPTION 'manutencao_cliente_ausente' USING ERRCODE='42501'; END IF;
-  SELECT array_agg(DISTINCT pessoa) INTO pessoas FROM (
-    SELECT user_id AS pessoa FROM private.client_assignment_report_20261105 WHERE user_id IS NOT NULL
-    UNION ALL SELECT solicitante_id FROM private.client_assignment_report_20261105
-    UNION ALL SELECT user_id FROM public.client_assignments WHERE client_id=ANY(ids)
-  ) x;
-  PERFORM id FROM public.users WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND id=ANY(pessoas) ORDER BY id FOR SHARE;
-  PERFORM client_id FROM public.client_assignment_state WHERE client_id=ANY(ids) ORDER BY client_id FOR UPDATE;
-  PERFORM id FROM public.client_assignments WHERE client_id=ANY(ids) ORDER BY client_id,id FOR UPDATE;
-
-  -- Primeiro confere o lote inteiro. Mudança concorrente falha sem aplicar subset.
-  FOR r IN SELECT * FROM private.client_assignment_report_20261105 ORDER BY client_id LOOP
-    UPDATE private.client_assignment_report_20261105 SET backend_pid=pg_backend_pid(),transacao=txid_current(),
-      executor_sql=session_user,iniciado_em=coalesce(iniciado_em,clock_timestamp()) WHERE client_id=r.client_id AND recibo IS NULL;
-    IF r.recibo IS NOT NULL THEN
-      -- Retry de lote concluído devolve somente recibos que constam no ledger.
-      PERFORM 1 FROM public.client_assignment_operations op WHERE op.tenant_id=r.tenant_id AND op.client_id=r.client_id
-        AND op.ator_id=r.solicitante_id AND op.idempotencia=r.idempotencia AND op.origem='manutencao_codex'
-        AND op.resposta=r.recibo;
-      IF NOT FOUND THEN RAISE EXCEPTION 'manutencao_recibo_divergente' USING ERRCODE='40001'; END IF;
-      CONTINUE;
-    END IF;
-    c:=private.client_assignment_report_contexto_20261105(r.client_id);
-    IF c IS NULL THEN RAISE EXCEPTION 'manutencao_contexto_ausente' USING ERRCODE='42501'; END IF;
-    PERFORM 1 FROM public.wa_agente_pedidos p
-      JOIN public.chat_messages m ON m.id=p.chat_message_id AND m.tenant_id=p.tenant_id
-      WHERE p.id=r.pedido_fonte_id AND p.tenant_id=r.tenant_id AND p.eh_grupo IS TRUE
-        AND m.id=r.mensagem_fonte_id AND p.chat_jid='120363415422487266@g.us'
-        AND p.chat_jid=(SELECT principal.chat_jid FROM public.wa_agente_pedidos principal
-          WHERE principal.id='b24d7590-d7b8-44ec-aa9c-ad3475d5c746'::uuid
-            AND principal.chat_message_id='1583771d-b531-4d0d-bfce-85668eb107c8'::uuid
-            AND principal.tenant_id=r.tenant_id AND principal.eh_grupo IS TRUE
-            AND principal.chat_jid='120363415422487266@g.us');
-    IF NOT FOUND THEN RAISE EXCEPTION 'manutencao_fonte_ausente' USING ERRCODE='42501'; END IF;
-    SELECT coalesce((SELECT revisao FROM public.client_assignment_state WHERE tenant_id=r.tenant_id AND client_id=r.client_id),0) INTO rev;
-    IF rev<>r.revisao_esperada THEN RAISE EXCEPTION 'manutencao_revisao_alterada' USING ERRCODE='40001'; END IF;
-    SELECT count(*) INTO n FROM public.client_assignments WHERE tenant_id=r.tenant_id AND client_id=r.client_id AND tipo='estrategista' AND ativo IS TRUE;
-    IF (r.assignment_id IS NULL AND n<>0) OR (r.assignment_id IS NOT NULL AND n<>1) THEN
-      RAISE EXCEPTION 'manutencao_vinculos_alterados' USING ERRCODE='40001';
-    END IF;
-    IF r.assignment_id IS NOT NULL THEN
-      PERFORM 1 FROM public.client_assignments WHERE id=r.assignment_id AND tenant_id=r.tenant_id AND client_id=r.client_id AND tipo='estrategista' AND ativo IS TRUE;
-      IF NOT FOUND THEN RAISE EXCEPTION 'manutencao_vinculo_alterado' USING ERRCODE='40001'; END IF;
-    END IF;
-    IF r.user_id IS NOT NULL THEN
-      PERFORM 1 FROM public.users WHERE id=r.user_id AND tenant_id=r.tenant_id AND ativo IS TRUE;
-      IF NOT FOUND OR NOT coalesce(private.client_assignment_elegivel(r.tenant_id,r.user_id,'estrategista'),false) THEN
-        RAISE EXCEPTION 'manutencao_destino_inelegivel' USING ERRCODE='42501';
-      END IF;
-    END IF;
-  END LOOP;
-  FOR r IN SELECT * FROM private.client_assignment_report_20261105 WHERE recibo IS NULL ORDER BY client_id LOOP
-    c:=private.client_assignment_report_contexto_20261105(r.client_id);
-    IF c IS NULL THEN RAISE EXCEPTION 'manutencao_contexto_ausente' USING ERRCODE='42501'; END IF;
-    resultado:=public.client_assignment_decidir(r.client_id,r.acao,'estrategista',r.assignment_id,r.user_id,
-      r.revisao_esperada,r.idempotencia,c->>'motivo');
-    IF resultado->>'ok' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'manutencao_resultado_nao_confirmado' USING ERRCODE='40001'; END IF;
-    UPDATE private.client_assignment_report_20261105 SET recibo=resultado,executado_em=clock_timestamp(),
-      backend_pid=NULL,transacao=NULL WHERE client_id=r.client_id;
-  END LOOP;
-  SELECT jsonb_agg(jsonb_build_object('cliente_id',client_id,'rotulo',rotulo,'acao',acao,
-    'solicitante_id',solicitante_id,'executor_sql',executor_sql,'executado_em',executado_em,'recibo',recibo) ORDER BY client_id)
-    INTO resultado FROM private.client_assignment_report_20261105;
-  RETURN jsonb_build_object('ok',true,'origem','manutencao_codex','itens',resultado);
-END;
-$function$
-;
 
 CREATE OR REPLACE FUNCTION private.client_assignment_report_contexto_20261105(p_client_id uuid)
  RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
+ LANGUAGE sql
+ STABLE
  SET search_path TO 'public', 'pg_temp'
 AS $function$
-DECLARE r private.client_assignment_report_20261105%ROWTYPE; u public.users%ROWTYPE;
-  total boolean; ids uuid[];
-BEGIN
-  IF session_user NOT IN ('postgres','supabase_admin') OR auth.uid() IS NOT NULL THEN RETURN NULL; END IF;
-  SELECT * INTO r FROM private.client_assignment_report_20261105
-    WHERE client_id=p_client_id AND backend_pid=pg_backend_pid() AND transacao=txid_current()
-      AND executor_sql=session_user AND recibo IS NULL;
-  IF NOT FOUND THEN RETURN NULL; END IF;
-  SELECT * INTO u FROM public.users WHERE id=r.solicitante_id AND tenant_id=r.tenant_id
-    AND ativo IS TRUE AND perfil <> 'cliente' FOR SHARE;
-  IF NOT FOUND OR NOT coalesce(public.has_permissao_de(u.id,'clientes.atribuir','editar'),false) THEN
-    RAISE EXCEPTION 'manutencao_solicitante_sem_alcada' USING ERRCODE='42501';
-  END IF;
-  SELECT s.total,s.client_ids INTO total,ids FROM public.wa_agente_escopo(r.tenant_id,r.solicitante_id) s;
-  IF total IS NOT TRUE AND NOT (r.client_id=ANY(coalesce(ids,'{}'::uuid[]))) THEN
-    RAISE EXCEPTION 'manutencao_cliente_fora_escopo' USING ERRCODE='42501';
-  END IF;
-  RETURN jsonb_build_object('tenant_id',r.tenant_id,'ator_id',r.solicitante_id,'ator_nome',u.nome,
-    'origem','manutencao_codex','proposta_id',r.idempotencia,'executor_sql',r.executor_sql,
-    'motivo','Manutenção Codex autorizada por Bruno em 05/11/2026; executor SQL: '||r.executor_sql||'; pedido fonte: '||r.pedido_fonte_id::text||'; mensagem fonte: '||r.mensagem_fonte_id::text||'.',
-    'item',jsonb_build_object('cliente_id',r.client_id,'acao',r.acao,'assignment_id',r.assignment_id,
-      'user_id',r.user_id,'expected_revision',r.revisao_esperada));
-END;
+  SELECT NULL::jsonb
 $function$
 ;
 
@@ -4936,134 +4804,7 @@ END;
 $function$
 ;
 
-CREATE OR REPLACE FUNCTION private.wa_agente_fatos_fontes_20261105()
- RETURNS SETOF wa_agente_fatos_equipe
- LANGUAGE plpgsql
- SET search_path TO 'pg_catalog', 'public'
-AS $function$
-DECLARE
-  a record;
-  p public.wa_agente_pedidos%ROWTYPE;
-  m public.chat_messages%ROWTYPE;
-  f public.wa_agente_fatos_equipe%ROWTYPE;
-  v_tenant constant uuid := '00000000-0000-0000-0000-000000000001';
-  v_grupo constant text := '120363415422487266@g.us';
-  v_autorizador constant uuid := '0295d401-6270-4fbe-be47-ee9b6a9ed9c9';
-  v_total boolean;
-  v_texto text;
-BEGIN
-  IF current_user NOT IN ('postgres','supabase_admin') OR session_user <> current_user OR auth.uid() IS NOT NULL THEN
-    RAISE EXCEPTION 'Importação limitada à sessão administrativa real.' USING ERRCODE = '42501';
-  END IF;
-  PERFORM 1 FROM public.users u WHERE u.id = v_autorizador AND u.tenant_id = v_tenant AND u.ativo IS TRUE AND u.perfil IS DISTINCT FROM 'cliente' FOR SHARE;
-  IF NOT FOUND OR NOT coalesce(public.has_permissao_de(v_autorizador,'automacoes-wa','admin'),false) THEN
-    RAISE EXCEPTION 'Autorizador da manutenção não tem administração atual.' USING ERRCODE = '42501';
-  END IF;
-  SELECT total INTO v_total FROM public.wa_agente_escopo(v_tenant,v_autorizador);
-  IF v_total IS NOT TRUE THEN
-    RAISE EXCEPTION 'Autorizador sem carteira completa atual.' USING ERRCODE = '42501';
-  END IF;
-  PERFORM 1 FROM public.wa_agente_grupos g WHERE g.tenant_id = v_tenant AND g.grupo_jid = v_grupo AND g.ativo IS TRUE FOR SHARE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'Grupo da manutenção indisponível.' USING ERRCODE = '42501'; END IF;
 
-  FOR a IN SELECT * FROM (VALUES
-    ('b4e5ce68-6609-5c15-bc2b-5ab69b63bf22'::uuid, '683eb4c0-a057-4af0-b412-7e37066c2714'::uuid,
-     '3cad0870-b074-41d1-bb8d-567ded016b4d'::uuid, '849a0faa-f08d-43a5-b381-7164363c8c68'::uuid,
-     '0295d401-6270-4fbe-be47-ee9b6a9ed9c9'::uuid, '@255748827312232 virendra é um estrategista que já saiu.'::text),
-    ('766e894f-7741-5911-ad30-4eda5c40bfbf'::uuid, 'c461c73d-2979-46ca-89ea-5af5e24277e5'::uuid,
-     'b24d7590-d7b8-44ec-aa9c-ad3475d5c746'::uuid, '1583771d-b531-4d0d-bfce-85668eb107c8'::uuid,
-     'efa3729e-de6e-4515-905d-f5fdd11dd679'::uuid, 'Herilly prado não é mais estrategista da empresa.'::text)
-  ) AS alvos(id,sujeito,pedido,mensagem,autor,trecho)
-  LOOP
-    SELECT * INTO p FROM public.wa_agente_pedidos q WHERE q.id = a.pedido AND q.tenant_id = v_tenant FOR SHARE;
-    IF NOT FOUND OR p.chat_jid IS DISTINCT FROM v_grupo OR p.eh_grupo IS NOT TRUE
-      OR p.user_id IS DISTINCT FROM a.autor OR p.chat_message_id IS DISTINCT FROM a.mensagem
-      OR p.entrada_encaminhada IS TRUE THEN
-      RAISE EXCEPTION 'Pedido histórico não corresponde ao alvo autorizado.' USING ERRCODE = '42501';
-    END IF;
-    PERFORM 1 FROM public.wa_agente_membros mb WHERE mb.id = p.membro_id AND mb.tenant_id = v_tenant
-      AND mb.user_id = a.autor AND mb.telefone_chave = p.remetente_chave FOR SHARE;
-    IF NOT FOUND THEN RAISE EXCEPTION 'Ator histórico sem vínculo conferível com o pedido.' USING ERRCODE = '42501'; END IF;
-    SELECT * INTO m FROM public.chat_messages x WHERE x.id = a.mensagem AND x.tenant_id = v_tenant FOR SHARE;
-    IF NOT FOUND OR m.tipo IS DISTINCT FROM 'texto' OR m.autor_origem IS DISTINCT FROM 'webhook'
-      OR m.autor_chave IS DISTINCT FROM p.remetente_chave OR m.message_id_wpp IS DISTINCT FROM p.message_id_wpp
-      OR m.enviado_por_agente IS TRUE OR m.enviado_por_ia IS TRUE OR m.criado_em IS NULL
-      OR (m.conversation_id = p.conversation_id AND (m.autor_tipo IS DISTINCT FROM 'equipe' OR m.autor_user_id IS DISTINCT FROM a.autor)) THEN
-      RAISE EXCEPTION 'Autoria histórica não pôde ser conferida.' USING ERRCODE = '42501';
-    END IF;
-    v_texto := regexp_replace(m.conteudo, '^\[[^\]\r\n]{1,100}\] ', '');
-    IF coalesce(strpos(v_texto,a.trecho),0) = 0 THEN
-      RAISE EXCEPTION 'A declaração literal não consta da fonte histórica.' USING ERRCODE = '42501';
-    END IF;
-    IF p.entrada_texto_sha256 IS NOT NULL AND p.entrada_texto_sha256 IS DISTINCT FROM encode(extensions.digest(convert_to(v_texto,'UTF8'),'sha256'),'hex') THEN
-      RAISE EXCEPTION 'O digest histórico existente diverge do corpo próprio.' USING ERRCODE = '42501';
-    END IF;
-    -- Identidade vem do pedido/membro autenticados; a mensagem canônica de
-    -- outra conexão comprova o conteúdo/autor_chave, sem reescrever sua autoria.
-    PERFORM 1 FROM public.chat_conversations cv
-      JOIN public.chat_contacts ct ON ct.id = cv.contact_id AND ct.tenant_id = cv.tenant_id AND ct.instance_id = cv.instance_id
-      JOIN public.whatsapp_instances wi ON wi.id = cv.instance_id AND wi.tenant_id = cv.tenant_id
-      WHERE cv.id = p.conversation_id AND cv.instance_id = p.instance_uuid AND cv.tenant_id = v_tenant AND cv.is_group IS TRUE
-        AND lower(btrim(ct.numero_whatsapp)) IN (v_grupo,left(v_grupo,length(v_grupo)-5)) FOR SHARE OF cv,ct,wi;
-    IF NOT FOUND THEN RAISE EXCEPTION 'Conversa do pedido fora do grupo autorizado.' USING ERRCODE = '42501'; END IF;
-    -- Conferir o grupo da mensagem, inclusive se a fila veio de outra instância.
-    PERFORM 1 FROM public.chat_conversations cv
-      JOIN public.chat_contacts ct ON ct.id = cv.contact_id AND ct.tenant_id = cv.tenant_id AND ct.instance_id = cv.instance_id
-      JOIN public.whatsapp_instances wi ON wi.id = cv.instance_id AND wi.tenant_id = cv.tenant_id
-      WHERE cv.id = m.conversation_id AND cv.tenant_id = v_tenant AND cv.is_group IS TRUE
-        AND lower(btrim(ct.numero_whatsapp)) IN (v_grupo,left(v_grupo,length(v_grupo)-5)) FOR SHARE OF cv,ct,wi;
-    IF NOT FOUND THEN RAISE EXCEPTION 'Fonte histórica fora do grupo autorizado.' USING ERRCODE = '42501'; END IF;
-    f := NULL;
-    f.id := a.id; f.tenant_id := v_tenant; f.grupo_jid := v_grupo;
-    f.sujeito_tipo := 'pessoa'; f.sujeito_id := a.sujeito;
-    SELECT u.nome INTO f.sujeito_nome FROM public.users u WHERE u.id = a.sujeito AND u.tenant_id = v_tenant FOR SHARE;
-    IF NOT FOUND THEN RAISE EXCEPTION 'Sujeito histórico não cadastrado no tenant.' USING ERRCODE = '42501'; END IF;
-    f.trecho := a.trecho;
-    f.trecho_sha256 := encode(extensions.digest(convert_to(a.trecho,'UTF8'),'sha256'),'hex');
-    f.autor_id := a.autor;
-    SELECT left(u.nome,120) INTO f.autor_nome FROM public.users u WHERE u.id = a.autor AND u.tenant_id = v_tenant FOR SHARE;
-    IF NOT FOUND THEN RAISE EXCEPTION 'Autor histórico não cadastrado no tenant.' USING ERRCODE = '42501'; END IF;
-    f.pedido_id := a.pedido; f.mensagem_id := a.mensagem;
-    f.entrada_sha256 := encode(extensions.digest(convert_to(v_texto,'UTF8'),'sha256'),'hex');
-    f.criado_em := clock_timestamp(); f.ativo := true;
-    f.origem := 'manutencao_codex'; f.executor_bd := session_user;
-    f.autorizado_por := v_autorizador; f.fonte_criada_em := m.criado_em;
-    RETURN NEXT f;
-  END LOOP;
-END;
-$function$
-;
-
-CREATE OR REPLACE FUNCTION private.wa_agente_fatos_importar_20261105()
- RETURNS TABLE(fato_id uuid, sujeito text, resultado text)
- LANGUAGE plpgsql
- SET search_path TO 'pg_catalog', 'public'
-AS $function$
-DECLARE
-  esperado public.wa_agente_fatos_equipe%ROWTYPE;
-  existente public.wa_agente_fatos_equipe%ROWTYPE;
-BEGIN
-  -- O helper também valida sessão real, autorização e ambas as fontes.
-  FOR esperado IN SELECT * FROM private.wa_agente_fatos_fontes_20261105() LOOP
-    PERFORM pg_advisory_xact_lock(hashtext('wa_agente_fatos:' || esperado.tenant_id::text || ':' || esperado.grupo_jid));
-    SELECT * INTO existente FROM public.wa_agente_fatos_equipe f WHERE f.id = esperado.id FOR SHARE;
-    IF FOUND THEN
-      IF existente.origem IS DISTINCT FROM 'manutencao_codex' OR existente.tenant_id IS DISTINCT FROM esperado.tenant_id
-        OR existente.grupo_jid IS DISTINCT FROM esperado.grupo_jid OR existente.sujeito_id IS DISTINCT FROM esperado.sujeito_id
-        OR existente.pedido_id IS DISTINCT FROM esperado.pedido_id OR existente.mensagem_id IS DISTINCT FROM esperado.mensagem_id
-        OR existente.autor_id IS DISTINCT FROM esperado.autor_id OR existente.trecho IS DISTINCT FROM esperado.trecho
-        OR existente.autorizado_por IS DISTINCT FROM esperado.autorizado_por THEN
-        RAISE EXCEPTION 'Identificador ocupado por outra memória; nada importado.' USING ERRCODE = '23505';
-      END IF;
-      RETURN QUERY SELECT existente.id, existente.sujeito_nome, CASE WHEN existente.ativo THEN 'ja_importado' ELSE 'ja_desativado_preservado' END;
-    ELSE
-      INSERT INTO public.wa_agente_fatos_equipe SELECT (esperado).*;
-      RETURN QUERY SELECT esperado.id, esperado.sujeito_nome, 'importado'::text;
-    END IF;
-  END LOOP;
-END;
-$function$
-;
 
 CREATE OR REPLACE FUNCTION public.api_externa_limpar_antigos()
  RETURNS jsonb
@@ -5149,7 +4890,7 @@ BEGIN
    LIMIT 1;
   IF v_base IS NULL OR v_base !~ '^https://' THEN
     -- Reserva: o endereço deste projeto (o empacotador troca pelo do cliente).
-    v_base := 'https://wuzmckatbmlpkdxtfhqr.supabase.co';
+    v_base := 'https://seu-projeto-supabase.supabase.co';
   END IF;
   RETURN v_base || '/functions/v1/' || p_funcao;
 END;
@@ -7150,7 +6891,7 @@ BEGIN
   IF to_regprocedure('public.app_url_funcoes(text)') IS NOT NULL THEN
     v_url := public.app_url_funcoes('crm-omnx-notificar');
   ELSE
-    v_url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/crm-omnx-notificar';
+    v_url := 'https://seu-projeto-supabase.supabase.co/functions/v1/crm-omnx-notificar';
   END IF;
   IF to_regprocedure('public.app_chave_anon()') IS NOT NULL THEN
     v_anon := public.app_chave_anon();
@@ -10671,7 +10412,7 @@ begin
   -- Assíncrono (pg_net enfileira e envia após o commit). O Authorization com a anon key
   -- só passa pelo gateway; a autorização real é o header x-notify-secret.
   perform net.http_post(
-    url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/vendas-ressincronizar-crm',
+    url := 'https://seu-projeto-supabase.supabase.co/functions/v1/vendas-ressincronizar-crm',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1em1ja2F0Ym1scGtkeHRmaHFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNjUxNzEsImV4cCI6MjA4ODc0MTE3MX0.dL8LHbCJv69zJtt-aA3iAEO6PMcJBHlDC1HAEu9O9Ho',
@@ -10910,7 +10651,7 @@ begin
   -- Authorization usa a anon key (pública) só para passar o gateway;
   -- a autorização real é o header x-notify-secret.
   perform net.http_post(
-    url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/empire-contrato-assinado-ghl',
+    url := 'https://seu-projeto-supabase.supabase.co/functions/v1/empire-contrato-assinado-ghl',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1em1ja2F0Ym1scGtkeHRmaHFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNjUxNzEsImV4cCI6MjA4ODc0MTE3MX0.dL8LHbCJv69zJtt-aA3iAEO6PMcJBHlDC1HAEu9O9Ho',
@@ -11035,7 +10776,7 @@ begin
       and coalesce(u.email, '') <> ''
   loop
     perform net.http_post(
-      url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/send-email',
+      url := 'https://seu-projeto-supabase.supabase.co/functions/v1/send-email',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
         'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1em1ja2F0Ym1scGtkeHRmaHFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNjUxNzEsImV4cCI6MjA4ODc0MTE3MX0.dL8LHbCJv69zJtt-aA3iAEO6PMcJBHlDC1HAEu9O9Ho',
@@ -11359,7 +11100,7 @@ begin
   -- Assíncrono (pg_net enfileira e envia após o commit). O Authorization com a anon key
   -- só passa pelo gateway; a autorização real é o header x-notify-secret.
   perform net.http_post(
-    url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/vendas-ressincronizar-crm',
+    url := 'https://seu-projeto-supabase.supabase.co/functions/v1/vendas-ressincronizar-crm',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1em1ja2F0Ym1scGtkeHRmaHFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNjUxNzEsImV4cCI6MjA4ODc0MTE3MX0.dL8LHbCJv69zJtt-aA3iAEO6PMcJBHlDC1HAEu9O9Ho',
@@ -12579,7 +12320,7 @@ BEGIN
   END IF;
   BEGIN
     PERFORM net.http_post(
-      url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/wa-agente-responder',
+      url := 'https://seu-projeto-supabase.supabase.co/functions/v1/wa-agente-responder',
       headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_segredo),
       body := jsonb_build_object('pedido_id', NEW.id),
       timeout_milliseconds := 150000
@@ -13114,13 +12855,6 @@ ALTER TABLE private."atendimento_resolucoes_ia_recibos" ADD CONSTRAINT "atendime
 ALTER TABLE private."atendimento_resolucoes_ia_recibos" ADD CONSTRAINT "atendimento_resolucoes_ia_recibos_motivo_check" CHECK (((length(motivo) >= 12) AND (length(motivo) <= 180)));
 ALTER TABLE private."atendimento_resolucoes_ia_recibos" ADD CONSTRAINT "atendimento_resolucoes_ia_recibos_versao_check" CHECK (((length(versao) >= 1) AND (length(versao) <= 100)));
 ALTER TABLE private."atendimento_wa_entradas" ADD CONSTRAINT "atendimento_wa_entradas_autor_tipo_check" CHECK ((autor_tipo = ANY (ARRAY['cliente'::text, 'equipe'::text])));
-ALTER TABLE private."client_assignment_report_20261105" ADD CONSTRAINT "client_assignment_report_20261105_acao_check" CHECK ((acao = ANY (ARRAY['adicionar'::text, 'trocar'::text, 'encerrar'::text])));
-ALTER TABLE private."client_assignment_report_20261105" ADD CONSTRAINT "client_assignment_report_20261105_check" CHECK ((((acao = 'adicionar'::text) AND (assignment_id IS NULL) AND (user_id IS NOT NULL)) OR ((acao = 'trocar'::text) AND (assignment_id IS NOT NULL) AND (user_id IS NOT NULL)) OR ((acao = 'encerrar'::text) AND (assignment_id IS NOT NULL) AND (user_id IS NULL))));
-ALTER TABLE private."client_assignment_report_20261105" ADD CONSTRAINT "client_assignment_report_20261105_check1" CHECK ((((backend_pid IS NULL) AND (transacao IS NULL)) OR ((backend_pid IS NOT NULL) AND (transacao IS NOT NULL))));
-ALTER TABLE private."client_assignment_report_20261105" ADD CONSTRAINT "client_assignment_report_20261105_check2" CHECK ((((recibo IS NULL) AND (executado_em IS NULL)) OR ((recibo IS NOT NULL) AND (executado_em IS NOT NULL))));
-ALTER TABLE private."client_assignment_report_20261105" ADD CONSTRAINT "client_assignment_report_20261105_revisao_esperada_check" CHECK ((revisao_esperada = 0));
-ALTER TABLE private."client_assignment_report_20261105" ADD CONSTRAINT "client_assignment_report_20261105_solicitante_id_check" CHECK ((solicitante_id = '0295d401-6270-4fbe-be47-ee9b6a9ed9c9'::uuid));
-ALTER TABLE private."client_assignment_report_20261105" ADD CONSTRAINT "client_assignment_report_20261105_tenant_id_check" CHECK ((tenant_id = '00000000-0000-0000-0000-000000000001'::uuid));
 ALTER TABLE private."cliente_relacionamento_ia_tentativas" ADD CONSTRAINT "cliente_relacionamento_ia_tentativas_reserva_check" CHECK ((reserva >= (0)::numeric));
 ALTER TABLE public."api_request_log" ADD CONSTRAINT "api_request_log_canal_check" CHECK ((canal = ANY (ARRAY['rest'::text, 'mcp'::text])));
 ALTER TABLE public."app_logs" ADD CONSTRAINT "app_logs_nivel_check" CHECK ((nivel = ANY (ARRAY['erro'::text, 'aviso'::text, 'info'::text])));
@@ -14023,7 +13757,6 @@ CREATE TRIGGER tempo_resposta_instancia_changed AFTER UPDATE OF status, ativo ON
 ALTER TABLE private."atendimento_resolucoes_ia_recibos" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE private."atendimento_wa_entradas" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE private."client_assignment_iris_context" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE private."client_assignment_report_20261105" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE private."cliente_relacionamento_ia_tentativas" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."_webhook_debug" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public."api_keys" ENABLE ROW LEVEL SECURITY;
@@ -14914,7 +14647,6 @@ REVOKE ALL ON FUNCTION "private"."client_assignment_elegivel"(p_tenant uuid, p_u
 REVOKE ALL ON FUNCTION "private"."client_assignment_guard"() FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION "private"."client_assignment_iris_contexto"(p_client_id uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION "private"."client_assignment_iris_operacao"() FROM PUBLIC, anon, authenticated, service_role;
-REVOKE ALL ON FUNCTION "private"."client_assignment_reconciliar_report_20261105"() FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION "private"."client_assignment_report_contexto_20261105"(p_client_id uuid) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION "private"."cliente_canais_do_cliente"(p_tenant uuid, p_client uuid) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION "private"."cliente_canais_do_cliente"(p_tenant uuid, p_client uuid) TO service_role;
@@ -14951,8 +14683,6 @@ REVOKE ALL ON FUNCTION "private"."wa_agente_atribuicoes_estado"(p wa_agente_pedi
 REVOKE ALL ON FUNCTION "private"."wa_agente_atribuicoes_itens"(p_alvo uuid, p_novo jsonb) FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION "private"."wa_agente_fatos_equipe_confere"() FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION "private"."wa_agente_fatos_equipe_confere"() TO service_role;
-REVOKE ALL ON FUNCTION "private"."wa_agente_fatos_fontes_20261105"() FROM PUBLIC, anon, authenticated, service_role;
-REVOKE ALL ON FUNCTION "private"."wa_agente_fatos_importar_20261105"() FROM PUBLIC, anon, authenticated, service_role;
 REVOKE ALL ON FUNCTION "public"."api_externa_limpar_antigos"() FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION "public"."api_externa_limpar_antigos"() TO service_role;
 REVOKE ALL ON FUNCTION "public"."api_rate_limit_hit"(p_key_id uuid, p_limite integer, p_janela_seg integer) FROM PUBLIC, anon, authenticated, service_role;
@@ -15456,8 +15186,6 @@ REVOKE ALL ON private."backup_vinculos_20261027_juncao" FROM PUBLIC, anon, authe
 GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON private."backup_vinculos_20261027_juncao" TO postgres;
 REVOKE ALL ON private."client_assignment_iris_context" FROM PUBLIC, anon, authenticated, service_role;
 GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON private."client_assignment_iris_context" TO postgres;
-REVOKE ALL ON private."client_assignment_report_20261105" FROM PUBLIC, anon, authenticated, service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON private."client_assignment_report_20261105" TO postgres;
 REVOKE ALL ON private."cliente_relacionamento_ia_tentativas" FROM PUBLIC, anon, authenticated, service_role;
 GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON private."cliente_relacionamento_ia_tentativas" TO postgres;
 GRANT SELECT ON private."cliente_relacionamento_ia_tentativas" TO service_role;
@@ -16251,7 +15979,6 @@ GRANT MAINTAIN ON private."atendimento_wa_entradas" TO postgres;
 GRANT MAINTAIN ON private."backup_vinculos_20261027_contatos" TO postgres;
 GRANT MAINTAIN ON private."backup_vinculos_20261027_juncao" TO postgres;
 GRANT MAINTAIN ON private."client_assignment_iris_context" TO postgres;
-GRANT MAINTAIN ON private."client_assignment_report_20261105" TO postgres;
 GRANT MAINTAIN ON private."cliente_relacionamento_ia_tentativas" TO postgres;
 GRANT MAINTAIN ON public."_webhook_debug" TO anon;
 GRANT MAINTAIN ON public."_webhook_debug" TO authenticated;

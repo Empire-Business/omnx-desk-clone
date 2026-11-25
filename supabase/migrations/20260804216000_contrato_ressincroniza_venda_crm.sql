@@ -63,7 +63,7 @@ begin
   -- Assíncrono (pg_net enfileira e envia após o commit). O Authorization com a anon key
   -- só passa pelo gateway; a autorização real é o header x-notify-secret.
   perform net.http_post(
-    url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/vendas-ressincronizar-crm',
+    url := 'https://seu-projeto-supabase.supabase.co/functions/v1/vendas-ressincronizar-crm',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1em1ja2F0Ym1scGtkeHRmaHFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMxNjUxNzEsImV4cCI6MjA4ODc0MTE3MX0.dL8LHbCJv69zJtt-aA3iAEO6PMcJBHlDC1HAEu9O9Ho',

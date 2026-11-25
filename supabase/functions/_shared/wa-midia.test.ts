@@ -6,7 +6,7 @@ import {
 } from './wa-midia.ts'
 import { montarTranscricao, textoDaMidia, type MensagemLida } from '../wa-auto-satisfacao/regras.ts'
 
-const SUPA = 'https://wuzmckatbmlpkdxtfhqr.supabase.co'
+const SUPA = 'https://seu-projeto-supabase.supabase.co'
 const CONV = '6f1c2a34-1111-4222-8333-944455556666'
 const url = (resto: string) => `${SUPA}/storage/v1/object/public/chat-media/${resto}`
 const resposta = (conteudo: unknown, extra: Record<string, unknown> = {}) => ({

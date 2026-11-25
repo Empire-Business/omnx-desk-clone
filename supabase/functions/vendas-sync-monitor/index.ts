@@ -16,7 +16,8 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const BRIDGE_SECRET = Deno.env.get('EMPIREDESK_BRIDGE_SECRET') ?? ''
 const GHL_FUNCTIONS_URL =
   Deno.env.get('GHL_FUNCTIONS_URL') ?? 'https://qzesffnkqgelmtfblzkr.supabase.co/functions/v1'
-const DEST_EMAIL = Deno.env.get('NOTIFICA_CONTRATO_EMAIL') ?? 'bruno@aliancadealtovalor.com.br'
+// Sem destinatário configurado, o monitor registra o problema e não envia e-mail.
+const DEST_EMAIL = Deno.env.get('NOTIFICA_CONTRATO_EMAIL')?.trim() ?? ''
 
 // Dias que uma venda concluída pode ficar sem vínculo no CRM antes de virar alerta.
 const PENDENCIA_DIAS = 3
@@ -122,7 +123,7 @@ servirComLicenca(async (req) => {
 
   let emailEnviado = false
 
-  if (problemas.length > 0 && assinatura !== assinaturaAnterior) {
+  if (DEST_EMAIL && problemas.length > 0 && assinatura !== assinaturaAnterior) {
     const html = montarHtml(problemas, detalhes)
     const envio = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
       method: 'POST',

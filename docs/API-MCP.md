@@ -38,7 +38,7 @@ Criadas em **Desk → Chaves de acesso**. Mostrada uma vez; a lista nunca traz `
 2. Publicar `chat-api-v2` e `desk-mcp` (entradas novas em `supabase/config.toml`, `verify_jwt=false`). **Não republicar `chat-api`** (não mudou); depois o frontend (Vercel).
 3. Secrets opcionais: `CHAT_API_ALLOWED_ORIGINS`, `CHAT_API_RATE_LIMIT`.
 4. Conferir em produção: `/docs/api`, `/docs/mcp`, `curl` do `tools/list` com uma chave de teste, 429 ao exceder, linha em `api_request_log`.
-5. Revisar o endereço do projeto Supabase usado nas páginas (`wuzmckatbmlpkdxtfhqr`, o mesmo de `docs/integracoes/uazapi.md`).
+5. Revisar o endereço do projeto Supabase usado nas páginas (`<project-ref>`, o mesmo de `docs/integracoes/uazapi.md`).
 
 ## Agendar a limpeza (decisão do dono: sem db push)
 

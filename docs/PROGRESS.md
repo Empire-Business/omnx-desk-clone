@@ -261,7 +261,7 @@ versões anteriores deste documento.
 
 ## Infraestrutura
 
-- **Supabase:** projeto `wuzmckatbmlpkdxtfhqr` (sa-east-1), multi-tenant com RLS
+- **Supabase:** projeto `<project-ref>` (sa-east-1), multi-tenant com RLS
   `tenant_isolation` em todas as tabelas de negócio
 - **Deploy:** Vercel (branch `main` → produção), domínio `desk.omnx.pro`
 - **Buckets:** `chat-media`, `deliveries`, `vendas-comprovantes`,
