@@ -122,9 +122,9 @@ select jobname from cron.job where jobname like 'wa-auto-%';
 
 ```bash
 git checkout <commit-bom> -- supabase/functions/<funcao> supabase/functions/_shared
-supabase functions deploy <funcao> --project-ref wuzmckatbmlpkdxtfhqr
+supabase functions deploy <funcao> --project-ref <project-ref>
 # ou retirar do ar:
-supabase functions delete <funcao> --project-ref wuzmckatbmlpkdxtfhqr
+supabase functions delete <funcao> --project-ref <project-ref>
 ```
 
 Funções: `wa-auto-testar-envio`, `wa-auto-backtest`, `wa-auto-agendar`,
@@ -223,7 +223,7 @@ select jobname from cron.job where jobname like 'wa-%';
 -- está no cabeçalho da 20261027150000):
 select cron.schedule('wa-auto-satisfacao-diaria', '*/15 9-10 * * *', $cron$
   select net.http_post(
-    url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/wa-auto-satisfacao',
+    url := 'https://<project-ref>.supabase.co/functions/v1/wa-auto-satisfacao',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', s.decrypted_secret),
     body := '{}'::jsonb, timeout_milliseconds := 150000)
   from vault.decrypted_secrets s

@@ -67,7 +67,7 @@
 --   -- religar a análise antiga (mesmo comando da migration 20261026240000):
 --   SELECT cron.schedule('wa-auto-satisfacao-diaria', '*/15 9-10 * * *', $cron$
 --     SELECT net.http_post(
---       url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/wa-auto-satisfacao',
+--       url := 'https://seu-projeto-supabase.supabase.co/functions/v1/wa-auto-satisfacao',
 --       headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', s.decrypted_secret),
 --       body := '{}'::jsonb, timeout_milliseconds := 150000)
 --     FROM vault.decrypted_secrets s
@@ -508,7 +508,7 @@ SELECT cron.schedule(
   '*/15 9-10 * * *',
   $cron$
   SELECT net.http_post(
-    url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/wa-relacionamento-analisar',
+    url := 'https://seu-projeto-supabase.supabase.co/functions/v1/wa-relacionamento-analisar',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'x-cron-secret', s.decrypted_secret

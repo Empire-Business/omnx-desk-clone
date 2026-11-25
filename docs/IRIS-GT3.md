@@ -172,7 +172,7 @@ com uma nova publicação deste documento.
 
 | Projeto | Registro efetivo em produção | Versão |
 |---|---|---|
-| Desk `wuzmckatbmlpkdxtfhqr` | `iris_gt3_connection_scope` | `20261027221159` |
+| Desk `<project-ref>` | `iris_gt3_connection_scope` | `20261027221159` |
 | GT3 `opbdoulspzlabxzevffc` | `iris_workspace_chat` | `20261027222022` |
 | GT3 | `iris_chat_previews_indexed` — correção aprovada separadamente | `20261027223439` |
 

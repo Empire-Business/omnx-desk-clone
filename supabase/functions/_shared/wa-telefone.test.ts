@@ -33,7 +33,7 @@ describe('chaveTelefoneBR (mesma regra da coluna gerada telefone_chave)', () => 
     expect(chaveTelefoneBR('5511987654321')).toBe(chaveTelefoneBR('551187654321'))
   })
   it('fixo BR (começa com 2–5) não ganha 9', () => {
-    expect(chaveTelefoneBR('+551151979967')).toBe('551151979967')
+    expect(chaveTelefoneBR('+551100009967')).toBe('551100009967')
     expect(chaveTelefoneBR('+552133334444')).toBe('552133334444')
   })
   it('internacional e vazio', () => {
@@ -47,7 +47,7 @@ describe('chaveTelefoneBR (mesma regra da coluna gerada telefone_chave)', () => 
   it('espelha a expressão SQL (CASE WHEN ~ ^\\+55[1-9][0-9][6-9][0-9]{7}$)', () => {
     const sql = (e164: string) =>
       /^\+55[1-9][0-9][6-9][0-9]{7}$/.test(e164) ? `55${e164.slice(3, 5)}9${e164.slice(5)}` : e164.slice(1)
-    for (const t of ['+551187654321', '+5511987654321', '+551151979967', '+14155550123', '+559976543210']) {
+    for (const t of ['+551187654321', '+5511987654321', '+551100009967', '+14155550123', '+559976543210']) {
       expect(chaveTelefoneBR(t)).toBe(sql(t))
     }
   })

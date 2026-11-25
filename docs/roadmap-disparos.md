@@ -104,7 +104,7 @@ Comparando por **chave canônica = DDD + últimos 8 dígitos**:
 #### Por que não dá para usar match exato de E.164
 
 Aqueles **16 casos** têm o número gravado sem o nono dígito no GHL — ex.: Desk tem
-`+5521989358444`, GHL tem `+552189358444`. O Brasil acrescentou o `9` aos celulares
+`+5511987654321`, GHL tem `+551187654321`. O Brasil acrescentou o `9` aos celulares
 e bases antigas ficaram sem ele. Com match exato, esses 16 **virariam contatos
 duplicados novos no GHL**, e o erro só apareceria depois do disparo, com gente
 recebendo a mensagem duas vezes.
@@ -153,7 +153,7 @@ cadastrar a credencial. Agora está assim:
 
 | Lado | Onde ficou |
 |---|---|
-| Desk (`wuzmckatbmlpkdxtfhqr`) | `tenant_integracoes` provider `empire`, secret no Vault, `base_url` do Empire |
+| Desk (`<project-ref>`) | `tenant_integracoes` provider `empire`, secret no Vault, `base_url` do Empire |
 | Empire (`qzesffnkqgelmtfblzkr`) | `workspace_integration_credentials` provider `omnx_desk`, `metadata.secret_sha256` = digest do mesmo secret |
 
 O Empire resolve o workspace pelo digest SHA-256 do secret recebido. `crm-aplicar-tag` **não
@@ -211,8 +211,8 @@ Content-Type: application/json
   "criar_novos": false,
   "contatos": [
     {
-      "chave": "2199358444",
-      "telefone": "+552199358444",
+      "chave": "1197654321",
+      "telefone": "+551197654321",
       "nome": "Maria Silva",
       "email": "maria@exemplo.com"
     }
@@ -240,7 +240,7 @@ Content-Type: application/json
   "marcados": 186,
   "falhas": 0,
   "ambiguos": [
-    { "telefone": "+552199358444", "nome": "Maria Silva" }
+    { "telefone": "+551197654321", "nome": "Maria Silva" }
   ]
 }
 ```
@@ -258,7 +258,7 @@ Content-Type: application/json
 
 1. Normalizar o telefone recebido e os telefones do GHL para E.164.
 2. Comparar pela **chave canônica = DDD + últimos 8 dígitos**. Isso faz
-   `+552199358444` casar com `+552189358444` (sem o nono dígito).
+   `+551197654321` casar com `+551187654321` (sem o nono dígito).
 3. Se achar **1 contato** no GHL → aplica só a tag. **Não altera nome, e-mail ou telefone.**
 4. Se achar **0 contatos** e `criar_novos=true` → cria contato novo com telefone em E.164
    completo (sempre com o nono dígito para celulares brasileiros).
@@ -534,7 +534,7 @@ de nada.
 | Data/hora BRT | O que |
 |---|---|
 | 28/07/2026 às 21h10 | **Bug da tag duplicada corrigido.** As 6 escritas em paralelo criavam a tag cada uma por si quando ela era inédita (3 contatos → 3 tags iguais no GHL), o que quebraria o workflow. Agora a primeira escrita do lote roda isolada (`aquecer`) e as demais reaproveitam. `crm-aplicar-tag` v3 no Empire, agora versionada em `GHL-SUPABASE/supabase/functions/crm-aplicar-tag/`. Tela `/disparo` ganhou seleção **pessoa a pessoa** (busca + caixa por contato). Aplicada a tag `demo-disparo-omnx-28jul` em 3 clientes reais ativos que já existiam no CRM (Alexandre de Almeida, Alison Machado, André Luis Rodrigues): `marcados: 3`, `criados: 0`, `falhas: 0` — só a tag, cadastro intocado. |
-| 28/07/2026 às 20h05 | **Contatos de teste deixados no CRM** com a tag `teste-disparo-omnx-28jul`, para configurar e testar o workflow do GHL: `Teste Disparo OMNX 1/2/3`, telefones `+5511999999901/02/03`, e-mails `teste.disparo1..3@omnx.pro`. Foram **criados pela ponte** (dry_run antes: 3 novos; aplicação: `criados: 3`, `marcados: 3`, `falhas: 0`). Nenhuma pessoa real foi etiquetada. **Apagar no GHL depois do teste.** |
+| 28/07/2026 às 20h05 | **Contatos de teste deixados no CRM** com a tag `teste-disparo-omnx-28jul`, para configurar e testar o workflow do GHL: `Teste Disparo OMNX 1/2/3`, telefones `+5511999999901/02/03`, e-mails `teste.disparo1..3@exemplo.com`. Foram **criados pela ponte** (dry_run antes: 3 novos; aplicação: `criados: 3`, `marcados: 3`, `falhas: 0`). Nenhuma pessoa real foi etiquetada. **Apagar no GHL depois do teste.** |
 | 28/07/2026 às 18h20 | `crm-aplicar-tag` implementada e deployada no Empire; `disparo-enviar-ghl` deployada no Desk; ponte por tenant ativada (Vault dos dois lados). Testado contra o CRM de produção: tag em existente, criação, dry_run, ambíguo e normalização. Corrigido bug do espelho desatualizado (contato apagado no GHL contava como existente e a tag falhava calada). Falta só o workflow do GHL. |
 | 28/07/2026 às 09h50 | Documento criado. Auditoria do que existe + desenho das 6 fases. Nenhuma alteração feita no sistema. |
 | 28/07/2026 às 16h35 | Medição dos formatos de telefone nos dois bancos e cruzamento real (186 de 258 já existem no GHL, 16 sem nono dígito, 27 ambíguos). Regra de normalização por chave canônica definida. Nenhuma alteração feita no sistema. |

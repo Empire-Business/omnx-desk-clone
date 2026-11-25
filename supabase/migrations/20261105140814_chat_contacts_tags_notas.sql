@@ -1,5 +1,5 @@
 -- A tela de contatos já cadastra/edita notas e filtra/atualiza tags em lote.
--- Catálogo Desk wuzmckatbmlpkdxtfhqr em 2026-11-05: ambas as colunas ausentes;
+-- Catálogo Desk seu-projeto-supabase em 2026-11-05: ambas as colunas ausentes;
 -- chat_contacts pertence a postgres e tem RLS ativo, com isolamento de tenant,
 -- bloqueio anon e grupos restritos. Essas policies e grants não são alterados.
 -- Tags vazias mantêm os contatos existentes sem rótulos inventados.

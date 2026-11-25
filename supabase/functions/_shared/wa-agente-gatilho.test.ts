@@ -5,7 +5,7 @@ import {
 } from './wa-agente-gatilho.ts'
 
 // Números fictícios.
-const TEL_AGENTE = '551151979900'
+const TEL_AGENTE = '551100009900'
 const LID_AGENTE = '111222333444555@lid'
 const LID_OUTRO = '999888777666555@lid'
 
@@ -44,7 +44,7 @@ describe('detectarGatilho — menção', () => {
     expect(detectarGatilho(base({ texto: '@999888777666555 olha isso', mencionados: [LID_OUTRO] }))).toBeNull()
   })
   it('telefone digitado com @ conta como menção', () => {
-    expect(detectarGatilho(base({ texto: 'oi @551151979900 tudo bem' }))).toBe('mencao')
+    expect(detectarGatilho(base({ texto: 'oi @551100009900 tudo bem' }))).toBe('mencao')
     expect(detectarGatilho(base({ texto: 'oi @111222333444555' }))).toBe('mencao')
     expect(detectarGatilho(base({ texto: 'liga pro @5511999990000' }))).toBeNull()
   })
@@ -157,29 +157,29 @@ describe('detectarGatilho — prioridade', () => {
 
 describe('ehNumeroDoAgente', () => {
   it('telefone com/sem 9, LID com aparelho', () => {
-    expect(ehNumeroDoAgente('551151979900@s.whatsapp.net', [TEL_AGENTE])).toBe(true)
+    expect(ehNumeroDoAgente('551100009900@s.whatsapp.net', [TEL_AGENTE])).toBe(true)
     expect(ehNumeroDoAgente('111222333444555:9@lid', [LID_AGENTE])).toBe(true)
     expect(ehNumeroDoAgente('5511987654321', ['551187654321'])).toBe(true)
     expect(ehNumeroDoAgente('5511987654321', [LID_AGENTE])).toBe(false)
     expect(ehNumeroDoAgente(null, [TEL_AGENTE])).toBe(false)
   })
   it('LID e telefone com os mesmos dígitos não se confundem', () => {
-    expect(ehNumeroDoAgente('551151979900@lid', [TEL_AGENTE])).toBe(false)
+    expect(ehNumeroDoAgente('551100009900@lid', [TEL_AGENTE])).toBe(false)
   })
 })
 
 describe('extrairDadosMensagem (formato real da UAZAPI, valores fictícios)', () => {
-  const body = { owner: '551151979900', instanceName: 'Suporte4', EventType: 'messages' }
+  const body = { owner: '551100009900', instanceName: 'Suporte4', EventType: 'messages' }
 
   it('menção em grupo', () => {
     const msg = {
-      chatid: '120363000000000001@g.us', isGroup: true, quoted: '', owner: '551151979900',
+      chatid: '120363000000000001@g.us', isGroup: true, quoted: '', owner: '551100009900',
       sender_pn: '5521999990000@s.whatsapp.net', sender_lid: '222@lid', sender: '222:5@lid',
       content: { text: '@111222333444555 oi', contextInfo: { mentionedJID: [LID_AGENTE] } },
     }
     expect(extrairDadosMensagem(body, msg)).toEqual({
       remetenteGrupo: '5521999990000', mencionados: [LID_AGENTE], quotedId: null, quotedParticipante: null,
-      owner: '551151979900',
+      owner: '551100009900',
     })
   })
 
@@ -213,7 +213,7 @@ describe('lidsDosNumeros (participantes de /group/info)', () => {
   it('acha o LID do participante cujo telefone é do assistente (qualquer nome de campo)', () => {
     const info = {
       Participants: [
-        { JID: '551151979900@s.whatsapp.net', LID: LID_AGENTE, IsAdmin: false },
+        { JID: '551100009900@s.whatsapp.net', LID: LID_AGENTE, IsAdmin: false },
         { JID: LID_OUTRO, PhoneNumber: '5521999990000@s.whatsapp.net' },
         { PhoneNumber: '5511987654321@s.whatsapp.net', JID: '777@lid' },
       ],

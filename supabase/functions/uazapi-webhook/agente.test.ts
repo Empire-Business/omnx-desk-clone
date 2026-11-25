@@ -6,7 +6,7 @@ import { avaliarAgente, type ContextoAgente } from './agente.ts'
 // deduplica pelo message_id_wpp, mas só a primeira conexão aciona a Íris.
 const TENANT = 'empresa-a'
 const GRUPO = '120363000000000001@g.us'
-const TEL_IRIS = '551151979900'
+const TEL_IRIS = '551100009900'
 const TEL_REMETENTE = '5511987654321'
 const TEXTO = 'Íris, guarde este feedback: comece pelos casos atuais.'
 type Linha = Record<string, unknown>

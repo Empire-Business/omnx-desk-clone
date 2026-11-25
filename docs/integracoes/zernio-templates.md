@@ -283,8 +283,8 @@ quando a chave da Zernio já foi salva.
 1. **Chave de API da Zernio** colada por ele na aba Conexão (nunca no chat). Ideal: uma **chave restrita**
    ao perfil do WhatsApp (`POST /v1/api-keys` com `scope: "profiles"`), com permissão de escrita (precisa
    criar modelos e enviar).
-2. **`accountId`** da conta WhatsApp que vai enviar ("sdrai - omnx" +55 11 5107-0286 ou "Acelerador de
-   Audiência" +55 11 5196-1461) — aparece no painel da Zernio ou em `GET /v1/accounts`.
+2. **`accountId`** da conta WhatsApp que vai enviar ("sdrai - omnx" +55 11 90000-0021 ou "Acelerador de
+   Audiência" +55 11 90000-0022) — aparece no painel da Zernio ou em `GET /v1/accounts`.
 3. Confirmar que esse número é **Cloud API** ativo na Meta (sem pendência de verificação da empresa), senão
    a criação de modelos falha.
 4. **Aprovar os 3 textos** (ou pedir ajustes — ex.: trocar "Bom dia" por "Olá") e os nomes `omnx_*_v1`.

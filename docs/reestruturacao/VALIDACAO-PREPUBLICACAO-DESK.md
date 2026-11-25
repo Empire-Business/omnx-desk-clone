@@ -29,7 +29,7 @@ seus estados de autorização, banco e publicação foram superados pelo estado 
 
 ## Conferência remota somente de catálogo — preflight histórico
 
-Supabase: projeto `wuzmckatbmlpkdxtfhqr`, EmpireDesk, ativo, região `sa-east-1`.
+Supabase: projeto `<project-ref>`, EmpireDesk, ativo, região `sa-east-1`.
 Sem branches de homologação existentes retornadas pela conexão. Não criar outra.
 As duas migrations novas não constam do histórico remoto de 173 entradas.
 Histórico remoto diverge dos nomes/versões locais antigos: não usar db push global.

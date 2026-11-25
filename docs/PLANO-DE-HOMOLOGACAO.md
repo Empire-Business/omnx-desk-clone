@@ -208,7 +208,7 @@ Modo **privado do cliente**:
 ```sql
 -- Prévia do resumo (não envia, não grava). Rodar como técnico, só leitura.
 select net.http_post(
-  url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/wa-auto-resumo-semanal',
+  url := 'https://<project-ref>.supabase.co/functions/v1/wa-auto-resumo-semanal',
   headers := jsonb_build_object('Content-Type','application/json','x-cron-secret', s.decrypted_secret),
   body := jsonb_build_object('dry_run', true, 'tenant_id', '<uuid-da-empresa>')
 ) from vault.decrypted_secrets s where s.name = 'wa_auto_cron_secret';

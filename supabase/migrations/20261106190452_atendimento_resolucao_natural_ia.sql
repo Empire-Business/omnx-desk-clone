@@ -362,7 +362,7 @@ DO $$ DECLARE jid bigint; BEGIN
   IF jid IS NOT NULL THEN
     PERFORM cron.alter_job(jid,schedule:='*/15 * * * *',command:=$job$
       SELECT net.http_post(
-        url:='https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/wa-relacionamento-analisar',
+        url:='https://seu-projeto-supabase.supabase.co/functions/v1/wa-relacionamento-analisar',
         headers:=jsonb_build_object('Content-Type','application/json','x-cron-secret',s.decrypted_secret),
         body:='{}'::jsonb,timeout_milliseconds:=150000)
       FROM vault.decrypted_secrets s WHERE s.name='wa_auto_cron_secret'

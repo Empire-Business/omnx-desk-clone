@@ -848,7 +848,7 @@ BEGIN
   END IF;
   BEGIN
     PERFORM net.http_post(
-      url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/wa-agente-responder',
+      url := 'https://seu-projeto-supabase.supabase.co/functions/v1/wa-agente-responder',
       headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_segredo),
       body := jsonb_build_object('pedido_id', NEW.id),
       timeout_milliseconds := 150000
@@ -882,7 +882,7 @@ SELECT cron.schedule(
   '* * * * *',
   $cron$
   SELECT net.http_post(
-    url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/wa-agente-responder',
+    url := 'https://seu-projeto-supabase.supabase.co/functions/v1/wa-agente-responder',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'x-cron-secret', s.decrypted_secret

@@ -67,14 +67,14 @@ SQL exige revisão de nomes, dependências, permissões, cascatas e compatibilid
 
 Preparar código e migration não autoriza executar a migration. A publicação do
 manual pode prosseguir separadamente; aplicação do SQL exige autorização expressa
-do usuário para o Desk de produção `wuzmckatbmlpkdxtfhqr` e validação compatível.
+do usuário para o Desk de produção `<project-ref>` e validação compatível.
 Não criar banco de teste, containers, shadow schema ou dados artificiais reais.
 
 
 ## Registro de aplicação
 
 Autorização nominal recebida nesta conversa para a migration preparada como
-20261028192239. Aplicada no Desk de produção wuzmckatbmlpkdxtfhqr pelo MCP;
+20261028192239. Aplicada no Desk de produção <project-ref> pelo MCP;
 o histórico do provedor gerou a versão 20261028194828. O arquivo foi apenas
 renomeado para acompanhar essa versão, sem mudar nenhum byte do SQL auditado
 (SHA256 cb5cf5ec7fd0302b351af775b33940dc4f7ab86c3495b4314bad97de71577f81).

@@ -18,7 +18,7 @@ describe('normalizaTelefoneBR', () => {
   })
 
   it('ignora espaços, parênteses e traços', () => {
-    expect(normalizaTelefoneBR('21 98935-8444').telefone).toBe('+5521989358444')
+    expect(normalizaTelefoneBR('21 99999-0000').telefone).toBe('+5521999990000')
     expect(normalizaTelefoneBR('(11) 99999-8888').telefone).toBe('+5511999998888')
     expect(normalizaTelefoneBR('19 997588944').telefone).toBe('+5519997588944')
   })

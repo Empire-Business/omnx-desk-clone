@@ -8,7 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Formata número de telefone para exibição legível.
  * Ex: "5521999545555" → "+55 (21) 99954-5555"
- *     "551151951461" → "+55 (11) 5195-1461"
+ *     "551100001461" → "+55 (11) 0000-1461"
  */
 export function formatPhone(raw: string | null | undefined): string {
   if (!raw) return ''

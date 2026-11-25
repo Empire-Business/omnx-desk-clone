@@ -5,13 +5,13 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const resendApiKey = Deno.env.get('RESEND_API_KEY')
 
-// Para quem vai a notificação de contrato assinado.
-const PRIMARY_DEST_EMAIL = Deno.env.get('NOTIFICA_CONTRATO_EMAIL')?.trim() || 'bruno@aliancadealtovalor.com.br'
-const MASTER_CONTRACT_RECIPIENTS = [
-  PRIMARY_DEST_EMAIL,
-  'highticket@marvee.com.br',
-  'exosconsultoria@marvee.com.br',
-]
+// Para quem vai a notificação de contrato assinado: só a lista da variável
+// NOTIFICA_CONTRATO_EMAILS (separada por vírgula). Sem ela, não envia nada —
+// cada instalação define os próprios destinatários.
+const MASTER_CONTRACT_RECIPIENTS = (Deno.env.get('NOTIFICA_CONTRATO_EMAILS') ?? '')
+  .split(',')
+  .map((email) => email.trim())
+  .filter(Boolean)
 
 // Buckets onde ficam os comprovantes (venda) e anexos (contrato).
 const BUCKET_VENDAS = 'vendas-comprovantes'
@@ -129,6 +129,9 @@ servirComLicenca(async (req) => {
     if (tenantErr) return json({ error: `Empresa não encontrada: ${tenantErr.message}` }, 500)
     if (!tenant?.is_master) {
       return json({ success: true, skipped: true, motivo: 'tenant não configurado para esta notificação' })
+    }
+    if (MASTER_CONTRACT_RECIPIENTS.length === 0) {
+      return json({ success: true, skipped: true, motivo: 'NOTIFICA_CONTRATO_EMAILS não configurada' })
     }
 
     // 2) Venda ligada pelo WhatsApp (dados ricos: pagamentos, endereço, comprovantes)

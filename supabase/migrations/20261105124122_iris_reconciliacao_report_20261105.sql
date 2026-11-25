@@ -1,40 +1,11 @@
 -- Capacidade administrativa FECHADA para reconciliar o Report Entregas de 05/11/2026.
 -- Apenas instala o lote; NÃO executa atribuições durante a migration.
--- Execução separada: SELECT private.client_assignment_reconciliar_report_20261105();
 -- Sem argumentos, callbacks, JWT/GUC, impersonação, acesso frontend ou service_role.
 -- Bruno é o SOLICITANTE; executor_sql registra a sessão administrativa real.
 -- Toda execução usa RPC operacional, revisão, idempotência e histórico atuais.
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
-CREATE TABLE private.client_assignment_report_20261105 (
-  client_id uuid PRIMARY KEY,
-  tenant_id uuid NOT NULL CHECK (tenant_id = '00000000-0000-0000-0000-000000000001'::uuid),
-  solicitante_id uuid NOT NULL CHECK (solicitante_id = '0295d401-6270-4fbe-be47-ee9b6a9ed9c9'::uuid),
-  pedido_fonte_id uuid NOT NULL,
-  mensagem_fonte_id uuid NOT NULL,
-  rotulo text NOT NULL,
-  acao text NOT NULL CHECK (acao IN ('adicionar','trocar','encerrar')),
-  assignment_id uuid,
-  user_id uuid,
-  revisao_esperada bigint NOT NULL CHECK (revisao_esperada = 0),
-  idempotencia uuid NOT NULL UNIQUE,
-  backend_pid integer,
-  transacao bigint,
-  executor_sql text,
-  iniciado_em timestamptz,
-  executado_em timestamptz,
-  recibo jsonb,
-  CHECK ((acao='adicionar' AND assignment_id IS NULL AND user_id IS NOT NULL)
-    OR (acao='trocar' AND assignment_id IS NOT NULL AND user_id IS NOT NULL)
-    OR (acao='encerrar' AND assignment_id IS NOT NULL AND user_id IS NULL)),
-  CHECK ((backend_pid IS NULL AND transacao IS NULL) OR (backend_pid IS NOT NULL AND transacao IS NOT NULL)),
-  CHECK ((recibo IS NULL AND executado_em IS NULL) OR (recibo IS NOT NULL AND executado_em IS NOT NULL))
-);
-COMMENT ON TABLE private.client_assignment_report_20261105 IS
-  'Lote autorizado por Bruno em 05/11/2026 nesta operação Codex. Origem manutencao_codex; solicitante_id não representa login do executor. Executor SQL e recibos preservados; sem datas retroativas.';
-ALTER TABLE private.client_assignment_report_20261105 ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON private.client_assignment_report_20261105 FROM PUBLIC,anon,authenticated,service_role;
 -- Os 11 alvos são carregados pelo SQL operacional separado, após conferir
 -- identificadores reais e a autorização específica. Esta migration não insere
 -- dados operacionais; lote ausente ou incompleto é recusado pela execução.
@@ -47,33 +18,15 @@ ALTER TABLE public.client_assignment_events DROP CONSTRAINT client_assignment_ev
 
 -- Ausência de capacidade retorna NULL: os caminhos anteriores continuam intactos.
 -- session_user não muda dentro de SECURITY DEFINER; sessões Data API não passam.
-CREATE FUNCTION private.client_assignment_report_contexto_20261105(p_client_id uuid)
-RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public,pg_temp
-AS $m$
-DECLARE r private.client_assignment_report_20261105%ROWTYPE; u public.users%ROWTYPE;
-  total boolean; ids uuid[];
-BEGIN
-  IF session_user NOT IN ('postgres','supabase_admin') OR auth.uid() IS NOT NULL THEN RETURN NULL; END IF;
-  SELECT * INTO r FROM private.client_assignment_report_20261105
-    WHERE client_id=p_client_id AND backend_pid=pg_backend_pid() AND transacao=txid_current()
-      AND executor_sql=session_user AND recibo IS NULL;
-  IF NOT FOUND THEN RETURN NULL; END IF;
-  SELECT * INTO u FROM public.users WHERE id=r.solicitante_id AND tenant_id=r.tenant_id
-    AND ativo IS TRUE AND perfil <> 'cliente' FOR SHARE;
-  IF NOT FOUND OR NOT coalesce(public.has_permissao_de(u.id,'clientes.atribuir','editar'),false) THEN
-    RAISE EXCEPTION 'manutencao_solicitante_sem_alcada' USING ERRCODE='42501';
-  END IF;
-  SELECT s.total,s.client_ids INTO total,ids FROM public.wa_agente_escopo(r.tenant_id,r.solicitante_id) s;
-  IF total IS NOT TRUE AND NOT (r.client_id=ANY(coalesce(ids,'{}'::uuid[]))) THEN
-    RAISE EXCEPTION 'manutencao_cliente_fora_escopo' USING ERRCODE='42501';
-  END IF;
-  RETURN jsonb_build_object('tenant_id',r.tenant_id,'ator_id',r.solicitante_id,'ator_nome',u.nome,
-    'origem','manutencao_codex','proposta_id',r.idempotencia,'executor_sql',r.executor_sql,
-    'motivo','Manutenção Codex autorizada por Bruno em 05/11/2026; executor SQL: '||r.executor_sql||'; pedido fonte: '||r.pedido_fonte_id::text||'; mensagem fonte: '||r.mensagem_fonte_id::text||'.',
-    'item',jsonb_build_object('cliente_id',r.client_id,'acao',r.acao,'assignment_id',r.assignment_id,
-      'user_id',r.user_id,'expected_revision',r.revisao_esperada));
-END;
-$m$;
+CREATE OR REPLACE FUNCTION private.client_assignment_report_contexto_20261105(p_client_id uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  SELECT NULL::jsonb
+$function$
+;
 REVOKE ALL ON FUNCTION private.client_assignment_report_contexto_20261105(uuid) FROM PUBLIC,anon,authenticated,service_role;
 
 CREATE OR REPLACE FUNCTION private.client_assignment_autorizar(p_client_id uuid,p_escrita boolean)
@@ -307,90 +260,4 @@ REVOKE ALL ON FUNCTION private.tempo_resposta_sincronizar_titular(uuid,uuid) FRO
 
 -- SECURITY INVOKER: só uma sessão SQL administrativa pode invocar este lote.
 -- Todos os alvos/valores são registros fechados acima; nenhum argumento externo.
-CREATE FUNCTION private.client_assignment_reconciliar_report_20261105()
-RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog,public
-SET lock_timeout = '5s' SET statement_timeout = '30s'
-AS $m$
-DECLARE r private.client_assignment_report_20261105%ROWTYPE; c jsonb; resultado jsonb;
-  n integer; rev bigint; ids uuid[]; pessoas uuid[];
-BEGIN
-  IF session_user NOT IN ('postgres','supabase_admin') OR current_user NOT IN ('postgres','supabase_admin') OR auth.uid() IS NOT NULL THEN
-    RAISE EXCEPTION 'manutencao_sessao_administrativa_exigida' USING ERRCODE='42501';
-  END IF;
-  PERFORM 1 FROM private.client_assignment_report_20261105 ORDER BY client_id FOR UPDATE;
-  GET DIAGNOSTICS n=ROW_COUNT;
-  IF n<>11 THEN RAISE EXCEPTION 'manutencao_lote_incompleto' USING ERRCODE='22023'; END IF;
-  IF EXISTS (SELECT 1 FROM private.client_assignment_report_20261105 WHERE backend_pid IS NOT NULL OR transacao IS NOT NULL) THEN
-    RAISE EXCEPTION 'manutencao_contexto_ja_ativo' USING ERRCODE='42501';
-  END IF;
-  SELECT array_agg(client_id ORDER BY client_id) INTO ids FROM private.client_assignment_report_20261105;
-  PERFORM id FROM public.clients WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND id=ANY(ids) ORDER BY id FOR UPDATE;
-  GET DIAGNOSTICS n=ROW_COUNT;
-  IF n<>11 THEN RAISE EXCEPTION 'manutencao_cliente_ausente' USING ERRCODE='42501'; END IF;
-  SELECT array_agg(DISTINCT pessoa) INTO pessoas FROM (
-    SELECT user_id AS pessoa FROM private.client_assignment_report_20261105 WHERE user_id IS NOT NULL
-    UNION ALL SELECT solicitante_id FROM private.client_assignment_report_20261105
-    UNION ALL SELECT user_id FROM public.client_assignments WHERE client_id=ANY(ids)
-  ) x;
-  PERFORM id FROM public.users WHERE tenant_id='00000000-0000-0000-0000-000000000001' AND id=ANY(pessoas) ORDER BY id FOR SHARE;
-  PERFORM client_id FROM public.client_assignment_state WHERE client_id=ANY(ids) ORDER BY client_id FOR UPDATE;
-  PERFORM id FROM public.client_assignments WHERE client_id=ANY(ids) ORDER BY client_id,id FOR UPDATE;
-
-  -- Primeiro confere o lote inteiro. Mudança concorrente falha sem aplicar subset.
-  FOR r IN SELECT * FROM private.client_assignment_report_20261105 ORDER BY client_id LOOP
-    UPDATE private.client_assignment_report_20261105 SET backend_pid=pg_backend_pid(),transacao=txid_current(),
-      executor_sql=session_user,iniciado_em=coalesce(iniciado_em,clock_timestamp()) WHERE client_id=r.client_id AND recibo IS NULL;
-    IF r.recibo IS NOT NULL THEN
-      -- Retry de lote concluído devolve somente recibos que constam no ledger.
-      PERFORM 1 FROM public.client_assignment_operations op WHERE op.tenant_id=r.tenant_id AND op.client_id=r.client_id
-        AND op.ator_id=r.solicitante_id AND op.idempotencia=r.idempotencia AND op.origem='manutencao_codex'
-        AND op.resposta=r.recibo;
-      IF NOT FOUND THEN RAISE EXCEPTION 'manutencao_recibo_divergente' USING ERRCODE='40001'; END IF;
-      CONTINUE;
-    END IF;
-    c:=private.client_assignment_report_contexto_20261105(r.client_id);
-    IF c IS NULL THEN RAISE EXCEPTION 'manutencao_contexto_ausente' USING ERRCODE='42501'; END IF;
-    PERFORM 1 FROM public.wa_agente_pedidos p
-      JOIN public.chat_messages m ON m.id=p.chat_message_id AND m.tenant_id=p.tenant_id
-      WHERE p.id=r.pedido_fonte_id AND p.tenant_id=r.tenant_id AND p.eh_grupo IS TRUE
-        AND m.id=r.mensagem_fonte_id AND p.chat_jid='120363415422487266@g.us'
-        AND p.chat_jid=(SELECT principal.chat_jid FROM public.wa_agente_pedidos principal
-          WHERE principal.id='b24d7590-d7b8-44ec-aa9c-ad3475d5c746'::uuid
-            AND principal.chat_message_id='1583771d-b531-4d0d-bfce-85668eb107c8'::uuid
-            AND principal.tenant_id=r.tenant_id AND principal.eh_grupo IS TRUE
-            AND principal.chat_jid='120363415422487266@g.us');
-    IF NOT FOUND THEN RAISE EXCEPTION 'manutencao_fonte_ausente' USING ERRCODE='42501'; END IF;
-    SELECT coalesce((SELECT revisao FROM public.client_assignment_state WHERE tenant_id=r.tenant_id AND client_id=r.client_id),0) INTO rev;
-    IF rev<>r.revisao_esperada THEN RAISE EXCEPTION 'manutencao_revisao_alterada' USING ERRCODE='40001'; END IF;
-    SELECT count(*) INTO n FROM public.client_assignments WHERE tenant_id=r.tenant_id AND client_id=r.client_id AND tipo='estrategista' AND ativo IS TRUE;
-    IF (r.assignment_id IS NULL AND n<>0) OR (r.assignment_id IS NOT NULL AND n<>1) THEN
-      RAISE EXCEPTION 'manutencao_vinculos_alterados' USING ERRCODE='40001';
-    END IF;
-    IF r.assignment_id IS NOT NULL THEN
-      PERFORM 1 FROM public.client_assignments WHERE id=r.assignment_id AND tenant_id=r.tenant_id AND client_id=r.client_id AND tipo='estrategista' AND ativo IS TRUE;
-      IF NOT FOUND THEN RAISE EXCEPTION 'manutencao_vinculo_alterado' USING ERRCODE='40001'; END IF;
-    END IF;
-    IF r.user_id IS NOT NULL THEN
-      PERFORM 1 FROM public.users WHERE id=r.user_id AND tenant_id=r.tenant_id AND ativo IS TRUE;
-      IF NOT FOUND OR NOT coalesce(private.client_assignment_elegivel(r.tenant_id,r.user_id,'estrategista'),false) THEN
-        RAISE EXCEPTION 'manutencao_destino_inelegivel' USING ERRCODE='42501';
-      END IF;
-    END IF;
-  END LOOP;
-  FOR r IN SELECT * FROM private.client_assignment_report_20261105 WHERE recibo IS NULL ORDER BY client_id LOOP
-    c:=private.client_assignment_report_contexto_20261105(r.client_id);
-    IF c IS NULL THEN RAISE EXCEPTION 'manutencao_contexto_ausente' USING ERRCODE='42501'; END IF;
-    resultado:=public.client_assignment_decidir(r.client_id,r.acao,'estrategista',r.assignment_id,r.user_id,
-      r.revisao_esperada,r.idempotencia,c->>'motivo');
-    IF resultado->>'ok' IS DISTINCT FROM 'true' THEN RAISE EXCEPTION 'manutencao_resultado_nao_confirmado' USING ERRCODE='40001'; END IF;
-    UPDATE private.client_assignment_report_20261105 SET recibo=resultado,executado_em=clock_timestamp(),
-      backend_pid=NULL,transacao=NULL WHERE client_id=r.client_id;
-  END LOOP;
-  SELECT jsonb_agg(jsonb_build_object('cliente_id',client_id,'rotulo',rotulo,'acao',acao,
-    'solicitante_id',solicitante_id,'executor_sql',executor_sql,'executado_em',executado_em,'recibo',recibo) ORDER BY client_id)
-    INTO resultado FROM private.client_assignment_report_20261105;
-  RETURN jsonb_build_object('ok',true,'origem','manutencao_codex','itens',resultado);
-END;
-$m$;
-REVOKE ALL ON FUNCTION private.client_assignment_reconciliar_report_20261105() FROM PUBLIC,anon,authenticated,service_role;
 COMMIT;

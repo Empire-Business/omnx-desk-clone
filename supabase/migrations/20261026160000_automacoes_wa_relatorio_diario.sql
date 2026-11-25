@@ -157,7 +157,7 @@ SELECT cron.schedule(
   '*/15 * * * *',
   $cron$
   SELECT net.http_post(
-    url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/wa-auto-relatorio-diario',
+    url := 'https://seu-projeto-supabase.supabase.co/functions/v1/wa-auto-relatorio-diario',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'x-cron-secret', s.decrypted_secret

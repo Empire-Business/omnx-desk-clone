@@ -1,6 +1,6 @@
 -- EXECUTE de desk_mfa_situacao() no banco do SaaS da empresa (migrações 20261119180100 +
 -- 20261120140000). Roda com `ensaiar.mjs --verificar --sem-licenca`.
--- Aqui está o defeito que apareceu na produção (wuzmckatbmlpkdxtfhqr): como a
+-- Aqui está o defeito que apareceu na produção (seu-projeto-supabase): como a
 -- 20261109140000 não roda sem a licença HTAI, a função nascia pelo CREATE OR REPLACE da
 -- 20261119180100 com o EXECUTE de fábrica para PUBLIC, e anon podia chamar a RPC.
 -- Transação desfeita no fim.

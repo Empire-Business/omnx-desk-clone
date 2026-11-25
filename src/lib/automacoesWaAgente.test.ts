@@ -33,7 +33,7 @@ describe('textos literais pedidos pelo dono', () => {
     expect(front.rodapesPrivado()).toHaveLength(3)
   })
   it('rodapé do grupo com @contato, final de 4 dígitos e "Nome,"', () => {
-    expect(front.rodapesGrupo({ nome: 'Ana', nomeContato: 'Ana Suporte', telefoneNumero: '+5511951979967' })[0]).toBe(
+    expect(front.rodapesGrupo({ nome: 'Ana', nomeContato: 'Ana Suporte', telefoneNumero: '+5511900009967' })[0]).toBe(
       'Para falar comigo aqui, marque @Ana Suporte (digite @ e escolha o contato final 9967) ou responda a esta mensagem. Também funciona começar com "Ana,"',
     )
     expect(front.rodapesGrupo({ nome: 'Ana' })).toHaveLength(3)
@@ -51,7 +51,7 @@ describe('textos literais pedidos pelo dono', () => {
     const a = front.textosAjuda('privado', { nome: 'Ana' })
     expect(a).toHaveLength(3)
     for (const t of a) for (const item of front.O_QUE_FACO) expect(t).toContain(item)
-    const b = front.textoBoasVindas('grupo', { nome: 'Ana', telefoneNumero: '+5511951979967' })
+    const b = front.textoBoasVindas('grupo', { nome: 'Ana', telefoneNumero: '+5511900009967' })
     expect(front.EXEMPLOS_PERGUNTA).toHaveLength(3)
     for (const e of front.EXEMPLOS_PERGUNTA) expect(b).toContain(e)
     expect(b).toContain('final 9967')

@@ -511,7 +511,7 @@ BEGIN
   IF to_regprocedure('public.app_url_funcoes(text)') IS NOT NULL THEN
     v_url := public.app_url_funcoes('crm-omnx-notificar');
   ELSE
-    v_url := 'https://wuzmckatbmlpkdxtfhqr.supabase.co/functions/v1/crm-omnx-notificar';
+    v_url := 'https://seu-projeto-supabase.supabase.co/functions/v1/crm-omnx-notificar';
   END IF;
   IF to_regprocedure('public.app_chave_anon()') IS NOT NULL THEN
     v_anon := public.app_chave_anon();
